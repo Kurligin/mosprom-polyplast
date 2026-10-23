@@ -8,7 +8,7 @@ NAME_LABEL = "[ФИО]"
 PHONE_LABEL = "[ТЕЛЕФОН]"
 EMAIL_LABEL = "[EMAIL]"
 
-_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", re.U)
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", re.UNICODE)
 # +7 / 8, затем 10 цифр с любыми разделителями: +7 (495) 745-68-57, 89161234567, 8 916 123 45 67
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+7|8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)")
 
@@ -25,11 +25,11 @@ def _name_patterns(names: list[str]) -> list[re.Pattern]:
         for p in n.split():
             if len(p) >= 3:
                 parts.add(p)
-    pats = [re.compile(re.escape(f), re.I) for f in sorted(full, key=len, reverse=True)]
+    pats = [re.compile(re.escape(f), re.IGNORECASE) for f in sorted(full, key=len, reverse=True)]
     for p in sorted(parts, key=len, reverse=True):
         # основа без последней гласной + до 3 букв окончания: Иванов → Иванова, Ивановым; Мария → Марии
         base = p[:-1] if p[-1].lower() in "аяоеыийуюь" else p
-        pats.append(re.compile(r"(?<![\w])" + re.escape(base) + r"[а-яё]{0,3}(?![\w])", re.I))
+        pats.append(re.compile(r"(?<![\w])" + re.escape(base) + r"[а-яё]{0,3}(?![\w])", re.IGNORECASE))
     return pats
 
 

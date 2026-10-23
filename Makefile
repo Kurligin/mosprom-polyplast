@@ -40,7 +40,7 @@ kb:
 
 # Оценка качества на эталоне
 eval:
-	$(DC) exec app python -m eval.run
+	$(DC) exec app python -m eval.run --llm --write
 
 # HTTPS-туннель к Mini App, чтобы открыть её внутри «МАКС»; печатает адрес
 tunnel:

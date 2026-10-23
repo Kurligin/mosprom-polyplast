@@ -103,15 +103,33 @@ def test_parse_json_object():
     assert parse_json_object('{"chunk_id": 3') is None
 
 
-def test_card_excerpt_is_verbatim():
-    from app.kb.card import render_card
-    from app.kb.chunker import load_all_docs
-
-    c = next(x for x in load_all_docs("docs") if x.point_no == "6.5.2")
-    out = render_card(c.text, c.source_label, "Когда платят зарплату?")
-    assert "29-го числа" in out and "Источник: ПВТР, п. 6.5.2, стр. 15" in out
-    assert len(out) < len(c.text)
+def _assert_quote_verbatim(out, text):
     for ln in out.splitlines():
         body = ln[2:] if ln.startswith("> ") else None
         if body and body != "…":
-            assert body in c.text
+            assert body in text
+
+
+def test_card_excerpt_is_verbatim():
+    from app.kb.card import render_card
+    from app.kb.chunker import load_all_docs, sub_lines
+
+    c = next(x for x in load_all_docs("docs") if x.point_no == "6.5.2")
+    # поиск нашёл строку про зарплату → в карточке вводная строка и она
+    focus = next(line for _, line in sub_lines(c) if "29-го числа" in line)
+    out = render_card(c.text, c.source_label, "Когда платят зарплату?", focus=focus)
+    assert "29-го числа" in out and "Источник: ПВТР, п. 6.5.2, стр. 15" in out
+    assert "> 6.5.2. **Работодатель обязан:**" in out
+    assert len(out) < len(c.text)
+    _assert_quote_verbatim(out, c.text)
+
+
+def test_card_very_long_point_without_focus_is_excerpt():
+    from app.kb.card import FULL_LIMIT, render_card
+    from app.kb.chunker import load_all_docs
+
+    c = next(x for x in load_all_docs("docs") if x.point_no == "6.4.2")
+    assert len(c.text) > FULL_LIMIT
+    out = render_card(c.text, c.source_label, "можно ли играть в компьютерные игры")
+    assert "компьютерных игр" in out and len(out) < len(c.text)
+    _assert_quote_verbatim(out, c.text)

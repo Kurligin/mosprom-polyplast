@@ -70,6 +70,16 @@
   - «Источник: …»;
   - кнопка «Связаться с HR» (`kb:hr:<question_log_id>`).
 
+Уточнения по итогам раунда 2:
+- `ingest_*` и `index_hr_answer` не коммитят — коммитит вызывающий код.
+- `ingest_file` бросает `ValueError`, если формат не PDF/PPTX/MD или у PDF нет текстового слоя. API отвечает на это 400.
+- У `Hit` есть дополнительные поля: `sim`, `fts_rank`, `vec_rank`, `chunk_key`, `kind` (doc | scenario | article | hr_answer), `title`, `path`, `point_no`, `focus`, `is_draft`. У `search` дополнительные параметры: `qvec=`, `pool=`.
+- Форматы `chunk_key`: `pvtr:6.5.2`, `pvtr:разд3`, `pvtr:6.4.2/24` (строка длинного пункта), `scenario:documents@GTP`, `doc<id>:<п>`, `hr:<id>`.
+- `KbDocument.doc_type`: `scenario` — статьи сценария, `article` — черновик HR.
+- `questions_log.route`: answer | unknown | personal | hr. Обращение по кнопке «Связаться с HR» — `Ticket.source="button"`.
+- Пороги ответа — в `config/kb.yaml`.
+- `gigachat.choose_chunk(..., raise_errors=False, timeout=20.0)`, исключение `LlmUnavailable`.
+
 ## Обращения — `app/tickets`
 
 - `service.create_ticket(ctx, repo, emp, text, *, source, category=None, is_personal=False, level=None) -> Ticket` (`level="red"` — красный флаг). Регистрируется через `hooks.on_create_ticket`. Обращение уходит закреплённому рекрутеру, в HR-группу — уведомление с кнопкой «Открыть в Mini App»; `Ticket.group_mid` хранит id уведомления.

@@ -10,10 +10,15 @@ import yaml
 
 SYNONYMS_PATH = Path(__file__).resolve().parents[2] / "config" / "synonyms.yaml"
 
-_WORD_RE = re.compile(r"[а-яёa-z0-9]+", re.I)
+_WORD_RE = re.compile(r"[а-яёa-z0-9]+", re.IGNORECASE)
+
+
+def _words(block: str) -> list[str]:
+    return block.split()
+
 
 # Стоп-слова: служебные и вопросительные, которые только шумят в поиске
-STOP_WORDS = frozenset(
+STOP_WORDS = frozenset(_words(
     """
     а и или но да же ли бы то не ни в во на о об от до по за из к ко у с со для при про без над под
     что как кто где когда куда откуда зачем почему сколько какой какая какое какие каков чей
@@ -22,15 +27,15 @@ STOP_WORDS = frozenset(
     мой моя мое моё мои наш наша ваш ваша свой своя
     быть есть был была было были будет будут бывает
     если чтобы ну вообще скока скоко сколька
-    """.split()
-)
+    """
+))
 
 # Окончания для грубой основы слова (длинные — раньше)
 _ENDINGS = sorted(
-    """
+    _words("""
     иями ями ами ием ием иях ях ах ов ев ей ой ий ый ая яя ое ее ые ие ую юю ого его ому ему ым им
     ом ем ам ям ую ия ья ье ью ь а я о е ы и у ю ть ться тся ешь ет ут ют ит ат ят ла ло ли л
-    """.split(),
+    """),
     key=len,
     reverse=True,
 )
@@ -110,3 +115,12 @@ def rrf_merge(*ranked_lists, k: int = 60) -> list[tuple]:
         for rank, item in enumerate(lst or [], start=1):
             scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+
+def topic_of(question: str) -> str | None:
+    """Тема вопроса для статистики: первое слово найденной группы синонимов («обед», «отпуск»)."""
+    q = _stems(question)
+    for group in load_synonyms():
+        if any(_contains_phrase(q, term) for term in group):
+            return group[0]
+    return None

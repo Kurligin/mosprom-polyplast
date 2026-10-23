@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,7 +40,8 @@ TOPICS = [
 MOODS = ["негатив", "нейтрально", "позитив"]
 
 # Тексты о здоровье в LLM не отправляем (dev-plan 4.10)
-_HEALTH_RE = re.compile(r"(болез|болею|болит|заболел|больнич|диагноз|депресс|давлени|беремен|врач|лекарств|травм)", re.I)
+_FIRST_PERSON_RE = re.compile(r"(?<![а-яё])(я|мне|меня|мой|моя|мою|моего|моей|у нас)(?![а-яё])", re.IGNORECASE)
+_HEALTH_RE = re.compile(r"(болез|болею|болит|заболел|больнич|диагноз|депресс|давлени|беремен|врач|лекарств|травм)", re.IGNORECASE)
 
 
 def _settings():
@@ -77,16 +79,42 @@ def get_client():
     return _client
 
 
+_tasks: set = set()
+
+
 def _log(kind: str, classes: set[str], started: float, ok: bool, **extra) -> None:
     # Только метаданные: время, тип вызова, классы данных. Никаких текстов.
+    ms = int((time.monotonic() - started) * 1000)
     log.info(
         "llm_call type=%s classes=%s ms=%d ok=%s %s",
         kind,
         ",".join(sorted(classes)) or "-",
-        int((time.monotonic() - started) * 1000),
+        ms,
         ok,
         " ".join(f"{k}={v}" for k, v in extra.items()),
     )
+    if "pytest" in sys.modules:
+        return
+    try:
+        task = asyncio.get_running_loop().create_task(_persist(kind, sorted(classes), ms, ok))
+    except RuntimeError:
+        return
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+
+
+async def _persist(kind: str, classes: list[str], ms: int, ok: bool) -> None:
+    """Строка в llm_log (своя сессия): тип вызова, классы данных, время. Текстов нет."""
+    try:
+        from app.db.models import LlmLog
+        from app.db.session import async_session
+
+        async with async_session() as session:
+            session.add(LlmLog(call_type=kind, data_classes=classes, model=_settings().gigachat_model or None,
+                               latency_ms=ms, ok=ok))
+            await session.commit()
+    except Exception as e:  # noqa: BLE001 — журнал не должен ломать ответ
+        log.debug("llm_log не записан: %s", e)
 
 
 async def _complete(system: str, user: str, temperature: float = 0.01) -> str:
@@ -110,8 +138,8 @@ def parse_json_object(raw: str) -> dict | None:
     if not raw:
         return None
     s = raw.strip()
-    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.I)
-    m = re.search(r"\{.*\}", s, re.S)
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.IGNORECASE)
+    m = re.search(r"\{.*\}", s, re.DOTALL)
     if not m:
         return None
     try:
@@ -129,10 +157,22 @@ CHOOSE_SYSTEM = (
 )
 
 
-async def choose_chunk(question: str, candidates: list[dict], names: list[str] | None = None) -> int | None:
-    """Выбрать пункт из кандидатов [{chunk_id, text, is_kt?}] или None («нет подходящего»)."""
+class LlmUnavailable(Exception):
+    """GigaChat не ответил (сеть, лимит, таймаут)."""
+
+
+async def choose_chunk(question: str, candidates: list[dict], names: list[str] | None = None, *,
+                       raise_errors: bool = False, timeout: float = 20.0) -> int | None:
+    """Выбрать пункт из кандидатов [{chunk_id, text, is_kt?}] или None («нет подходящего»).
+
+    raise_errors=True — при сбое GigaChat бросить LlmUnavailable (бот решит, что делать),
+    иначе сбой = None. Вопрос о своём здоровье в LLM не отправляем.
+    """
     safe = [c for c in candidates if not c.get("is_kt")]
     if not safe:
+        return None
+    if _HEALTH_RE.search(question or "") and _FIRST_PERSON_RE.search(question or ""):
+        log.info("llm_call type=choose_chunk skipped=health")
         return None
     allowed = {str(c["chunk_id"]): c["chunk_id"] for c in safe}
     q, classes = mask_with_classes(question, names)
@@ -143,9 +183,11 @@ async def choose_chunk(question: str, candidates: list[dict], names: list[str] |
     for attempt in range(2):  # один повтор при битом JSON
         started = time.monotonic()
         try:
-            raw = await _complete(CHOOSE_SYSTEM, user)
-        except Exception as e:  # noqa: BLE001
+            raw = await asyncio.wait_for(_complete(CHOOSE_SYSTEM, user), timeout)
+        except Exception as e:
             _log("choose_chunk", classes, started, False, err=type(e).__name__)
+            if raise_errors:
+                raise LlmUnavailable(type(e).__name__) from e
             return None
         obj = parse_json_object(raw)
         if obj is None or "chunk_id" not in obj:

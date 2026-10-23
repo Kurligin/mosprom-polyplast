@@ -8,16 +8,18 @@ from __future__ import annotations
 
 from app.kb.query import STOP_WORDS, expand_synonyms, stem, tokenize
 
-LONG_POINT = 800  # символов; длиннее — показываем выдержку
+LONG_POINT = 800  # символов; длиннее — выдержка вокруг строки, которую нашёл поиск
+FULL_LIMIT = 1600  # без найденной строки пункт до этой длины показываем целиком
+FOCUS_MIN = 1200  # с найденной строкой: короче — пункт целиком, длиннее — вводная строка и найденная
 
 
 def _terms(text: str) -> set[str]:
     return {stem(w) for w in tokenize(text) if w not in STOP_WORDS and len(w) > 1}
 
 
-def excerpt(text: str, question: str, max_lines: int = 2) -> str:
+def excerpt(text: str, question: str, max_lines: int = 2, limit: int = LONG_POINT) -> str:
     """Вводная строка пункта + до max_lines лучших по совпадению строк, дословно."""
-    if len(text) <= LONG_POINT:
+    if len(text) <= limit:
         return text
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if len(lines) < 3:
@@ -41,7 +43,36 @@ def excerpt(text: str, question: str, max_lines: int = 2) -> str:
     return "\n".join(out)
 
 
-def render_card(text: str, source_label: str, question: str = "", lead: str = "Вот что сказано в документе:") -> str:
-    quote = excerpt(text, question) if question else text
-    quoted = "\n".join("> " + ln if ln.strip() else ">" for ln in quote.splitlines())
-    return f"{lead}\n\n{quoted}\n\nИсточник: {source_label}"
+def focus_excerpt(text: str, focus: str) -> str:
+    """Длинный пункт: вводная строка + строка, которую нашёл поиск (дословно), пропуски — «…»."""
+    if len(text) <= FOCUS_MIN or not focus:
+        return text
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    idx = next((i for i, ln in enumerate(lines) if ln.strip() == focus.strip()), None)
+    if idx is None or idx == 0:
+        return text
+    out = [lines[0]]
+    if idx > 1:
+        out.append("…")
+    out.append(lines[idx])
+    if idx != len(lines) - 1:
+        out.append("…")
+    return "\n".join(out)
+
+
+def quote_block(text: str) -> str:
+    """Цитата для markdown «МАКС»: каждая строка с «> »."""
+    return "\n".join("> " + ln if ln.strip() else ">" for ln in text.splitlines())
+
+
+def render_card(text: str, source_label: str, question: str = "", lead: str = "Вот что сказано в документе:",
+                focus: str | None = None) -> str:
+    quote = shown_text(text, question, focus)
+    return f"{lead}\n\n{quote_block(quote)}\n\nИсточник: {source_label}"
+
+
+def shown_text(text: str, question: str = "", focus: str | None = None) -> str:
+    """Что показываем новичку и что видит LLM при выборе пункта: длинный пункт — выдержкой."""
+    if focus:
+        return focus_excerpt(text, focus)
+    return excerpt(text, question, limit=FULL_LIMIT) if question else text

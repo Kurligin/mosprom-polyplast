@@ -15,10 +15,10 @@ import math
 from collections import Counter
 from pathlib import Path
 
+from app.kb.card import render_card
 from app.kb.chunker import Chunk, load_all_docs
 from app.kb.query import STOP_WORDS, expand_synonyms, stem, tokenize
 from app.kb.route import is_personal_hr_case
-from app.kb.card import render_card
 
 ROOT = Path(__file__).resolve().parents[2]
 

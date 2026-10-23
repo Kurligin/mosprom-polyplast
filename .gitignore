@@ -10,3 +10,4 @@ data/raw/
 miniapp/dist/
 *.egg-info/
 data/uploads/
+eval/.llm_cache.json
