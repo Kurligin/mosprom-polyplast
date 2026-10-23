@@ -42,3 +42,21 @@
 - **Руководитель** не получает ответы опросов и обращения. Для роли `manager` поля `pending_surveys`, `open_tickets`, `red_flag`, `surveys`, `tickets` приходят пустыми или нулевыми, `GET /api/tickets*` отвечает `403`.
 - `invite_link` — диплинк на бота в «МАКС» с кодом привязки, например `https://max.ru/<bot>?start=<code>`. QR строится на фронте.
 - Все демо-сущности помечены `synthetic: true`.
+
+## Раунд 2: новые эндпоинты
+
+Владелец контракта — бэкенд (`app/api`). Фронт реализует то, что здесь описано; если нужно ещё что-то — фронт делает экран на демо-данных и пишет запрос в отчёте.
+
+| Экран | Метод и путь | Тело запроса | Ответ |
+|---|---|---|---|
+| Новичок: подключён ли, ссылка | `GET /api/employees/{id}` | — | `Employee` с полями `connected: bool`, `invite_link`, `intro: {text, photo_url, at} \| null`, `gates: {recruiter_go: bool, plan_ready: bool}` |
+| Отмашка «представить коллегам» | `POST /api/employees/{id}/gate` | `{gate: "recruiter_go"}` | `Employee` |
+| «План готов» | `POST /api/employees/{id}/plan` (multipart, поле `file`) | файл плана | `Employee` |
+| Справочники формы | `GET /api/sites`, `GET /api/staff?role=manager\|recruiter` | — | `[{code, name, tz}]`, `[{id, name, role}]` |
+| Новая площадка из xlsx | `POST /api/sites` | `{code, name, tz}` | `{code, name, tz}` |
+| Загрузка документа | `POST /api/kb/documents` (multipart: `file`, `title`, `is_kt`, `site_codes` через запятую) | PDF / PPTX | `KbDocument` с `chunks: number` |
+| Подтвердить ответ HR | `POST /api/kb/answers/{id}/confirm` | `{}` | `KbDocument` (`kind: "answer"`, `status: "confirmed"`) |
+| Загрузка сценария | `POST /api/scenario/import` (multipart, поле `file`) | xlsx | `{steps, by_site: {code: n}, surveys, attachments, new_sites: [code], warnings: [string]}` |
+| Демо: кто перематывается | `POST /api/demo/shift` | `{to, employee_id?}` | как раньше; без `employee_id` — первый тестовый новичок |
+
+Ошибки — `{"detail": "текст для человека"}` с кодом 4xx. Если модуль ещё не готов — `501` с `detail`.

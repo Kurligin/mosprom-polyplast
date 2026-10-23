@@ -185,3 +185,7 @@ class MaxApi:
             return uploaded
         return {"token": info.get("token") or uploaded.get("token")}
 
+    async def send_action(self, chat_id: int, action: str = "typing_on") -> dict:
+        """POST /chats/{chatId}/actions: «печатает…» (typing_on), «отправляет фото» и т. п."""
+        return await self._request("POST", f"/chats/{chat_id}/actions", json={"action": action})
+

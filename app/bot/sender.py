@@ -164,3 +164,12 @@ class Sender:
             log.warning("Не удалось удалить сообщение %s: %s", mid, e)
             return False
 
+    async def typing(self, chat_id: int | None) -> None:
+        """Показать «печатает…», пока готовим ответ (поиск, GigaChat). Ошибки не важны."""
+        if chat_id is None:
+            return
+        try:
+            await self.call(chat_id, self.api.send_action, chat_id, "typing_on")
+        except Exception as e:  # noqa: BLE001
+            log.debug("typing_on: %s", e)
+
