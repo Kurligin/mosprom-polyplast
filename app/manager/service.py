@@ -154,9 +154,10 @@ def push_is_due(task, emp, vnow: datetime) -> bool:
 
 # --- вид сообщений -----------------------------------------------------------
 
-def _app_button() -> dict | None:
+def _app_button(emp) -> dict | None:
+    """«Открыть в Mini App» сразу на карточке новичка: payload employee_<id> → start_param."""
     if settings.miniapp_url and settings.max_bot_name:
-        return open_app(T.BTN_APP, settings.max_bot_name.lstrip("@"))
+        return open_app(T.BTN_APP, settings.max_bot_name.lstrip("@"), payload=f"employee_{emp.id}")
     return None
 
 
@@ -172,7 +173,7 @@ def push_view(task, emp, vnow: datetime | None = None) -> tuple[str, list[dict]]
     else:
         text = T.PUSH.get(task.day, T.PUSH[3]).format(name=name)
     row = [callback(T.BTN_DONE, f"mg:done:{task.id}")]
-    app = _app_button()
+    app = _app_button(emp)
     if app:
         row.append(app)
     return text, keyboard(row)
@@ -181,7 +182,7 @@ def push_view(task, emp, vnow: datetime | None = None) -> tuple[str, list[dict]]
 def done_view(task, emp) -> tuple[str, list[dict]]:
     label = T.DONE_LABELS.get(task.day, T.PROBATION_DONE_LABEL) if task.kind == KIND_MEETING \
         else T.PROBATION_DONE_LABEL
-    app = _app_button()
+    app = _app_button(emp)
     return T.DONE.format(name=display_name(emp), label=label), (keyboard([app]) if app else [])
 
 
@@ -342,7 +343,7 @@ async def remind_access(repo, emp) -> bool:
     manager = await repo.s.get(Staff, emp.manager_id) if emp.manager_id else None
     sent = None
     if _bound(manager):
-        app = _app_button()
+        app = _app_button(emp)
         sent = await runtime.send(repo, T.ACCESS.format(name=name), staff=manager,
                                   attachments=keyboard([app]) if app else None)
     if not sent:
@@ -386,7 +387,8 @@ async def list_for_manager(session, staff) -> list[dict]:
             "start_date": emp.start_date.isoformat(),
             "day": adaptation_day(emp),
             "probation_days": probation_days(emp),
-            "connected": bool(emp.max_user_id),
+            # синтетические новички в статусе active — «подключились» (как в API)
+            "connected": bool(emp.max_user_id) or (bool(emp.is_synthetic) and emp.status == "active"),
             "synthetic": bool(emp.is_synthetic),
             "next_meeting": next((m for m in meetings if not m["done"]), None),
             "meetings": meetings,

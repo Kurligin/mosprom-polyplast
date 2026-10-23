@@ -298,3 +298,38 @@ async def test_replay_closes_gates_of_replayed_days(db, emp, api, sender):
         await s.commit()
         assert engine.gates(e) == {"recruiter_go": False, "plan_ready": False}
         assert e.dialog_state is None
+
+
+async def test_timeline_past_from_deliveries_and_upcoming(db, emp, api, sender):
+    await tick(db, sender, at(2, 19))
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        tl = await engine.timeline(s, e, now=at(2, 19))
+    # знакомство в боте (шаг 1) — пройдено; устаревшие и письмо — нет
+    assert [p["at"][:16] for p in tl["past"]] == ["2026-10-30T10:00", "2026-11-02T10:00", "2026-11-02T12:30"]
+    assert [u["at"][:16] for u in tl["upcoming"]] == ["2026-11-03T10:00", "2026-11-05T17:30"]
+    assert all(p["title"] for p in tl["past"] + tl["upcoming"])
+    assert tl["now"].startswith("2026-11-02T19:00")
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        assert await engine.upcoming_steps(s, e, limit=1, now=at(2, 19)) == tl["upcoming"][:1]
+
+
+async def test_timeline_synthetic_past_from_plan(db):
+    async with db() as s:
+        await store.import_specs(s, SPECS)
+        e = make_employee(full_name="Синтетиков Демьян [синтетика]", is_synthetic=True, is_test=False,
+                          max_user_id=None, chat_id=None, dialog_data={})
+        s.add(e)
+        await s.commit()
+        tl = await engine.timeline(s, e, now=at(3, 12))
+    # отправок нет: прошедшие — шаги плана до «сейчас», без письма и без шага по отмашке (3.11 10:00)
+    assert [p["at"][:16] for p in tl["past"]] == ["2026-10-30T10:00", "2026-11-01T10:00", "2026-11-02T10:00",
+                                                  "2026-11-02T12:30"]
+    assert [u["at"][:16] for u in tl["upcoming"]] == ["2026-11-05T17:30"]
+    # приглашён, но не подключился: пройденных шагов нет
+    async with db() as s:
+        e = await s.get(Employee, e.id)
+        e.status = "waiting"
+        tl = await engine.timeline(s, e, now=at(3, 12))
+    assert tl["past"] == []

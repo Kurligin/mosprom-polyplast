@@ -1,5 +1,6 @@
 """Вход по initData «МАКС» и роли."""
 
+import json
 import time
 from urllib.parse import quote
 
@@ -56,6 +57,35 @@ def test_full_url_fragment_with_double_encoding():
     assert validate_init_data(fragment, TOKEN)["user"]["id"] == 7
 
 
+def _raw_cyrillic(user_id: int) -> str:
+    """initData как её отдаёт мост: значения без кодирования, в имени кириллица (синтетика)."""
+    data = {"auth_date": str(int(time.time())), "query_id": "AAH-test",
+            "user": json.dumps({"id": user_id, "first_name": "Тест", "last_name": "Синтетика"},
+                               ensure_ascii=False)}
+    return "&".join(f"{k}={v}" for k, v in data.items()) + f"&hash={sign(data, TOKEN)}"
+
+
+def _encode_uri_component(s: str) -> str:
+    """Как encodeURIComponent в браузере."""
+    return quote(s, safe="-_.!~*'()")
+
+
+def test_encoded_whole_init_data_is_unquoted_once():
+    """Фронт закодировал initData целиком (кириллица в заголовке): «=» нет, раскодируем один раз."""
+    raw = _raw_cyrillic(42)
+    encoded = _encode_uri_component(raw)
+    assert "=" not in encoded and "&" not in encoded
+    assert validate_init_data(encoded, TOKEN)["user"]["first_name"] == "Тест"
+    # обычная строка из conftest (значения URL-кодированы) тоже проходит после кодирования целиком
+    assert validate_init_data(_encode_uri_component(init_data(7)), TOKEN)["user"]["id"] == 7
+
+
+def test_encoded_init_data_still_checks_signature():
+    raw = _raw_cyrillic(42).replace('"id": 42', '"id": 43')
+    with pytest.raises(InitDataError, match="подпись"):
+        validate_init_data(_encode_uri_component(raw), TOKEN)
+
+
 def test_sign_matches_reference():
     """HMAC-SHA256(secret=HMAC-SHA256("WebAppData", token), data_check_string) в hex."""
     import hashlib
@@ -74,6 +104,14 @@ async def test_me_with_valid_init_data(client, world):
     r = await client.get("/api/me", headers=auth(world.hr))
     assert r.status_code == 200
     assert r.json() == {"role": "hr", "name": "Тестова Анна Сергеевна", "id": world.hr.id}
+
+
+@pytest.mark.asyncio
+async def test_me_with_encoded_init_data_header(client, world):
+    """Заголовок в Latin-1: initData с кириллицей пришла через encodeURIComponent."""
+    header = _encode_uri_component(_raw_cyrillic(world.hr.max_user_id))
+    r = await client.get("/api/me", headers={"X-Max-Init-Data": header})
+    assert r.status_code == 200 and r.json()["role"] == "hr"
 
 
 @pytest.mark.asyncio

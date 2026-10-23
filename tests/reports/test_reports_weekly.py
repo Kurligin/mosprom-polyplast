@@ -99,11 +99,28 @@ def test_threshold_counts_people_not_answers():
 
 
 def test_topics_top3_without_other():
-    raw = make_raw({"GTP": 5, "GrPP": 5}, topics=("доступы", "другое", "нагрузка"))
+    raw = make_raw({"GTP": 5, "GrPP": 5}, topics=("доступы", "другое", "нагрузка"), mood="negative")
     raw.questions = [{"employee_id": 1, "site": "GTP", "topic": "быт и транспорт"}] * 2
     rep = weekly.aggregate(raw, weekly.period(MON))
     assert rep["topics"] == [{"topic": "Доступы", "count": 10}, {"topic": "Нагрузка", "count": 10},
                              {"topic": "Быт и транспорт", "count": 2}]
+
+
+def test_topics_skip_positive_button_answers():
+    """Кнопка «всё хорошо» не тема: иначе топ повторяет набор вопросов опроса. Текст и вопросы боту — темы."""
+    # оценки 6 (так себе) у «доступов», 9 (хорошо) у «коллектива» и «нагрузки»
+    raw = make_raw({"GTP": 5, "GrPP": 5}, topics=("доступы", "коллектив", "нагрузка"))
+    for a in raw.answers:
+        if a["topic"] == "нагрузка" and a["employee_id"] % 2:
+            a["text"] = True  # свой текст в ответе — тема, даже если оценка хорошая
+    raw.questions = [{"employee_id": 1, "site": "GTP", "topic": "зарплата"}] * 3
+    rep = weekly.aggregate(raw, weekly.period(MON))
+    # ответили 10 новичков (id 1–5 и 8–12), свой текст про нагрузку — у нечётных: 5 ответов
+    assert rep["topics"] == [{"topic": "Доступы", "count": 10}, {"topic": "Нагрузка", "count": 5},
+                             {"topic": "Зарплата", "count": 3}]
+    assert weekly.topic_worthy({"mood": "positive", "score": 10}) is False
+    assert weekly.topic_worthy({"mood": None, "score": None}) is False
+    assert weekly.topic_worthy({"mood": "негатив", "score": None}) is True
 
 
 def test_kpi_newbies_and_signals():

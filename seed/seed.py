@@ -42,6 +42,13 @@ SYNTH_FIRST = ["Демьян", "Синтия", "Пробор", "Вымысла",
 SYNTH_LAST = ["Синтетиков", "Демонстрова", "Примеров", "Вымышленная", "Макетов", "Образцова",
               "Шаблонов", "Условная", "Пробников", "Эскизова", "Тестерова", "Моделин"]
 
+# Синтетические новички, которые ещё не открыли ссылку из оффера («Не подключился» в Mini App):
+# (фамилия, имя, площадка, офис/производство, через сколько дней выход — от даты первого запуска сида)
+WAITING = [
+    ("Образцова", "Синтия", "Luzhniki", "office", 2),
+    ("Макетов", "Шаблон", "GTP", "production", 4),
+]
+
 
 def add_months(d: date, months: int) -> date:
     m = d.month - 1 + months
@@ -109,6 +116,20 @@ async def seed() -> None:
                     invite_code=new_code(), status="active", address_form=rnd.choice(["ty", "vy"]),
                     is_synthetic=True,
                 ))
+        await s.flush()
+
+        # Пригласили, но к боту ещё не подключились: статус waiting, ответов и вопросов нет
+        for last, first, code, work_type, in_days in WAITING:
+            full_name = f"{last} {first} [синтетика]"
+            if await s.scalar(select(Employee.id).where(Employee.full_name == full_name, Employee.is_synthetic)):
+                continue
+            start = today + timedelta(days=in_days)
+            s.add(Employee(
+                full_name=full_name, first_name=first, site_code=code, work_type=work_type,
+                start_date=start, probation_end=add_months(start, 3),
+                manager_id=manager.id, recruiter_id=recruiter.id,
+                invite_code=new_code(), status="waiting", address_form="ty", is_synthetic=True,
+            ))
 
         await s.commit()
 

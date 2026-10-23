@@ -125,6 +125,10 @@ def test_push_view(monkeypatch):
     buttons = atts[0]["payload"]["buttons"][0]
     assert buttons[0] == {"type": "callback", "text": "Провёл", "payload": "mg:done:5"}
     assert buttons[1]["type"] == "open_app" and buttons[1]["web_app"] == "korsik_bot"
+    # Mini App откроет карточку этого новичка: payload приходит как start_param
+    assert buttons[1]["payload"] == "employee_1"
+    _, atts = S.done_view(task_(status="done"), emp_(id=7))
+    assert atts[0]["payload"]["buttons"][0][0]["payload"] == "employee_7"
 
 
 def test_push_view_without_miniapp(monkeypatch):

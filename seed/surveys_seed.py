@@ -191,7 +191,9 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
 
     async with async_session() as s:
         ids = await store.sync(s)
-        emps = (await s.scalars(select(Employee).where(Employee.is_synthetic).order_by(Employee.id))).all()
+        # отвечают только подключившиеся (active): приглашённые в статусе waiting бота ещё не открыли
+        emps = (await s.scalars(select(Employee).where(Employee.is_synthetic, Employee.status == "active")
+                                .order_by(Employee.id))).all()
         if not emps:
             print("Нет синтетических новичков: сначала make seed")
             return

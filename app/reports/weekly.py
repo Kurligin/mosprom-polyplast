@@ -8,7 +8,8 @@
 - имён, ответов и цитат в сводке нет: только числа.
 
 Настроение ответа — `SurveyAnswer.mood` (ИИ-разбор), если его нет — по оценке: 8–10 хорошо, 5–7 так себе, 1–4 плохо.
-Темы — `SurveyAnswer.topic` и `QuestionLog.topic`, без «другое».
+Темы — `SurveyAnswer.topic` и `QuestionLog.topic`, без «другое». Из ответов опросов берём только текстовые
+и не позитивные: тема кнопки — это тема вопроса, иначе топ повторял бы набор вопросов опроса.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.db.models import Employee, Flag, QuestionLog, Site, Staff, SurveyAnswer
@@ -90,7 +91,7 @@ def period(now: datetime | None = None) -> dict:
 class Raw:
     sites: list[tuple[str, str]] = field(default_factory=list)   # (code, name)
     employees: list[dict] = field(default_factory=list)          # id, site, start_date, probation_end, status, synthetic
-    answers: list[dict] = field(default_factory=list)            # employee_id, site, score, mood, topic, synthetic
+    answers: list[dict] = field(default_factory=list)            # employee_id, site, score, mood, topic, text, synthetic
     questions: list[dict] = field(default_factory=list)          # employee_id, site, topic
     flags: list[dict] = field(default_factory=list)              # employee_id, site, status, level
 
@@ -106,11 +107,12 @@ async def collect(session, p: dict) -> Raw:
                               "status": e[4], "synthetic": bool(e[5])})
     rows = await session.execute(
         select(SurveyAnswer.employee_id, Employee.site_code, SurveyAnswer.score, SurveyAnswer.mood,
-               SurveyAnswer.topic, SurveyAnswer.is_synthetic, Employee.is_synthetic)
+               SurveyAnswer.topic, SurveyAnswer.is_synthetic, Employee.is_synthetic,
+               func.length(func.coalesce(func.trim(SurveyAnswer.text), "")) > 0)
         .join(Employee, Employee.id == SurveyAnswer.employee_id)
         .where(SurveyAnswer.created_at >= lo, SurveyAnswer.created_at < hi))
     raw.answers = [{"employee_id": r[0], "site": r[1], "score": r[2], "mood": r[3], "topic": r[4],
-                    "synthetic": bool(r[5] or r[6])} for r in rows.all()]
+                    "text": bool(r[7]), "synthetic": bool(r[5] or r[6])} for r in rows.all()]
     rows = await session.execute(
         select(QuestionLog.employee_id, Employee.site_code, QuestionLog.topic)
         .join(Employee, Employee.id == QuestionLog.employee_id)
@@ -163,9 +165,17 @@ def _slice(answers: list[dict]) -> dict:
     }
 
 
+def topic_worthy(answer: dict) -> bool:
+    """Ответ опроса говорит о теме: свой текст или не позитивный ответ (кнопка «всё отлично» — нет)."""
+    if answer.get("text"):
+        return True
+    return mood_of(answer.get("mood"), answer.get("score")) in ("neutral", "negative")
+
+
 def _topics(answers: list[dict], questions: list[dict]) -> list[dict]:
+    """Топ тем: текстовые и не позитивные ответы опросов + вопросы боту (questions_log)."""
     c: Counter[str] = Counter()
-    for row in (*answers, *questions):
+    for row in (*(a for a in answers if topic_worthy(a)), *questions):
         t = (row.get("topic") or "").strip()
         if t.lower() not in _SKIP_TOPICS:
             c[topic_label(t)] += 1

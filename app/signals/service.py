@@ -67,8 +67,9 @@ async def _create_ticket(repo, emp, text: str, *, category: str, level: str):
             return await factory(ctx, repo, emp, text, source="flag", category=category)
     ticket = await repo.create_ticket(employee_id=emp.id, source="flag", text=text,
                                       assignee_id=getattr(emp, "recruiter_id", None), category=category)
-    atts = keyboard([open_app("Открыть в Mini App", settings.max_bot_name.lstrip("@"))]) \
-        if settings.max_bot_name else None
+    tid = getattr(ticket, "id", None)
+    atts = keyboard([open_app("Открыть в Mini App", settings.max_bot_name.lstrip("@"),
+                              payload=f"ticket_{tid}" if tid else None)]) if settings.max_bot_name else None
     await runtime.notify_hr_group(repo, GROUP_FLAG.format(topic=category, name=emp.full_name,
                                                           site=emp.site_code, quote=text[:QUOTE_LIMIT]), atts)
     return ticket

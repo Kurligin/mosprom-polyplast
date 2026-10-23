@@ -38,6 +38,7 @@
 - В состоянии `sc:intro` вопрос со знаком «?» уходит в базу знаний, состояние сохраняется.
 - `engine.adaptation_day(emp, now=None) -> int` — 1 = день выхода, ≤ 0 = до выхода. `engine.probation_days(emp) -> int`.
 - `engine.upcoming_steps(session, emp, limit=5) -> list[{"at": iso, "title": str}]`.
+- `engine.timeline(session, emp, limit=5, *, now=None, plan=None) -> {"past", "upcoming", "now"}` — путь новичка для карточки Mini App: `past` — отправленные шаги (у синтетики в статусе active без отправок — шаги плана, время которых наступило, кроме писем и отмашек), `upcoming` — как `upcoming_steps`, `now` — «сейчас» новичка. Пункты — `{"at": iso, "title": str}`, один на момент.
 - `engine.time_travel(session, emp, to: str) -> {"employee_id", "day", "message"}`, где `to` ∈ `-2 | 1 | 3 | 14 | 60 | end`.
 - `engine.open_gate(session, emp, gate, *, file_path=None)`. Отмашки:
   - `recruiter_go` — «представлю тебя коллегам»;
@@ -115,12 +116,13 @@
   - в 10:00 дня встречи по часовому поясу площадки (с `time_shift_hours`) шлёт push с кнопками «Провёл» (`mg:done:<id>`) и «Открыть в Mini App» (если задан `MINIAPP_URL`). Пропущенный push догоняет 3 дня, итоговый — до конца испытательного. Синтетическим новичкам push не шлётся;
   - после нажатия «Провёл» push меняется на месте: «Встреча проведена ✓».
 - `manager.service.tick(session, now=None) -> {"employees", "created", "sent"}` — то же, что задача, без коммита. Можно вызвать сразу после перемотки времени, чтобы не ждать 5 минут.
+- Кнопка «Открыть в Mini App» в push руководителю — `open_app` с `payload="employee_<id>"`: Mini App открывает карточку новичка.
 - `manager.service.mark_done(session, task, staff, *, edit_push=True) -> ManagerTask`. Правит push в чате руководителя. `PermissionError` — руководитель отмечает чужую встречу; HR и глава подбора могут отметить любую.
 - `manager.service.remind_access(repo, emp) -> bool` — push руководителю «<Имя> пишет, что пока нет всех доступов». Руководитель не подключён — сообщение уходит в HR-группу. Повтор в течение 30 минут не дублирует push (`emp.dialog_data["access_reminded_at"]`).
 - `manager.service.list_for_manager(session, staff) -> list[dict]` — экран «Мои новички»: `{id, full_name, site, work_type, start_date, day, probation_days, connected, synthetic, next_meeting: Meeting | null, meetings: Meeting[]}`, `Meeting` — как в `miniapp/src/api/types.ts`: `{id, day, title, date, done}`. Дописывает недостающие встречи (flush): вызывающий коммитит сессию.
 - `manager.service.meetings_for(session, emp) -> list[Meeting]` — встречи для карточки новичка.
 - `manager.service.adaptation_day(emp, now=None)`, `probation_days(emp)` — берут `scenario.engine`, пока его нет — считают сами.
-- `reports.weekly.build(session, now=None) -> dict` — агрегаты за 4 недели: `kpi` (новички, средняя оценка, открытые и закрытые сигналы), `mood_rows` по площадкам, `topics` (топ-3), `low_data`, `synthetic`. Срез по площадке — только если ответили 5 и больше разных новичков. Мелкие площадки объединяются в строку с пометкой «мало данных»; если и вместе меньше 5 — только названия в `low_data`. Имён и цитат нет.
+- `reports.weekly.build(session, now=None) -> dict` — агрегаты за 4 недели: `kpi` (новички, средняя оценка, открытые и закрытые сигналы), `mood_rows` по площадкам, `topics` (топ-3: из ответов опросов — только текстовые и не позитивные, плюс темы `questions_log`), `low_data`, `synthetic`. Срез по площадке — только если ответили 5 и больше разных новичков. Мелкие площадки объединяются в строку с пометкой «мало данных»; если и вместе меньше 5 — только названия в `low_data`. Имён и цитат нет.
 - `reports.render.render_png(report) -> bytes` — 1080 × 1350, Playwright, браузер переиспользуется.
 - `reports.weekly.send(session, now=None) -> bool` — картинка с короткой подписью всем привязанным `Staff.role == "head_recruitment"`. Задача `weekly_report`: понедельник, 09:00. Подходит и для кнопки «Сформировать сводку» (`POST /api/demo/report`): `False` — глава подбора не привязан или бот выключен.
 

@@ -6,15 +6,22 @@ import logging
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.auth import HrDep, StaffDep, role_of
+from app.api.auth import HrDep, StaffDep, current_staff, role_of
 from app.api.deps import SessionDep, call, need, optional, save_upload
-from app.api.views import EmployeeViews, invite_link
+from app.api.views import (
+    EmployeeViews,
+    check_photo_sig,
+    intro_photo_file,
+    invite_link,
+    is_external_url,
+)
 from app.db.models import Employee, ManagerTask, Site, Staff, new_code
 from app.tickets.service import clean_name
 
@@ -54,6 +61,35 @@ async def get_employee(emp_id: int, staff: StaffDep,
     emp = await load_employee(session, emp_id, staff)
     await _ensure_meetings(session, emp)
     return await employee_card(session, emp, staff)
+
+
+@router.get("/employees/{emp_id}/intro-photo")
+async def intro_photo(emp_id: int, request: Request, session: SessionDep,
+                      exp: int = 0, sig: str = "", v: str = ""):
+    """Фото «представления коллегам» (emp.dialog_data["intro"]["photo_url"]).
+
+    Вход — как у остального API (заголовок initData) или подписанная ссылка из карточки: <img> не шлёт заголовки.
+    Файл из data/ или assets/ — отдаём файлом, внешний адрес «МАКС» — переадресацией.
+    Токен «МАКС» без адреса скачать нельзя: фото есть только в чате.
+    """
+    if sig:
+        if not check_photo_sig(emp_id, exp, sig):
+            raise HTTPException(403, "Ссылка на фото устарела, откройте карточку заново")
+        emp = await session.get(Employee, emp_id)
+        if emp is None:
+            raise HTTPException(404, "Новичок не найден")
+    else:
+        emp = await load_employee(session, emp_id, await current_staff(request, session))
+    intro = (emp.dialog_data or {}).get("intro")
+    photo = str((intro or {}).get("photo_url") or "").strip() if isinstance(intro, dict) else ""
+    if not photo:
+        raise HTTPException(404, "Новичок ещё не прислал фото")
+    if is_external_url(photo):
+        return RedirectResponse(photo, status_code=307)
+    path = intro_photo_file(photo)
+    if path is None:
+        raise HTTPException(404, "Фото есть только в чате «МАКС»")
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
 
 
 async def _ensure_meetings(session: AsyncSession, emp: Employee) -> None:

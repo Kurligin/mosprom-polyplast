@@ -702,27 +702,72 @@ def step_title(row: ScenarioStep, emp=None) -> str:
     return personalize(title, emp) if emp is not None else title
 
 
-async def upcoming_steps(session, emp, limit: int = 5, *, now: datetime | None = None) -> list[dict]:
-    """Ближайшие шаги новичка: [{"at": iso, "title": str}], один пункт на момент (до двух заголовков)."""
-    plan = await load_plan(session)
-    ctx = employee_ctx(emp, await _tz(session, emp))
-    vnow = employee_now(ctx, now or utcnow())
-    delivered = await _deliveries(session, emp.id)
+def _moments(items: list[tuple[datetime, ScenarioStep]], emp, limit: int | None = None) -> list[dict]:
+    """(время, шаг) по порядку → [{"at": iso, "title": str}]: один пункт на момент, до двух заголовков."""
     moments: dict[datetime, list[str]] = {}
+    for at, row in items:
+        if at not in moments:
+            if limit is not None and len(moments) >= limit:
+                break
+            moments[at] = []
+        title = step_title(row, emp)
+        if title and title not in moments[at]:
+            moments[at].append(title)
+    return [{"at": at.isoformat(), "title": " · ".join(t[:2]) or "Сообщение Корсика"}
+            for at, t in moments.items()]
+
+
+def _upcoming(plan: Plan, ctx: EmployeeCtx, emp, vnow: datetime, delivered: dict[str, Delivery],
+              limit: int) -> list[dict]:
+    items = []
     for p in plan_for(ctx, plan.specs_for(emp)):
         row = plan.by_number[p.step_number]
         if p.due_at <= vnow or _ikey(row, emp.id) in delivered or _ex(row).get("covered") \
                 or _ex(row).get("channel") == "email":
             continue
-        if p.due_at not in moments:
-            if len(moments) >= limit:
-                break
-            moments[p.due_at] = []
-        title = step_title(row, emp)
-        if title and title not in moments[p.due_at]:
-            moments[p.due_at].append(title)
-    return [{"at": at.isoformat(), "title": " · ".join(t[:2]) or "Сообщение Корсика"}
-            for at, t in moments.items()]
+        items.append((p.due_at, row))
+    return _moments(items, emp, limit)
+
+
+async def upcoming_steps(session, emp, limit: int = 5, *, now: datetime | None = None) -> list[dict]:
+    """Ближайшие шаги новичка: [{"at": iso, "title": str}], один пункт на момент (до двух заголовков)."""
+    plan = await load_plan(session)
+    ctx = employee_ctx(emp, await _tz(session, emp))
+    vnow = employee_now(ctx, now or utcnow())
+    return _upcoming(plan, ctx, emp, vnow, await _deliveries(session, emp.id), limit)
+
+
+async def timeline(session, emp, limit: int = 5, *, now: datetime | None = None,
+                   plan: Plan | None = None) -> dict:
+    """Путь новичка для карточки Mini App: {"past": [...], "upcoming": [...], "now": iso}.
+
+    Пункт — {"at": iso, "title": str}, один на момент, по возрастанию времени.
+    - past — отправленные шаги (deliveries со статусом sent, и знакомство в боте тоже), без писем;
+    - у синтетического новичка в статусе active (демо) отправок нет: прошедшими считаем шаги плана,
+      время которых наступило, кроме писем и шагов по отмашке. Не подключившийся (waiting) — без пройденных;
+    - upcoming — как `upcoming_steps`, не больше limit;
+    - now — «сейчас» новичка с учётом машины времени.
+    plan — уже загруженный сценарий (список новичков: один запрос на всех).
+    """
+    plan = plan or await load_plan(session)
+    ctx = employee_ctx(emp, await _tz(session, emp))
+    vnow = employee_now(ctx, now or utcnow())
+    delivered = await _deliveries(session, emp.id)
+    by_id = {r.id: r for r in plan.rows}
+    zone = ZoneInfo(ctx.tz)
+    past: list[tuple[datetime, ScenarioStep]] = []
+    for d in delivered.values():
+        row = by_id.get(d.step_id)
+        if d.status == "sent" and row is not None and _ex(row).get("channel") != "email":
+            past.append((d.scheduled_at.astimezone(zone), row))  # из БД время приходит в UTC
+    if not past and getattr(emp, "is_synthetic", False) and emp.status == "active":
+        for p in plan_for(ctx, plan.specs_for(emp)):
+            row = plan.by_number[p.step_number]
+            if p.due_at <= vnow and not p.gate and _ex(row).get("channel") != "email":
+                past.append((p.due_at, row))
+    past.sort(key=lambda x: (x[0], x[1].order_no))
+    return {"past": _moments(past, emp), "upcoming": _upcoming(plan, ctx, emp, vnow, delivered, limit),
+            "now": vnow.isoformat()}
 
 
 def _target_date(to: str, emp, ctx: EmployeeCtx, plan: Plan) -> date:

@@ -127,7 +127,7 @@
   .foot .brand { flex: none; font-weight: 700; }
 </style>
 </head>
-<body{% if r.mood_rows | length > 3 %} class="dense"{% endif %}>
+<body{% if r.mood_rows | length >= 3 %} class="dense"{% endif %}>
 {% set k = r.kpi %}
 <div class="page">
 

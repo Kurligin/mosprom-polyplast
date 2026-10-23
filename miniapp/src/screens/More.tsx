@@ -32,9 +32,9 @@ export default function More() {
   const toast = useToast()
   const reduce = useReducedMotion()
   const topics = useAsync(() => api.topics(), [])
-  // перематывать можно только тех, кто подключился к боту: остальным бот не пишет
+  // перематывать можно только тех, кто подключился к боту: остальным бот не пишет (синтетике тоже)
   const people = useAsync(() => api.employees(), [])
-  const connected = (people.data ?? []).filter((e) => e.connected)
+  const connected = (people.data ?? []).filter((e) => e.connected && !e.synthetic)
   const [who, setWho] = useState<number | ''>('')
   const [shift, setShift] = useState<ShiftTo | null>(null)
   const [shifting, setShifting] = useState(false)

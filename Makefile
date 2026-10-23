@@ -18,6 +18,7 @@ migrate:
 seed:
 	$(DC) exec app python -m seed.seed
 	$(DC) exec app python -m seed.surveys_seed
+	$(DC) exec app python -m seed.questions_seed
 
 links:
 	$(DC) exec app python -m seed.seed --links

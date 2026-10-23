@@ -114,7 +114,7 @@ export function IntroSection({ e, demo, canGate, onUpdate }: { e: Employee; demo
     return (
       <Section header="Представление коллегам" footer={e.intro.at ? `Прислано ${fmtDate(e.intro.at)}` : undefined}>
         {e.intro.photo_url && !photoFailed && (
-          <button className="intro-photo" onClick={() => { haptic.tap(); openExternal(e.intro!.photo_url!) }} aria-label="Открыть фото целиком">
+          <button className="intro-photo" onClick={() => { haptic.tap(); openExternal(new URL(e.intro!.photo_url!, location.href).href) }} aria-label="Открыть фото целиком">
             <img src={e.intro.photo_url} alt={`Фото: ${e.full_name}`} loading="lazy" onError={() => setPhotoFailed(true)} />
           </button>
         )}

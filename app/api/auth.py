@@ -6,6 +6,8 @@
 3. secret_key = HMAC-SHA256(key="WebAppData", msg=<токен бота>).
 4. hash = hex(HMAC-SHA256(key=secret_key, msg=<строка из п. 2>)).
 auth_date — не старше 24 часов. Роль — по user.id → staff.max_user_id.
+Если в заголовке нет «=», Mini App закодировал строку целиком (encodeURIComponent из-за кириллицы):
+раскодируем её один раз и проверяем как обычно.
 
 Без initData при DEV_ALLOW_NO_INIT_DATA=true запрос проходит как первый HR из БД
 (заголовок X-Dev-Role: manager | head | hr выбирает другую роль — только в dev).
@@ -43,6 +45,9 @@ class InitDataError(ValueError):
 
 def _pairs(raw: str) -> list[tuple[str, str]]:
     raw = raw.strip().lstrip("#")
+    if raw and "=" not in raw:
+        # Mini App закодировал строку encodeURIComponent: в заголовке HTTP нельзя кириллицу (имя в user)
+        raw = unquote(raw).strip().lstrip("#")
     if "WebAppData=" in raw:
         # пришёл целиком фрагмент URL: #WebAppData=…&WebAppPlatform=…
         outer = parse_qsl(raw, keep_blank_values=True)

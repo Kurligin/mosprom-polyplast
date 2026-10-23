@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import re
+import secrets
+import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -43,6 +48,10 @@ MEETING_TITLES = {3: "Встреча на 3-й день", 30: "Встреча н
 FINAL_MEETING = "Итоговая встреча"
 ROLE_LABELS = {"hr": "HR", "recruiter": "Рекрутер", "manager": "Руководитель", "head_recruitment": "Глава подбора"}
 _SOURCE_RE = re.compile(r"^\s*Источник:\s*(.+?)\s*$", re.MULTILINE)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PHOTO_ROOTS = (PROJECT_ROOT / "data", PROJECT_ROOT / "assets")  # откуда можно отдавать фото файлом
+PHOTO_TTL = 24 * 3600  # подписанная ссылка на фото живёт сутки: <img> не умеет слать заголовок initData
+_PHOTO_FALLBACK_KEY = secrets.token_bytes(32)
 
 
 def iso(dt: datetime | None) -> str | None:
@@ -97,39 +106,49 @@ def contact(staff: Staff | None, role: str, fallback_id: int) -> dict:
     return {"id": staff.id, "name": tickets.clean_name(staff.full_name), "role": label, "phone": None}
 
 
-def step_title(step: ScenarioStep) -> str:
-    title = (step.topic or "").strip()
-    if not title:
-        first = (step.text or "").strip().splitlines()
-        title = first[0] if first else f"Шаг {step.step_no or step.id}"
-    return title if len(title) <= 80 else title[:79].rstrip() + "…"
-
-
 def survey_code(step: ScenarioStep) -> str | None:
-    """Код опроса для шага-опроса: surveys.engine.survey_for_step, иначе карта шагов из config/surveys.yaml."""
-    keys = [k for k in (step.order_no, step.step_no) if k not in (None, "")]
-    for_step = optional("app.surveys.engine", "survey_for_step")
-    if for_step is not None:
-        for k in keys:
-            try:
-                code = for_step(k)
-            except Exception:  # noqa: BLE001
-                code = None
-            if code:
-                return code
+    """Код опроса для шага сценария, как у движка: surveys.engine.survey_for_step(номер строки).
+
+    Тип шага не важен: шаги 20, 21 и 47 в xlsx — «message», но это опросы.
+    """
+    if step.order_no is None:
         return None
-    step_map = optional("app.surveys.config", "step_map")
-    if step_map is None:
+    for_step = optional("app.surveys.engine", "survey_for_step")
+    if for_step is None:
         return None
     try:
-        m = step_map()
+        return for_step(step.order_no) or None
     except Exception:  # noqa: BLE001
         return None
-    for k in keys:
-        code = m.get(k) or (m.get(int(k)) if str(k).isdigit() else None)
-        if code:
-            return code
-    return None
+
+
+def survey_steps() -> list[int]:
+    """Номера шагов сценария, которые покрывают опросы (config/surveys.yaml)."""
+    step_map = optional("app.surveys.config", "step_map")
+    try:
+        return sorted(step_map()) if step_map is not None else []
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def connected(emp) -> bool:
+    """Подключился ли новичок к боту. Синтетические новички в статусе active — «подключились» (демо)."""
+    return emp.max_user_id is not None or (bool(emp.is_synthetic) and emp.status == "active")
+
+
+def employee_now(emp, now: datetime | None = None) -> datetime:
+    """«Сейчас» для новичка с учётом машины времени."""
+    return (now or datetime.now(UTC)) + timedelta(hours=emp.time_shift_hours or 0)
+
+
+def _parse_dt(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def meeting_json(task: ManagerTask, emp) -> dict:
@@ -160,11 +179,62 @@ def gates_of(emp) -> dict:
     return {"recruiter_go": bool(raw.get("recruiter_go")), "plan_ready": bool(raw.get("plan_ready"))}
 
 
+def is_external_url(value: str) -> bool:
+    return value.startswith(("https://", "http://"))
+
+
+def _photo_key() -> bytes:
+    token = settings.max_bot_token
+    return hashlib.sha256(b"intro-photo:" + token.encode()).digest() if token else _PHOTO_FALLBACK_KEY
+
+
+def photo_sig(emp_id: int, exp: int) -> str:
+    return hmac.new(_photo_key(), f"{emp_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def check_photo_sig(emp_id: int, exp: int, sig: str, now: float | None = None) -> bool:
+    if not sig or exp < (time.time() if now is None else now):
+        return False
+    return hmac.compare_digest(photo_sig(emp_id, exp), sig)
+
+
+def intro_photo_url(emp, photo: str | None, now: float | None = None) -> str | None:
+    """Ссылка на фото «представления коллегам» для Mini App.
+
+    Внешний https-адрес фото «МАКС» — как есть. Файл или токен «МАКС» — через API
+    (GET /api/employees/{id}/intro-photo) с подписью в адресе: <img> не передаёт заголовок initData,
+    а карточку с этой ссылкой уже выдали тому, кому её можно видеть.
+    """
+    if not photo:
+        return None
+    photo = str(photo).strip()
+    if is_external_url(photo):
+        return photo
+    exp = int(time.time() if now is None else now) + PHOTO_TTL
+    v = hashlib.sha256(photo.encode()).hexdigest()[:8]  # другое фото — другой адрес, кэш браузера не мешает
+    return f"/api/employees/{emp.id}/intro-photo?v={v}&exp={exp}&sig={photo_sig(emp.id, exp)}"
+
+
+def intro_photo_file(photo: str | None) -> Path | None:
+    """Фото лежит файлом в data/ или assets/ проекта. Иначе (токен «МАКС», чужой путь) — None."""
+    if not photo or is_external_url(photo):
+        return None
+    try:
+        path = Path(photo)
+        path = (path if path.is_absolute() else PROJECT_ROOT / path).resolve()
+    except (OSError, ValueError):
+        return None
+    if not any(path.is_relative_to(root.resolve()) for root in PHOTO_ROOTS):
+        return None
+    return path if path.is_file() else None
+
+
 def intro_of(emp) -> dict | None:
     intro = (emp.dialog_data or {}).get("intro")
     if not isinstance(intro, dict) or not intro.get("text"):
         return None
-    return {"text": intro.get("text"), "photo_url": intro.get("photo_url"), "at": intro.get("at")}
+    return {"text": intro.get("text"), "photo_url": intro_photo_url(emp, intro.get("photo_url")),
+            "at": intro.get("at")}
 
 
 # --- тикеты ---------------------------------------------------------------------
@@ -282,8 +352,23 @@ async def ticket_json(session: AsyncSession, t: Ticket) -> dict:
 
 # --- новички -------------------------------------------------------------------------
 
+def current_index(steps: list[dict], today: str) -> int | None:
+    """Шаг «сейчас»: последний пройденный сегодня, иначе первый сегодняшний из ближайших."""
+    done = [i for i, s in enumerate(steps) if s["status"] == "done" and s["date"] == today]
+    if done:
+        return done[-1]
+    return next((i for i, s in enumerate(steps) if s["status"] == "upcoming" and s["date"] == today), None)
+
+
+def current_step(steps: list[dict]) -> str | None:
+    """Подпись в списке новичков: шаг сегодняшнего дня, иначе ближайший."""
+    cur = next((s for s in steps if s["status"] == "current"), None) \
+        or next((s for s in steps if s["status"] == "upcoming"), None)
+    return cur["title"] if cur else None
+
+
 class EmployeeViews:
-    """Сборка EmployeeShort / Employee. Тикеты, флаги, встречи и персонал — одним запросом на список."""
+    """Сборка EmployeeShort / Employee. Тикеты, флаги, встречи, персонал и сценарий — одним запросом на список."""
 
     def __init__(self, session: AsyncSession, role: str):
         self.s = session
@@ -295,6 +380,8 @@ class EmployeeViews:
         self.red_emps: set[int] = set()
         self.tasks: dict[int, list[ManagerTask]] = defaultdict(list)
         self.staff: dict[int, Staff] = {}
+        self.plan = None  # сценарий движка, один на все карточки
+        self.survey_rows: dict[str, Survey] | None = None
 
     async def prepare(self, emps: list[Employee]) -> None:
         ids = [e.id for e in emps]
@@ -304,6 +391,12 @@ class EmployeeViews:
         for t in await self.s.scalars(select(ManagerTask).where(ManagerTask.employee_id.in_(ids))
                                       .order_by(ManagerTask.due_date, ManagerTask.day, ManagerTask.id)):
             self.tasks[t.employee_id].append(t)
+        load_plan = optional("app.scenario.engine", "load_plan")
+        if load_plan is not None:
+            try:
+                self.plan = await call(load_plan, self.s)
+            except Exception as e:  # noqa: BLE001 — без сценария карточка всё равно открывается
+                log.warning("engine.load_plan: %s", e)
         if not self.hr:
             return
         all_t = list(await self.s.scalars(select(Ticket).where(Ticket.employee_id.in_(ids))
@@ -317,91 +410,126 @@ class EmployeeViews:
     def meetings(self, emp) -> list[dict]:
         return [meeting_json(t, emp) for t in self.tasks.get(emp.id, [])]
 
-    async def upcoming(self, emp, limit: int = 5) -> list[dict]:
-        fn = optional("app.scenario.engine", "upcoming_steps")
-        if fn is None:
-            return []
+    async def timeline(self, emp, limit: int = 5) -> dict:
+        """{"past", "upcoming", "now"} из движка сценария (engine.timeline); без него — только ближайшие шаги."""
         try:
-            return list(await call(fn, self.s, emp, limit=limit) or [])
+            fn = optional("app.scenario.engine", "timeline")
+            if fn is not None:
+                return dict(await call(fn, self.s, emp, limit=limit, plan=self.plan) or {})
+            fn = optional("app.scenario.engine", "upcoming_steps")
+            if fn is not None:
+                return {"past": [], "upcoming": list(await call(fn, self.s, emp, limit=limit) or [])}
         except Exception as e:  # noqa: BLE001 — шаги не должны ронять карточку
-            log.warning("engine.upcoming_steps(%s): %s", emp.id, e)
-            return []
+            log.warning("engine.timeline(%s): %s", emp.id, e)
+        return {"past": [], "upcoming": []}
+
+    def steps(self, emp, tl: dict) -> list[dict]:
+        """Шаги карточки: пройденные (done), сегодняшний (current), ближайшие (upcoming). Форма Step из types.ts."""
+        tz = _tz(emp)
+        now = _parse_dt(tl.get("now")) or employee_now(emp)
+        out = []
+        for status, items in (("done", tl.get("past") or []), ("upcoming", tl.get("upcoming") or [])):
+            for item in items:
+                at = _parse_dt(item.get("at"))
+                if at is None:
+                    continue
+                step = {"day": _day_of(emp, at), "title": str(item.get("title") or "Сообщение Корсика"),
+                        "date": at.astimezone(tz).date().isoformat(), "status": status}
+                if out and all(out[-1][k] == step[k] for k in ("title", "date", "status")):
+                    continue  # два момента одного шага в один день («Опрос двух месяцев» в 10:00 и 10:05)
+                out.append(step)
+        cur = current_index(out, now.astimezone(tz).date().isoformat())
+        if cur is not None:
+            out[cur]["status"] = "current"
+        return out
+
+    async def _survey_rows(self) -> dict[str, Survey]:
+        if self.survey_rows is None:
+            self.survey_rows = {s.code: s for s in await self.s.scalars(select(Survey))}
+        return self.survey_rows
 
     async def surveys(self, emp) -> list[dict]:
-        """Опросы новичка: отправленные шаги-опросы и ответы из survey_answers."""
-        answers: dict[int, dict] = {}
+        """Опросы новичка: отправленные шаги-опросы, начатые опросы и ответы.
+
+        - пройден — есть survey_history(emp)[код]["done_at"]; у синтетики истории нет, тогда — по ответам;
+        - не пройден — pending_surveys(emp) или отправлен без done_at; старше 3 дней или закрыт — «пропущен».
+        Шаг-опрос — по survey_for_step(номер строки), не по типу шага.
+        """
+        history: dict = {}
+        pending: set[str] = set()
+        fn = optional("app.surveys.engine", "survey_history")
+        if fn is not None:
+            try:
+                history = dict(fn(emp) or {})
+            except Exception as e:  # noqa: BLE001
+                log.debug("surveys.survey_history: %s", e)
+        fn = optional("app.surveys.engine", "pending_surveys")
+        if fn is not None:
+            try:
+                pending = set(fn(emp) or [])
+            except Exception as e:  # noqa: BLE001
+                log.debug("surveys.pending_surveys: %s", e)
+
+        rows = await self._survey_rows()
+        code_by_id = {s.id: code for code, s in rows.items()}
+        answers: dict[str, dict] = {}
         for sid, score, created in (await self.s.execute(
                 select(SurveyQuestion.survey_id, SurveyAnswer.score, SurveyAnswer.created_at)
                 .join(SurveyQuestion, SurveyAnswer.question_id == SurveyQuestion.id)
                 .where(SurveyAnswer.employee_id == emp.id))).all():
-            a = answers.setdefault(sid, {"scores": [], "at": created})
+            code = code_by_id.get(sid)
+            if code is None:
+                continue
+            a = answers.setdefault(code, {"scores": [], "at": created})
             if score is not None:
                 a["scores"].append(score)
             if created and (a["at"] is None or created < a["at"]):
                 a["at"] = created
 
-        sent: dict[int, datetime] = {}
-        rows = (await self.s.execute(
-            select(Delivery.scheduled_at, Delivery.sent_at, ScenarioStep)
-            .join(ScenarioStep, Delivery.step_id == ScenarioStep.id)
-            .where(Delivery.employee_id == emp.id, Delivery.status == "sent", ScenarioStep.kind == "survey"))).all()
-        if rows:
-            codes: dict[str, int] = {c: i for i, c in (await self.s.execute(select(Survey.id, Survey.code))).all()}
-            for scheduled, sent_at, step in rows:
-                sid = step.survey_id
-                if sid is None:
-                    code = survey_code(step)
-                    sid = codes.get(code) if code else None
-                if sid is not None:
-                    when = sent_at or scheduled
-                    sent[sid] = min(sent.get(sid, when), when)
+        sent: dict[str, datetime] = {}
+        numbers = survey_steps()
+        if numbers:
+            for scheduled, sent_at, step in (await self.s.execute(
+                    select(Delivery.scheduled_at, Delivery.sent_at, ScenarioStep)
+                    .join(ScenarioStep, Delivery.step_id == ScenarioStep.id)
+                    .where(Delivery.employee_id == emp.id, Delivery.status == "sent",
+                           ScenarioStep.order_no.in_(numbers)))).all():
+                code = survey_code(step)
+                when = scheduled or sent_at
+                if code and when:
+                    sent[code] = min(sent.get(code, when), when)
 
-        ids = set(answers) | set(sent)
-        if not ids:
-            return []
-        titles = {s.id: s.title for s in await self.s.scalars(select(Survey).where(Survey.id.in_(ids)))}
-        now = datetime.now(UTC)
+        now = employee_now(emp)
         items = []
-        for sid in ids:
-            a = answers.get(sid)
-            when = sent.get(sid) or (a or {}).get("at") or now
-            if a:
-                scores = a["scores"]
+        for code in set(history) | pending | set(sent) | set(answers):
+            row = rows.get(code)
+            if row is None:
+                continue  # опроса ещё нет в БД (store.sync не запускали)
+            h = history.get(code) if isinstance(history.get(code), dict) else None
+            a = answers.get(code)
+            when = sent.get(code) or _parse_dt((h or {}).get("started_at")) or (a or {}).get("at") or now
+            if code in pending:
+                done = False
+            elif h is not None:
+                done = bool(h.get("done_at"))
+            else:
+                done = a is not None  # синтетика: истории опросов нет, только ответы
+            if done:
+                scores = (a or {}).get("scores") or []
                 status, score = "done", (round(sum(scores) / len(scores)) if scores else None)
             else:
-                status, score = ("missed" if now - when > SURVEY_MISSED_AFTER else "pending"), None
-            items.append({"id": sid, "title": titles.get(sid, "Опрос"), "day": _day_of(emp, when),
-                          "status": status, "score": score, "_at": when})
+                stale = bool((h or {}).get("closed_at")) or now - when > SURVEY_MISSED_AFTER
+                status, score = ("missed" if stale else "pending"), None
+            items.append({"id": row.id, "title": row.title, "day": _day_of(emp, when), "status": status,
+                          "score": score, "_at": when})
         items.sort(key=lambda x: x["_at"])
         for x in items:
             x.pop("_at")
         return items
 
-    async def steps(self, emp, upcoming: list[dict]) -> list[dict]:
-        done = (await self.s.execute(
-            select(Delivery.scheduled_at, ScenarioStep)
-            .join(ScenarioStep, Delivery.step_id == ScenarioStep.id)
-            .where(Delivery.employee_id == emp.id, Delivery.status == "sent")
-            .order_by(Delivery.scheduled_at))).all()
-        out = []
-        for when, step in done:
-            out.append({"day": _day_of(emp, when), "title": step_title(step),
-                        "date": when.astimezone(_tz(emp)).date().isoformat(), "status": "done"})
-        for i, u in enumerate(upcoming):
-            try:
-                at = datetime.fromisoformat(str(u.get("at")))
-            except ValueError:
-                continue
-            if at.tzinfo is None:
-                at = at.replace(tzinfo=_tz(emp))
-            out.append({"day": _day_of(emp, at), "title": str(u.get("title") or "Шаг сценария"),
-                        "date": at.astimezone(_tz(emp)).date().isoformat(),
-                        "status": "current" if i == 0 else "upcoming"})
-        return out
-
-    async def short(self, emp, *, upcoming: list[dict] | None = None, surveys: list[dict] | None = None) -> dict:
-        if upcoming is None:
-            upcoming = await self.upcoming(emp, limit=1)
+    async def short(self, emp, *, tl: dict | None = None, surveys: list[dict] | None = None) -> dict:
+        if tl is None:
+            tl = await self.timeline(emp, limit=1)
         if surveys is None:
             surveys = await self.surveys(emp) if self.hr else []
         own = self.tickets.get(emp.id, []) if self.hr else []
@@ -418,19 +546,19 @@ class EmployeeViews:
             "start_date": emp.start_date.isoformat(),
             "day": tickets.employee_day(emp),
             "probation_days": tickets.probation_days(emp),
-            "current_step": str(upcoming[0].get("title")) if upcoming else None,
+            "current_step": current_step(self.steps(emp, tl)),
             "pending_surveys": sum(1 for s in surveys if s["status"] != "done"),
             "open_tickets": len(open_t),
             "red_flag": bool(red),
-            "connected": emp.max_user_id is not None,
+            "connected": connected(emp),
             "next_meeting": next((m for m in meetings if not m["done"]), None),
             "synthetic": bool(emp.is_synthetic),
         }
 
     async def full(self, emp) -> dict:
-        upcoming = await self.upcoming(emp, limit=5)
+        tl = await self.timeline(emp, limit=5)
         surveys = await self.surveys(emp) if self.hr else []
-        data = await self.short(emp, upcoming=upcoming, surveys=surveys)
+        data = await self.short(emp, tl=tl, surveys=surveys)
         intro = intro_of(emp)
         own = self.tickets.get(emp.id, []) if self.hr else []
         data.update({
@@ -438,7 +566,7 @@ class EmployeeViews:
             "recruiter": contact(self.staff.get(emp.recruiter_id), "recruiter", -2),
             "intro_text": intro["text"] if intro else None,
             "intro": intro,
-            "steps": await self.steps(emp, upcoming),
+            "steps": self.steps(emp, tl),
             "surveys": surveys,
             "tickets": [ticket_short_json(t, emp, self.levels.get(t.id, set()), self.topics.get(t.id))
                         for t in own],
