@@ -5,3 +5,7 @@ node_modules/
 *.pyc
 .DS_Store
 data/raw/
+.pytest_cache/
+.ruff_cache/
+miniapp/dist/
+*.egg-info/

@@ -1,0 +1,12 @@
+.env
+.git
+*.pdf
+*.pptx
+*.xlsx
+miniapp/node_modules
+data/
+.agents
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.venv
