@@ -264,6 +264,13 @@ docker-compose.yml   postgres+pgvector, app, caddy
 
 ## 7. Деплой
 
+**Локальная разработка — тоже в Docker Compose** (Docker Desktop, Apple Silicon / arm64):
+- `docker compose up` поднимает `postgres` (pgvector), `app` (бот + планировщик + API, код смонтирован томом, автоперезапуск при изменениях) и `miniapp` (Vite dev-server с hot-reload);
+- миграции, заполнение демо-данных, импорт сценария и оценка качества — командами `docker compose exec app …` (обёртки в `Makefile`);
+- модель `bge-m3` скачивается один раз в именованный том, чтобы не тянуть её при каждой сборке.
+
+**Сервер:**
+
 - VPS с Docker Compose: `postgres` (образ pgvector), `app`, `caddy`.
 - Caddy выдаёт HTTPS для Mini App и API. URL Mini App прописывается в настройках тестового бота.
 - Бот работает через long polling.
