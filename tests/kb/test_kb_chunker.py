@@ -7,6 +7,8 @@ from app.kb.chunker import load_all_docs
 
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 
+pytestmark = pytest.mark.needs_customer_docs
+
 
 @pytest.fixture(scope="module")
 def chunks():

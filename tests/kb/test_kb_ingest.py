@@ -100,6 +100,7 @@ def test_unsupported_format(tmp_path):
         chunk_file(p, "x")
 
 
+@pytest.mark.needs_customer_docs
 def test_sub_lines_only_for_long_points():
     chunks = {c.key: c for c in load_all_docs(DOCS)}
     lines = sub_lines(chunks["pvtr:6.4.2"])

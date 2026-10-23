@@ -110,6 +110,7 @@ def _assert_quote_verbatim(out, text):
             assert body in text
 
 
+@pytest.mark.needs_customer_docs
 def test_card_excerpt_is_verbatim():
     from app.kb.card import render_card
     from app.kb.chunker import load_all_docs, sub_lines
@@ -124,6 +125,7 @@ def test_card_excerpt_is_verbatim():
     _assert_quote_verbatim(out, c.text)
 
 
+@pytest.mark.needs_customer_docs
 def test_card_very_long_point_without_focus_is_excerpt():
     from app.kb.card import FULL_LIMIT, render_card
     from app.kb.chunker import load_all_docs
