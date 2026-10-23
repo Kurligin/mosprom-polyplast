@@ -82,14 +82,19 @@
 
 ## Руководитель — `app/manager`, сводка — `app/reports`
 
-- Задача `manager_tasks`:
-  - создаёт `ManagerTask` на 3-й, 30-й, 60-й день и за 5 дней до конца испытательного;
-  - в 10:00 дня встречи шлёт push с кнопками «Провёл» (`mg:done:<id>`) и «Открыть в Mini App»;
-  - после нажатия «Провёл» push меняется на месте.
-- `manager.service.mark_done(session, task, staff)`, `manager.service.remind_access(repo, emp)`.
-- `reports.weekly.build(session, now=None) -> dict`. Срез по площадке — только если ответили 5 и больше разных новичков, иначе пометка «мало данных».
-- `reports.render.render_png(report) -> bytes` — 1080 × 1350, Playwright.
-- `reports.weekly.send(session) -> bool` — картинка главе подбора. Задача `weekly_report`: понедельник, 09:00.
+- Задача `manager_tasks` (раз в 5 минут):
+  - создаёт `ManagerTask`: `kind="meeting"`, `day` 3 / 30 / 60 и `kind="probation"` за 5 дней до конца испытательного (`day` — день адаптации даты встречи). Даты — по производственному календарю: 3-й рабочий день; 30-й и 60-й, если выходной — следующий рабочий; итоговая, если выходной — предыдущий рабочий;
+  - в 10:00 дня встречи по часовому поясу площадки (с `time_shift_hours`) шлёт push с кнопками «Провёл» (`mg:done:<id>`) и «Открыть в Mini App» (если задан `MINIAPP_URL`). Пропущенный push догоняет 3 дня, итоговый — до конца испытательного. Синтетическим новичкам push не шлётся;
+  - после нажатия «Провёл» push меняется на месте: «Встреча проведена ✓».
+- `manager.service.tick(session, now=None) -> {"employees", "created", "sent"}` — то же, что задача, без коммита. Можно вызвать сразу после перемотки времени, чтобы не ждать 5 минут.
+- `manager.service.mark_done(session, task, staff, *, edit_push=True) -> ManagerTask`. Правит push в чате руководителя. `PermissionError` — руководитель отмечает чужую встречу; HR и глава подбора могут отметить любую.
+- `manager.service.remind_access(repo, emp) -> bool` — push руководителю «<Имя> пишет, что пока нет всех доступов». Руководитель не подключён — сообщение уходит в HR-группу. Повтор в течение 30 минут не дублирует push (`emp.dialog_data["access_reminded_at"]`).
+- `manager.service.list_for_manager(session, staff) -> list[dict]` — экран «Мои новички»: `{id, full_name, site, work_type, start_date, day, probation_days, connected, synthetic, next_meeting: Meeting | null, meetings: Meeting[]}`, `Meeting` — как в `miniapp/src/api/types.ts`: `{id, day, title, date, done}`. Дописывает недостающие встречи (flush): вызывающий коммитит сессию.
+- `manager.service.meetings_for(session, emp) -> list[Meeting]` — встречи для карточки новичка.
+- `manager.service.adaptation_day(emp, now=None)`, `probation_days(emp)` — берут `scenario.engine`, пока его нет — считают сами.
+- `reports.weekly.build(session, now=None) -> dict` — агрегаты за 4 недели: `kpi` (новички, средняя оценка, открытые и закрытые сигналы), `mood_rows` по площадкам, `topics` (топ-3), `low_data`, `synthetic`. Срез по площадке — только если ответили 5 и больше разных новичков. Мелкие площадки объединяются в строку с пометкой «мало данных»; если и вместе меньше 5 — только названия в `low_data`. Имён и цитат нет.
+- `reports.render.render_png(report) -> bytes` — 1080 × 1350, Playwright, браузер переиспользуется.
+- `reports.weekly.send(session, now=None) -> bool` — картинка с короткой подписью всем привязанным `Staff.role == "head_recruitment"`. Задача `weekly_report`: понедельник, 09:00. Подходит и для кнопки «Сформировать сводку» (`POST /api/demo/report`): `False` — глава подбора не привязан или бот выключен.
 
 ## API для Mini App — `app/api`
 

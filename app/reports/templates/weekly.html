@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сводка по адаптации</title>
+<style>
+  /* Токены dev-plan 5.2, светлая тема. Типографика 5.3 в масштабе ×2: картинку смотрят на телефоне в треть ширины */
+  :root {
+    --bg: #F2F2F7;
+    --surface: #FFFFFF;
+    --text: #111827;
+    --text-secondary: #6B7280;
+    --primary: #2563EB;
+    --success: #16A34A;
+    --warning: #D97706;
+    --danger: #DC2626;
+    --separator: #E5E7EB;
+    --neutral: #D1D5DB;
+    --r-card: 28px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: {{ width }}px; height: {{ height }}px; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans", system-ui, -apple-system, sans-serif;
+    font-size: 30px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--text-secondary); }
+  .page {
+    height: 100%;
+    padding: 64px 64px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* Заголовок */
+  .eyebrow-row { display: flex; justify-content: space-between; align-items: center; }
+  .eyebrow { font-size: 26px; font-weight: 700; color: var(--text-secondary); }
+  .chip {
+    font-size: 22px; font-weight: 700; line-height: 1;
+    color: var(--text-secondary);
+    border: 2px solid var(--neutral);
+    border-radius: 999px;
+    padding: 10px 18px;
+  }
+  h1 { font-size: 64px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; margin-top: 8px; }
+  .sub { font-size: 26px; color: var(--text-secondary); margin-top: 10px; }
+  header { margin-bottom: 8px; }
+
+  /* KPI */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border-radius: var(--r-card); padding: 30px 32px; }
+  .kpi .label { font-size: 26px; color: var(--text-secondary); line-height: 1.2; white-space: nowrap; }
+  .kpi .value {
+    font-size: 84px; font-weight: 700; line-height: 1; letter-spacing: -0.03em;
+    margin: 18px 0 14px;
+  }
+  .kpi .value small { font-size: 32px; font-weight: 400; letter-spacing: 0; color: var(--text-secondary); margin-left: 4px; }
+  .kpi .value.danger { color: var(--danger); }
+  .kpi .note { font-size: 23px; color: var(--text-secondary); line-height: 1.25; white-space: nowrap; }
+
+  /* Секции */
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 26px; }
+  h2 { font-size: 36px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+  .legend { display: flex; gap: 22px; font-size: 22px; color: var(--text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .dot { width: 14px; height: 14px; border-radius: 999px; display: inline-block; }
+  .pos { background: var(--success); }
+  .neu { background: var(--neutral); }
+  .neg { background: var(--danger); }
+
+  /* Настроение */
+  .rows { display: flex; flex-direction: column; gap: 30px; }
+  /* 4+ строк: плотнее, чтобы подвал остался на картинке */
+  .dense .rows { gap: 16px; }
+  .dense .row-top { margin-bottom: 6px; }
+  .dense .bar { height: 16px; }
+  .dense .topics { gap: 14px; }
+  .dense .section-head { margin-bottom: 20px; }
+  .dense .page { gap: 20px; }
+  .row-top { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; }
+  .site { font-size: 30px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+  .meta { font-size: 23px; color: var(--text-secondary); white-space: nowrap; }
+  .score { margin-left: auto; font-size: 32px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+  .score small { font-size: 22px; font-weight: 400; color: var(--text-secondary); }
+  .row-bar { display: flex; align-items: center; gap: 20px; }
+  .bar { flex: 1; display: flex; gap: 4px; height: 20px; }
+  .bar i { display: block; height: 100%; border-radius: 4px; min-width: 10px; }
+  .bar i:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+  .bar i:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+  .share { width: 76px; text-align: right; font-size: 26px; font-weight: 700; color: var(--success); line-height: 1; }
+  .tag {
+    align-self: center;
+    font-size: 20px; font-weight: 700; line-height: 1;
+    color: var(--warning);
+    background: rgba(217, 119, 6, 0.12);
+    border-radius: 999px;
+    padding: 8px 14px;
+    white-space: nowrap;
+  }
+
+  /* Темы */
+  .topics { display: flex; flex-direction: column; gap: 22px; }
+  .topic { display: grid; grid-template-columns: 36px 300px 1fr 64px; column-gap: 16px; align-items: center; }
+  .rank { font-size: 26px; font-weight: 700; color: var(--text-secondary); }
+  .topic .name { font-size: 30px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track { height: 12px; border-radius: 999px; background: var(--separator); }
+  .track i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+  .topic .count { font-size: 30px; font-weight: 700; text-align: right; }
+
+  .empty { font-size: 26px; color: var(--text-secondary); line-height: 1.4; }
+
+  /* Подвал */
+  .foot {
+    margin-top: auto;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;
+    font-size: 22px; color: var(--text-secondary); line-height: 1.35;
+  }
+  .foot .low { max-width: 720px; }
+  .foot .low b { color: var(--warning); }
+  .foot .brand { flex: none; font-weight: 700; }
+</style>
+</head>
+<body{% if r.mood_rows | length > 3 %} class="dense"{% endif %}>
+{% set k = r.kpi %}
+<div class="page">
+
+  <header>
+    <div class="eyebrow-row">
+      <div class="eyebrow">Корсик · сводка по адаптации</div>
+      {% if r.synthetic %}<div class="chip">Синтетические данные</div>{% endif %}
+    </div>
+    <h1 class="num">{{ r.week.label }}</h1>
+    <div class="sub">Данные за 4 недели, {{ r.window.label }} · без имён и цитат</div>
+  </header>
+
+  <section class="kpis">
+    <div class="card kpi">
+      <div class="label">Новички</div>
+      <div class="value num">{{ k.newbies }}</div>
+      <div class="note num">
+        {% if k.newbies_week %}+{{ k.newbies_week }} за неделю{% else %}новых за неделю нет{% endif %}
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Средняя оценка</div>
+      {% if k.avg_score is not none %}
+      <div class="value num">{{ k.avg_score | num1 }}<small>/10</small></div>
+      <div class="note num">{{ k.respondents }} {{ k.respondents | plural("ответил", "ответили", "ответили") }}</div>
+      {% else %}
+      <div class="value">—</div>
+      <div class="note">мало ответов</div>
+      {% endif %}
+    </div>
+    <div class="card kpi">
+      <div class="label">Открытые сигналы</div>
+      <div class="value num{% if k.signals_red_open %} danger{% endif %}">{{ k.signals_open }}</div>
+      <div class="note num">
+        {% if k.signals_red_open %}{{ k.signals_red_open }} {{ k.signals_red_open | plural("красный", "красных", "красных") }} · {% endif %}закрыто {{ k.signals_closed }}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Настроение</h2>
+      <div class="legend">
+        <span><i class="dot pos"></i>позитив</span>
+        <span><i class="dot neu"></i>нейтрально</span>
+        <span><i class="dot neg"></i>негатив</span>
+      </div>
+    </div>
+    {% if r.mood_rows %}
+    <div class="rows">
+      {% for s in r.mood_rows %}
+      <div>
+        <div class="row-top">
+          <span class="site">{{ s.name }}</span>
+          {% if s.low_data %}<span class="tag">мало данных</span>{% endif %}
+          <span class="meta num">{{ s.respondents }} из {{ s.newbies }} {{ s.respondents | plural("ответил", "ответили", "ответили") }}</span>
+          <span class="score num">{{ s.avg_score | num1 }}<small> из 10</small></span>
+        </div>
+        <div class="row-bar">
+          <div class="bar">
+            {% if s.mood_total %}
+            {% for key, cls in (("positive", "pos"), ("neutral", "neu"), ("negative", "neg")) %}
+            {% if s.mood[key] %}<i class="{{ cls }}" style="flex: {{ s.mood[key] }}"></i>{% endif %}
+            {% endfor %}
+            {% else %}
+            <i class="neu" style="flex: 1; opacity: .5"></i>
+            {% endif %}
+          </div>
+          <div class="share num">{{ s.mood_share.positive | pct }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Пока мало ответов. Срез появится, когда ответят {{ r.threshold }} и больше новичков.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>О чём говорят новички</h2>
+      <div class="legend">упоминаний</div>
+    </div>
+    {% if r.topics %}
+    {% set top = r.topics[0].count %}
+    <div class="topics">
+      {% for t in r.topics %}
+      <div class="topic">
+        <div class="rank num">{{ loop.index }}</div>
+        <div class="name">{{ t.topic }}</div>
+        <div class="track"><i style="width: {{ (t.count / top * 100) | round(1) }}%"></i></div>
+        <div class="count num">{{ t.count }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Тем пока мало для сводки.</p>
+    {% endif %}
+  </section>
+
+  <footer class="foot">
+    <div class="low">
+      {% if r.low_data %}
+      <b>Мало данных:</b> {{ r.low_data | join(", ") }}. Срез по площадке показываем, когда ответят {{ r.threshold }} и больше новичков.
+      {% elif r.merged and r.merged.shown %}
+      Площадки, где ответили меньше {{ r.threshold }} новичков, объединены.
+      {% else %}
+      Срез по площадке показываем, когда ответят {{ r.threshold }} и больше новичков.
+      {% endif %}
+    </div>
+    <div class="brand">Группа ПОЛИПЛАСТИК</div>
+  </footer>
+
+</div>
+</body>
+</html>
