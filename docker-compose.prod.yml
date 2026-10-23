@@ -13,6 +13,8 @@ services:
     ports: !reset []
     environment:
       DEV_ALLOW_NO_INIT_DATA: "false"
+      # Демо-кнопки (машина времени, сводка): выключены; для показа — DEMO_ENABLED=true в .env
+      DEMO_ENABLED: ${DEMO_ENABLED:-false}
       MINIAPP_URL: https://${DOMAIN:?укажите DOMAIN}
       PUBLIC_BASE_URL: https://${DOMAIN}
     restart: always

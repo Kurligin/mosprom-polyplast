@@ -14,6 +14,8 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.datastructures import Headers
+from starlette.responses import JSONResponse
 
 from app.db.session import async_session
 
@@ -21,6 +23,9 @@ log = logging.getLogger(__name__)
 
 UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "data" / "uploads"
 MAX_UPLOAD = 50 * 1024 * 1024
+# Тело запроса целиком: файл до 50 МБ плюс заголовки multipart и поля формы
+MAX_BODY = MAX_UPLOAD + 1024 * 1024
+TOO_LARGE = "Файл больше 50 МБ"
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
@@ -90,3 +95,73 @@ async def save_upload(file: UploadFile, sub: str, allowed: tuple[str, ...]) -> P
         dest.unlink(missing_ok=True)
         raise HTTPException(400, "Файл пустой")
     return dest
+
+
+class _BodyTooLarge(Exception):
+    """Тело запроса превысило лимит: дальше не читаем."""
+
+
+class BodySizeLimit:
+    """ASGI-ограничитель тела запроса: 413 до разбора формы и до записи файла на диск.
+
+    FastAPI разбирает multipart раньше зависимостей и обработчика и целиком пишет файл во временный файл,
+    поэтому save_upload видит размер слишком поздно. Здесь:
+    - Content-Length больше лимита → 413 сразу, тело не читаем;
+    - без Content-Length или с заниженным — считаем байты по мере чтения и обрываем на лимите.
+    Подключение: app.add_middleware(BodySizeLimit) в app/main.py.
+    """
+
+    def __init__(self, app, max_body: int = MAX_BODY):
+        self.app = app
+        self.max_body = max_body
+
+    async def _reply(self, send, status: int, detail: str) -> None:
+        resp = JSONResponse({"detail": detail}, status_code=status, headers={"Connection": "close"})
+        await resp({"type": "http"}, None, send)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        length = Headers(scope=scope).get("content-length")
+        if length is not None:
+            try:
+                declared = int(length)
+            except ValueError:
+                await self._reply(send, 400, "Неверный Content-Length")
+                return
+            if declared > self.max_body:
+                await self._reply(send, 413, TOO_LARGE)
+                return
+
+        received = 0
+        exceeded = False
+        started = False
+
+        async def limited_receive():
+            nonlocal received, exceeded
+            if exceeded:
+                raise _BodyTooLarge
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_body:
+                    exceeded = True
+                    raise _BodyTooLarge
+            return message
+
+        async def guarded_send(message):
+            nonlocal started
+            if exceeded:
+                return  # ответ приложения на оборванное тело (400/500) заменяем своим 413
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            if not exceeded:
+                raise
+        if exceeded and not started:
+            await self._reply(send, 413, TOO_LARGE)

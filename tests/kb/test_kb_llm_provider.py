@@ -7,8 +7,19 @@ import httpx
 import pytest
 
 from app.llm import gigachat as llm
+from app.privacy import names as privacy_names
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _no_db_names(monkeypatch):
+    """Имена сотрудников из БД не нужны: LLM-клиент в этих тестах не ходит в базу."""
+    async def none(*a, **k):
+        return []
+
+    monkeypatch.setattr(privacy_names, "known_names", none)
+
 
 CANDS = [{"chunk_id": 11, "text": "6.6.1. Перерыв для отдыха и питания: 13:00 – 13:48."},
          {"chunk_id": 12, "text": "6.7.4. Ежегодный отпуск 28 календарных дней."}]

@@ -11,6 +11,9 @@
 
 	# API для Mini App
 	handle /api/* {
+		request_body {
+			max_size 51MB
+		}
 		reverse_proxy app:8000
 	}
 	handle /health {

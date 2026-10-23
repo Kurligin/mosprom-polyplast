@@ -1,7 +1,9 @@
 """Клиент GigaChat: выбор пункта из найденных и разбор свободного ответа опроса.
 
 ИИ не пишет норму: choose_chunk только возвращает номер найденного пункта или None.
-Фрагменты с пометкой КТ в LLM не уходят, вопрос маскируется. В лог — без текстов.
+Фрагменты с пометкой КТ в LLM не уходят. Тексты о здоровье (app.privacy.health) не уходят вовсе.
+Перед вызовом маскируются ФИО всех сотрудников из БД (app.privacy.names), телефоны, e-mail и номера документов.
+В лог — без текстов.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.privacy import names as privacy_names
+from app.privacy.health import health_match
 from app.privacy.mask import mask_with_classes
 
 log = logging.getLogger("llm_log")
@@ -39,9 +43,35 @@ TOPICS = [
 ]
 MOODS = ["негатив", "нейтрально", "позитив"]
 
-# Тексты о здоровье в LLM не отправляем (dev-plan 4.10)
-_FIRST_PERSON_RE = re.compile(r"(?<![а-яё])(я|мне|меня|мой|моя|мою|моего|моей|у нас)(?![а-яё])", re.IGNORECASE)
-_HEALTH_RE = re.compile(r"(болез|болею|болит|заболел|больнич|диагноз|депресс|давлени|беремен|врач|лекарств|травм)", re.IGNORECASE)
+
+def _is_health(text: str, *, rules_list: bool = False) -> bool:
+    """Тексты о здоровье в LLM не отправляем (plan.md, dev-plan 4.10): общий детектор app.privacy.health.
+
+    rules_list=True — ещё и список sensitive из config/flag_rules.yaml (его правит HR), как в сигналах.
+    Для ответов опросов: там он шире («операция», «давление»), а для вопросов в базу знаний отрезал бы
+    общие вопросы о порядке («больничный кто оплачивает?»), где данных о здоровье нет.
+    """
+    if health_match(text):
+        return True
+    if not rules_list:
+        return False
+    try:
+        from app.signals.rules import is_sensitive
+
+        return bool(is_sensitive(text))
+    except Exception as e:  # noqa: BLE001 — нет файла правил: хватает общего детектора
+        log.debug("flag_rules.sensitive недоступен: %s", type(e).__name__)
+        return False
+
+
+async def _all_names(names: list[str] | None) -> list[str]:
+    """Имена от вызывающего кода + ФИО всех сотрудников из БД (кэш)."""
+    try:
+        known = await privacy_names.known_names()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Имена сотрудников для маскирования недоступны: %s", type(e).__name__)
+        known = []
+    return [*(names or []), *known]
 
 
 def _settings():
@@ -202,14 +232,15 @@ async def choose_chunk(question: str, candidates: list[dict], names: list[str] |
     """Выбрать пункт из кандидатов [{chunk_id, text, is_kt?}] или None («нет подходящего»).
 
     raise_errors=True — при сбое GigaChat бросить LlmUnavailable (бот решит, что делать),
-    иначе сбой = None. Вопрос о своём здоровье в LLM не отправляем.
+    иначе сбой = None. Вопрос на тему здоровья в LLM не отправляем: None, бот передаст вопрос HR.
     """
     safe = [c for c in candidates if not c.get("is_kt")]
     if not safe:
         return None
-    if _HEALTH_RE.search(question or "") and _FIRST_PERSON_RE.search(question or ""):
+    if _is_health(question or ""):
         log.info("llm_call type=choose_chunk skipped=health")
         return None
+    names = await _all_names(names)
     allowed = {str(c["chunk_id"]): c["chunk_id"] for c in safe}
     q, classes = mask_with_classes(question, names)
     body = "\n\n".join(f"[{c['chunk_id']}]\n{mask_with_classes(c['text'], names)[0]}" for c in safe)
@@ -256,10 +287,10 @@ async def analyze_answer(text: str, names: list[str] | None = None) -> dict | No
     """Разбор свободного ответа → {topic, mood, quote}. None — не отправляли или не разобрали."""
     if not text or not text.strip():
         return None
-    if _HEALTH_RE.search(text):
+    if _is_health(text, rules_list=True):
         log.info("llm_call type=analyze_answer skipped=health")
         return None
-    masked, classes = mask_with_classes(text, names)
+    masked, classes = mask_with_classes(text, await _all_names(names))
     classes |= {"survey_answer"}
     for attempt in range(2):
         started = time.monotonic()

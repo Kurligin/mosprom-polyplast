@@ -11,16 +11,19 @@ auth_date — не старше 24 часов. Роль — по user.id → sta
 
 Без initData при DEV_ALLOW_NO_INIT_DATA=true запрос проходит как первый HR из БД
 (заголовок X-Dev-Role: manager | head | hr выбирает другую роль — только в dev).
+Обход работает только для запроса с этой машины (dev_bypass_allowed): не через прокси или туннель,
+по адресу localhost или имени сервиса Docker, не с чужого сайта. Порты стенда открыты только на 127.0.0.1.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import time
 from typing import Annotated
-from urllib.parse import parse_qsl, unquote, unquote_plus
+from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -130,6 +133,70 @@ async def _dev_staff(session: AsyncSession, role: str | None) -> Staff | None:
     return None
 
 
+# Заголовки, которые добавляют прокси и туннели (Caddy, nginx, Cloudflare, ngrok …): запрос пришёл снаружи
+PROXY_HEADERS = ("forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-port",
+                 "x-real-ip", "x-client-ip", "true-client-ip", "cf-connecting-ip", "cf-ray", "cf-visitor",
+                 "x-original-forwarded-for", "via")
+
+
+def _local_host(host: str | None) -> bool:
+    """localhost, 127.0.0.1, ::1 или имя без точек (сервис Docker: app, miniapp). Адрес в сети и домен — нет."""
+    host = (host or "").strip().lower().rstrip(".")
+    if host.startswith("["):
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:
+        host = host.split(":", 1)[0]
+    if not host:
+        return False
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        pass
+    return host == "localhost" or host.endswith(".localhost") or "." not in host
+
+
+def _local_url(value: str) -> bool:
+    try:
+        return _local_host(urlsplit(value).netloc.rsplit("@", 1)[-1])
+    except ValueError:
+        return False
+
+
+def _local_peer(peer: str | None) -> bool:
+    """Прямой собеседник: loopback или внутренняя сеть Docker. Внешний адрес — нет."""
+    if not peer:
+        return True
+    try:
+        ip = ipaddress.ip_address(peer)
+    except ValueError:
+        return True  # тестовый клиент без адреса
+    return ip.is_loopback or ip.is_private
+
+
+def dev_bypass_allowed(request: Request) -> bool:
+    """Можно ли пустить запрос без initData (DEV_ALLOW_NO_INIT_DATA): только браузер или curl с этой машины.
+
+    Нельзя, если запрос прошёл через прокси или туннель (их заголовки), пришёл по внешнему имени или адресу
+    в локальной сети, с чужого сайта (Origin, Referer, Sec-Fetch-Site) или с внешнего адреса.
+    """
+    if not settings.dev_allow_no_init_data:
+        return False
+    h = request.headers
+    if any(name in h for name in PROXY_HEADERS):
+        return False
+    if "host" in h and not _local_host(h["host"]):
+        return False
+    origin = h.get("origin")
+    if origin is not None and not _local_url(origin):
+        return False  # в том числе «Origin: null» (песочница, file://)
+    referer = h.get("referer")
+    if referer and not _local_url(referer):
+        return False
+    if (h.get("sec-fetch-site") or "").lower() == "cross-site":
+        return False
+    return _local_peer(request.client.host if request.client else None)
+
+
 async def current_staff(request: Request, session: SessionDep) -> Staff:
     raw = (request.headers.get(HEADER) or "").strip()
     if raw:
@@ -141,7 +208,7 @@ async def current_staff(request: Request, session: SessionDep) -> Staff:
         if staff is None or role_of(staff) is None:
             raise HTTPException(403, "Панель для HR и руководителей. Подключитесь к боту по ссылке от HR.")
         return staff
-    if settings.dev_allow_no_init_data:
+    if dev_bypass_allowed(request):
         staff = await _dev_staff(session, request.headers.get(DEV_ROLE_HEADER))
         if staff is None:
             raise HTTPException(401, "В базе нет сотрудников HR. Запустите make seed.")

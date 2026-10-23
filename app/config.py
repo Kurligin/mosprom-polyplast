@@ -34,8 +34,12 @@ class Settings(BaseSettings):
     bot_enabled: bool = True
     # Фоновые задачи (тик сценария, напоминания, сводка)
     jobs_enabled: bool = True
-    # Mini App вне «МАКС» (браузер, разработка): пускать без initData как HR. В проде — false
+    # Mini App вне «МАКС» (браузер, разработка): пускать без initData как HR. В проде — false.
+    # Действует только для запросов с этой машины, не через прокси и туннели (app/api/auth.py)
     dev_allow_no_init_data: bool = False
+    # Демо-кнопки панели: машина времени (только тестовые и синтетические новички) и «Сформировать сводку».
+    # В docker-compose.prod.yml по умолчанию false
+    demo_enabled: bool = True
 
     # База знаний
     embedding_model: str = "BAAI/bge-m3"

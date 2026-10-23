@@ -78,9 +78,20 @@ class ShiftInput(BaseModel):
     employee_id: int | None = None
 
 
+def _demo_on() -> None:
+    """DEMO_ENABLED=false (прод) выключает демо-кнопки целиком."""
+    if not settings.demo_enabled:
+        raise HTTPException(404, "Демо-режим выключен (DEMO_ENABLED=false)")
+
+
 @router.post("/demo/shift")
 async def demo_shift(body: ShiftInput, staff: HrDep,
                      session: SessionDep) -> dict:
+    """Машина времени — только для тестовых и синтетических новичков.
+
+    У живого человека перемотка безвозвратно пропускает шаги сценария и сразу шлёт ему опросы.
+    """
+    _demo_on()
     fn = need("app.scenario.engine", "time_travel", "Движок сценария")
     q = select(Employee).options(selectinload(Employee.site))
     if body.employee_id is not None:
@@ -91,6 +102,8 @@ async def demo_shift(body: ShiftInput, staff: HrDep,
                                    .order_by(Employee.max_user_id.is_(None), Employee.id).limit(1))
     if emp is None:
         raise HTTPException(404, "Тестовый новичок не найден. Запустите make seed.")
+    if not (emp.is_test or emp.is_synthetic):
+        raise HTTPException(403, "Перематывать время можно только тестовым и синтетическим новичкам")
     result = await call(fn, session, emp, body.to) or {}
     await session.commit()
     day = result.get("day")
@@ -103,6 +116,7 @@ async def demo_shift(body: ShiftInput, staff: HrDep,
 
 @router.post("/demo/report")
 async def demo_report(staff: HrDep, session: SessionDep) -> dict:
+    _demo_on()
     send = need("app.reports.weekly", "send", "Еженедельная сводка")
     ok = bool(await call(send, session))
     await session.commit()
