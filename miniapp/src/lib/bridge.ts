@@ -37,9 +37,30 @@ declare global {
 
 const raw = (): MaxWebApp | undefined => (typeof window !== 'undefined' ? window.WebApp : undefined)
 
-/** Строка initData для заголовка X-Max-Init-Data. Пусто — значит, открыто вне «МАКС». */
+/**
+ * Строка initData. «МАКС» передаёт её в адресе (#WebAppData=…), мост кладёт её в sessionStorage,
+ * поэтому она переживает перезагрузку страницы. Пусто — открыто вне «МАКС».
+ */
 export const initData = (): string => raw()?.initData ?? ''
 export const isInMax = (): boolean => initData().length > 0
+
+/**
+ * Параметр запуска из кнопки бота (open_app(..., payload)): «ticket_12», «employee_5».
+ * Вне «МАКС» для проверки можно открыть ?start=ticket_12.
+ */
+export const startParam = (): string | null =>
+  raw()?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('start') || null
+
+/**
+ * Значение для заголовка X-Max-Init-Data. Заголовки HTTP принимают только Latin-1:
+ * если в строке есть кириллица (например, имя в user), fetch упадёт. Тогда шлём её
+ * через encodeURIComponent. Признак для бэкенда: в такой строке нет «=», её нужно один раз unquote.
+ */
+export const initDataHeader = (): string => {
+  const v = initData()
+  // eslint-disable-next-line no-control-regex
+  return /^[\x00-\xFF]*$/.test(v) ? v : encodeURIComponent(v)
+}
 
 /** Мост только внутри «МАКС»: в обычном браузере скрипт есть, но транспорта нет. */
 const wa = (): MaxWebApp | undefined => (isInMax() ? raw() : undefined)
@@ -85,6 +106,16 @@ export const haptic = {
   success: () => safe(() => wa()?.HapticFeedback?.notificationOccurred?.('success', true)),
   warning: () => safe(() => wa()?.HapticFeedback?.notificationOccurred?.('warning', true)),
   error: () => safe(() => wa()?.HapticFeedback?.notificationOccurred?.('error', true)),
+}
+
+/** Внешняя ссылка: в «МАКС» через мост, иначе новой вкладкой */
+export function openExternal(url: string) {
+  const w = wa()
+  if (w?.openLink) {
+    safe(() => w.openLink?.(url))
+    return
+  }
+  window.open(url, '_blank', 'noopener')
 }
 
 export async function copyText(text: string): Promise<boolean> {

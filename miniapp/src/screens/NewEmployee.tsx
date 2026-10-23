@@ -1,39 +1,57 @@
-import { useState } from 'react'
-import { AlertTriangle, Briefcase, Copy, Factory, Share } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
-import { api } from '../api/client'
-import { MANAGERS, RECRUITERS, SITES } from '../api/mocks'
-import type { NewEmployeeInput, NewEmployeeResult, SiteCode, WorkType } from '../api/types'
-import { Screen, Segmented, Sheet, useToast } from '../components/ui'
-import { copyText, haptic, share } from '../lib/bridge'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, Briefcase, Factory } from 'lucide-react'
+import { api, toApiError } from '../api/client'
+import type { NewEmployeeInput, NewEmployeeResult, WorkType } from '../api/types'
+import InviteSheet from '../components/InviteSheet'
+import { Screen, Segmented, useAsync, useToast } from '../components/ui'
+import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
+import { useSites } from '../lib/sites'
 
-const todayIso = () => {
+const inThreeDays = () => {
   const d = new Date()
   d.setDate(d.getDate() + 3)
-  return d.toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export default function NewEmployee() {
   const nav = useNav()
   const toast = useToast()
+  const { sites, name: siteName, demo: sitesDemo, loaded: sitesLoaded } = useSites()
+  const managers = useAsync(() => api.staff('manager'), [])
+  const recruiters = useAsync(() => api.staff('recruiter'), [])
+  const demo = sitesDemo || managers.demo || recruiters.demo
+
   const [form, setForm] = useState<NewEmployeeInput>({
     full_name: '',
     position: '',
-    site: 'GTP',
+    site: '',
     work_type: 'production',
-    start_date: todayIso(),
+    start_date: inThreeDays(),
     probation_days: 90,
-    manager_id: MANAGERS[0].id,
-    recruiter_id: RECRUITERS[0].id,
+    manager_id: null,
+    recruiter_id: null,
   })
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<NewEmployeeResult | null>(null)
   const set = <K extends keyof NewEmployeeInput>(k: K, v: NewEmployeeInput[K]) => setForm((f) => ({ ...f, [k]: v }))
 
-  const nameError = touched && form.full_name.trim().split(/\s+/).length < 2 ? 'Укажите фамилию и имя' : null
-  const valid = form.full_name.trim().split(/\s+/).length >= 2 && form.position.trim() && form.start_date
+  // значения по умолчанию, когда справочники загрузились
+  useEffect(() => {
+    if (!form.site && sites.length) set('site', sites[0].code)
+  }, [sites]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (form.manager_id === null && managers.data?.length) set('manager_id', managers.data[0].id)
+  }, [managers.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (form.recruiter_id === null && recruiters.data?.length) set('recruiter_id', recruiters.data[0].id)
+  }, [recruiters.data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nameOk = form.full_name.trim().split(/\s+/).filter(Boolean).length >= 2
+  const nameError = touched && !nameOk ? 'Нужны фамилия и имя' : null
+  const siteError = touched && !form.site ? 'Выберите площадку' : null
+  const valid = nameOk && !!form.site && !!form.start_date
 
   const submit = async () => {
     setTouched(true)
@@ -43,40 +61,80 @@ export default function NewEmployee() {
     }
     setBusy(true)
     try {
-      const r = await api.createEmployee({ ...form, full_name: form.full_name.trim(), position: form.position.trim() })
+      const r = await api.createEmployee(
+        { ...form, full_name: form.full_name.trim().replace(/\s+/g, ' '), position: form.position.trim() },
+        { demo },
+      )
       haptic.success()
       setResult(r)
-    } catch {
-      toast('error', 'Не удалось сохранить. Попробуйте ещё раз')
+    } catch (e) {
+      toast('error', toApiError(e).message)
     } finally {
       setBusy(false)
     }
   }
 
+  // три коротких названия влезают в сегмент; иначе обычный список
+  const siteAsSegment = sites.length > 0 && sites.length <= 3 && sites.every((s) => s.name.length <= 10)
+
+  const staffSelect = (
+    label: string,
+    value: number | null,
+    onChange: (v: number | null) => void,
+    q: typeof managers,
+  ) => (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {q.error ? (
+        <span className="field-hint">
+          Список не загрузился.{' '}
+          <button type="button" className="link-text" onClick={q.reload}>Повторить</button>
+        </span>
+      ) : (
+        <select
+          value={value ?? ''}
+          disabled={!q.data}
+          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        >
+          {!q.data && <option value="">Загружаем…</option>}
+          {q.data && q.data.length === 0 && <option value="">Пока никого нет</option>}
+          {q.data?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {q.data && q.data.length > 0 && <option value="">Не назначать</option>}
+        </select>
+      )}
+    </label>
+  )
+
   return (
-    <Screen title="Новый сотрудник" back={{ label: nav.backLabel, onClick: nav.pop }} noTabbar>
+    <Screen title="Новый сотрудник" back={{ label: nav.backLabel, onClick: nav.pop }} noTabbar demo={demo} revealTitleAt={44}>
       <h1 className="large-title" style={{ padding: '4px 0 0' }}>Завести новичка</h1>
-      <p className="cell-meta" style={{ margin: '4px 0 0', fontSize: 15 }}>После сохранения появится ссылка и QR-код для оффера.</p>
+      <p className="lead">После сохранения появится ссылка и QR-код для оффера.</p>
 
       <section className="section">
         <div className="section-header">Сотрудник</div>
         <div className="group">
           <label className="field">
-            <span className="field-label">ФИО</span>
+            <span className="field-label">Фамилия и имя</span>
             <input
               value={form.full_name}
               onChange={(e) => set('full_name', e.target.value)}
-              onBlur={() => setTouched(true)}
-              placeholder="Иванов Иван Иванович"
+              onBlur={() => form.full_name && setTouched(true)}
+              placeholder="Иванов Иван"
               autoComplete="off"
               autoCapitalize="words"
               enterKeyHint="next"
+              aria-invalid={!!nameError}
             />
             {nameError && <span className="field-error"><AlertTriangle size={14} />{nameError}</span>}
           </label>
           <label className="field">
             <span className="field-label">Должность</span>
-            <input value={form.position} onChange={(e) => set('position', e.target.value)} placeholder="Оператор экструдера" enterKeyHint="next" />
+            <input
+              value={form.position}
+              onChange={(e) => set('position', e.target.value)}
+              placeholder="Оператор экструдера"
+              enterKeyHint="done"
+            />
           </label>
         </div>
       </section>
@@ -86,12 +144,22 @@ export default function NewEmployee() {
         <div className="group">
           <div className="field">
             <span className="field-label">Площадка</span>
-            <Segmented<SiteCode>
-              ariaLabel="Площадка"
-              value={form.site}
-              onChange={(v) => set('site', v)}
-              options={SITES.map((s) => ({ value: s.code, label: s.name }))}
-            />
+            {!sitesLoaded && <div className="skeleton" style={{ height: 32, marginTop: 6, borderRadius: 9 }} />}
+            {sitesLoaded && siteAsSegment && (
+              <Segmented
+                ariaLabel="Площадка"
+                value={form.site}
+                onChange={(v) => set('site', v)}
+                options={sites.map((s) => ({ value: s.code, label: s.name }))}
+              />
+            )}
+            {sitesLoaded && !siteAsSegment && (
+              <select aria-label="Площадка" value={form.site} onChange={(e) => set('site', e.target.value)}>
+                {sites.length === 0 && <option value="">Площадок пока нет</option>}
+                {sites.map((s) => <option key={s.code} value={s.code}>{siteName(s.code)}</option>)}
+              </select>
+            )}
+            {siteError && <span className="field-error"><AlertTriangle size={14} />{siteError}</span>}
           </div>
           <div className="field">
             <span className="field-label">Формат</span>
@@ -106,43 +174,34 @@ export default function NewEmployee() {
             />
           </div>
         </div>
-        <div className="section-footer">От формата зависит сценарий: на производстве — инструктаж по охране труда в первый день.</div>
+        <div className="section-footer">От формата зависят шаги: на производстве в первый день будет инструктаж по охране труда.</div>
       </section>
 
       <section className="section">
         <div className="section-header">Сроки</div>
         <div className="group">
           <label className="field">
-            <span className="field-label">Дата выхода</span>
+            <span className="field-label">Первый рабочий день</span>
             <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
           </label>
           <label className="field">
             <span className="field-label">Испытательный срок</span>
             <select value={form.probation_days} onChange={(e) => set('probation_days', Number(e.target.value))}>
-              <option value={90}>3 месяца (90 дней)</option>
-              <option value={180}>6 месяцев (180 дней)</option>
-              <option value={60}>2 месяца (60 дней)</option>
+              <option value={90}>3 месяца</option>
+              <option value={180}>6 месяцев</option>
+              <option value={60}>2 месяца</option>
             </select>
           </label>
         </div>
       </section>
 
       <section className="section">
-        <div className="section-header">Ответственные</div>
+        <div className="section-header">Кто ведёт</div>
         <div className="group">
-          <label className="field">
-            <span className="field-label">Руководитель</span>
-            <select value={form.manager_id} onChange={(e) => set('manager_id', Number(e.target.value))}>
-              {MANAGERS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Рекрутер</span>
-            <select value={form.recruiter_id} onChange={(e) => set('recruiter_id', Number(e.target.value))}>
-              {RECRUITERS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </label>
+          {staffSelect('Руководитель', form.manager_id, (v) => set('manager_id', v), managers)}
+          {staffSelect('Рекрутер', form.recruiter_id, (v) => set('recruiter_id', v), recruiters)}
         </div>
+        <div className="section-footer">Руководителю Корсик напомнит о встречах на 3‑й, 30‑й и 60‑й день.</div>
       </section>
 
       <div style={{ marginTop: 24 }}>
@@ -151,42 +210,13 @@ export default function NewEmployee() {
         </button>
       </div>
 
-      <Sheet open={!!result} onClose={() => { setResult(null); nav.pop() }} label="Ссылка для новичка">
-        {result && (
-          <>
-            <h3>Ссылка готова</h3>
-            <p>
-              {result.employee.full_name} · {result.employee.site}
-              <br />
-              Добавьте QR или ссылку в оффер — по ней новичок откроет Корсика в «МАКС».
-            </p>
-            <div className="qr-box">
-              <QRCodeSVG value={result.invite_link} size={168} level="M" fgColor="#111827" bgColor="#FFFFFF" />
-            </div>
-            <div className="link-box">{result.invite_link}</div>
-            <div className="sheet-actions">
-              <button
-                className="btn small"
-                onClick={async () => {
-                  const ok = await copyText(result.invite_link)
-                  toast(ok ? 'success' : 'error', ok ? 'Ссылка скопирована' : 'Не удалось скопировать')
-                }}
-              >
-                <Copy size={18} /> Скопировать ссылку
-              </button>
-              <button
-                className="btn secondary small"
-                onClick={() => share(`Добро пожаловать в ПОЛИПЛАСТИК! Ваш помощник адаптации — Корсик:`, result.invite_link)}
-              >
-                <Share size={18} /> Поделиться
-              </button>
-            </div>
-            <button className="btn plain small" style={{ marginTop: 8 }} onClick={() => { setResult(null); nav.pop() }}>
-              Готово
-            </button>
-          </>
-        )}
-      </Sheet>
+      <InviteSheet
+        open={!!result}
+        onClose={() => { setResult(null); nav.pop() }}
+        link={result?.invite_link ?? null}
+        name={result?.employee.full_name ?? ''}
+        site={siteName(result?.employee.site)}
+      />
     </Screen>
   )
 }

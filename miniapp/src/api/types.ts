@@ -7,11 +7,22 @@ export interface Me {
   name: string
 }
 
-export type SiteCode = 'GTP' | 'Luzhniki' | 'GrPP'
+/** Код площадки: GTP, Luzhniki, GrPP и новые из xlsx сценария */
+export type SiteCode = string
 
 export interface Site {
   code: SiteCode
   name: string
+  tz: string // Europe/Moscow
+}
+
+export type StaffRole = 'manager' | 'recruiter'
+
+/** Справочник для формы «Завести новичка» */
+export interface StaffMember {
+  id: number
+  name: string
+  role: string
 }
 
 export type WorkType = 'office' | 'production'
@@ -43,10 +54,10 @@ export interface EmployeeShort {
 }
 
 export interface Step {
-  day: number
+  day?: number | null
   title: string
-  date: string
-  status: 'done' | 'current' | 'upcoming'
+  date?: string | null // YYYY-MM-DD или ISO
+  status?: 'done' | 'current' | 'upcoming'
 }
 
 export interface SurveyItem {
@@ -65,11 +76,28 @@ export interface Meeting {
   done: boolean
 }
 
+/** «Представление коллегам»: текст и фото от новичка */
+export interface Intro {
+  text: string
+  photo_url: string | null
+  at: string | null // ISO
+}
+
+/** Отмашки: шаги сценария, которые ждут HR или руководителя */
+export interface Gates {
+  recruiter_go: boolean // «представлю тебя коллегам»
+  plan_ready: boolean // адаптационный план отправлен
+}
+
+export type GateName = keyof Gates
+
 /** Карточка новичка */
 export interface Employee extends EmployeeShort {
-  manager: Contact
-  recruiter: Contact
-  intro_text: string | null // «представление коллегам»
+  manager: Contact | null
+  recruiter: Contact | null
+  invite_link: string | null
+  intro: Intro | null
+  gates: Gates
   steps: Step[]
   surveys: SurveyItem[]
   tickets: TicketShort[]
@@ -83,8 +111,8 @@ export interface NewEmployeeInput {
   work_type: WorkType
   start_date: string
   probation_days: number
-  manager_id: number
-  recruiter_id: number
+  manager_id: number | null
+  recruiter_id: number | null
 }
 
 export interface NewEmployeeResult {
@@ -96,10 +124,10 @@ export interface NewEmployeeResult {
 export type TicketStatus = 'open' | 'in_progress' | 'closed'
 
 export type TicketCategory =
-  | 'safety' // охрана труда — красный флаг
-  | 'harassment' // травля — красный флаг
-  | 'intent_to_leave' // намерение уйти — красный флаг
-  | 'health' // здоровье — красный флаг
+  | 'safety' // охрана труда, красный флаг
+  | 'harassment' // травля, красный флаг
+  | 'intent_to_leave' // намерение уйти, красный флаг
+  | 'health' // здоровье, красный флаг
   | 'unknown' // бот не нашёл ответ → HR
   | 'contact_request' // просьба связаться
   | 'question' // вопрос HR (отпуск, зарплата, документы)
@@ -125,12 +153,14 @@ export interface Message {
   author_name: string
   text: string
   created_at: string
-  source: string | null // «ПВТР, п. 6.5.2, стр. 15» — у ответов бота
+  source: string | null // «ПВТР, п. 6.5.2, стр. 15» у ответов бота
 }
 
 export interface Ticket extends TicketShort {
   assignee: string | null
   messages: Message[]
+  delivered?: boolean // ответ на reply: ушло ли сообщение новичку в «МАКС»
+  added_to_kb?: boolean
 }
 
 export interface ReplyInput {
@@ -139,15 +169,37 @@ export interface ReplyInput {
   kb_site: SiteCode | 'all' | null
 }
 
+export type KbKind = 'pdf' | 'pptx' | 'xlsx' | 'md' | 'answer'
+
 export interface KbDocument {
   id: number
   title: string
-  kind: 'pdf' | 'pptx' | 'xlsx' | 'answer'
+  kind: KbKind
   trade_secret: boolean // метка «КТ»: фрагменты не уходят в LLM
   status: 'draft' | 'confirmed' // черновик HR / подтверждён
   version_date: string
   fragments: number
+  chunks?: number // ответ на загрузку: сколько фрагментов получилось
   site: SiteCode | null // null — для всех площадок
+  sites?: SiteCode[] // площадки документа; пусто — все
+  text?: string | null // текст ответа HR (для вкладки «Ответы HR»)
+}
+
+export interface UploadDocumentInput {
+  file: File
+  title: string
+  is_kt: boolean
+  site_codes: SiteCode[] // пусто — все площадки
+}
+
+/** Отчёт об импорте xlsx сценария */
+export interface ScenarioReport {
+  steps: number
+  by_site: Record<SiteCode, number>
+  surveys: number
+  attachments: number
+  new_sites: SiteCode[]
+  warnings: string[]
 }
 
 export interface Topic {
@@ -156,7 +208,7 @@ export interface Topic {
   peak_days: string // «дни 1–3»
 }
 
-export type ShiftTo = '-2' | '1' | '3' | '14' | '60' | 'end'
+export type ShiftTo = '-2' | '1' | '3' | '14' | '60' | 'end' | 'now'
 
 export interface ShiftResult {
   employee_id: number

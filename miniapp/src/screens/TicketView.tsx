@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, BookOpen, Bot, Check, ShieldAlert, UserCheck } from 'lucide-react'
-import { api } from '../api/client'
-import { SITES } from '../api/mocks'
+import { api, toApiError } from '../api/client'
 import type { SiteCode, Ticket } from '../api/types'
-import { Chip, Screen, SkeletonList, Switch, fmtDate, fmtTime, useAsync, useToast } from '../components/ui'
+import { Chip, ErrorState, Screen, SkeletonList, Switch, fmtDate, fmtTime, useAsync, useToast } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
+import { useSites } from '../lib/sites'
 import { CategoryIcon } from './Tickets'
 
 const STATUS_LABEL = { open: 'Открыто', in_progress: 'В работе', closed: 'Закрыто' } as const
@@ -13,7 +13,8 @@ const STATUS_LABEL = { open: 'Открыто', in_progress: 'В работе', c
 export default function TicketView({ id }: { id: number }) {
   const nav = useNav()
   const toast = useToast()
-  const { data: t, setData, loading } = useAsync(() => api.ticket(id), [id])
+  const { data: t, setData, demo, error, reload, showSkeleton } = useAsync(() => api.ticket(id), [id])
+  const { sites, name: siteName } = useSites()
   const [text, setText] = useState('')
   const [toKb, setToKb] = useState(false)
   const [kbSite, setKbSite] = useState<SiteCode | 'all'>('all')
@@ -28,15 +29,20 @@ export default function TicketView({ id }: { id: number }) {
     if (sc) sc.scrollTop = sc.scrollHeight
   }, [t?.messages.length])
 
-  const run = async (fn: () => Promise<Ticket>, ok: string) => {
+  const run = async (fn: () => Promise<Ticket>, ok: string, onFail?: () => void) => {
     setBusy(true)
     try {
       const next = await fn()
       setData(next)
       nav.refreshBadge()
-      toast('success', ok)
-    } catch {
-      toast('error', 'Не получилось. Попробуйте ещё раз')
+      // delivered: false — ответ сохранён в ленте, но в «МАКС» не ушёл (новичок не подключён)
+      if (next.delivered === false) toast('warning', 'Ответ сохранён, но новичок ещё не подключился к боту. Свяжитесь с ним сами')
+      else toast('success', ok)
+      return true
+    } catch (e) {
+      toast('error', toApiError(e).message)
+      onFail?.()
+      return false
     } finally {
       setBusy(false)
     }
@@ -46,9 +52,15 @@ export default function TicketView({ id }: { id: number }) {
     const v = text.trim()
     if (!v || !t) return
     haptic.tap()
+    const kb = toKb
     setText('')
-    run(() => api.reply(t.id, { text: v, add_to_kb: toKb, kb_site: toKb ? kbSite : null }), toKb ? 'Ответ отправлен и добавлен в базу' : 'Ответ отправлен в чат новичку')
     setToKb(false)
+    run(
+      () => api.reply(t.id, { text: v, add_to_kb: kb, kb_site: kb ? kbSite : null }, { demo }),
+      kb ? 'Ответ отправлен. Черновик ждёт подтверждения в базе' : 'Ответ отправлен новичку в чат',
+      // не теряем текст, если отправить не получилось
+      () => { setText(v); setToKb(kb) },
+    )
   }
 
   const composer = t && t.status !== 'closed' && (
@@ -56,11 +68,11 @@ export default function TicketView({ id }: { id: number }) {
       <div className="composer-inner">
         <div className="composer-actions">
           {t.status === 'open' && (
-            <button className="btn secondary small" disabled={busy} onClick={() => run(() => api.takeTicket(t.id), 'Взяли в работу')}>
+            <button className="btn secondary small" disabled={busy} onClick={() => run(() => api.takeTicket(t.id, { demo }), 'Взяли в работу')}>
               <UserCheck size={18} /> Взять
             </button>
           )}
-          <button className="btn secondary small" disabled={busy} onClick={() => run(() => api.closeTicket(t.id), 'Обращение закрыто')}>
+          <button className="btn secondary small" disabled={busy} onClick={() => run(() => api.closeTicket(t.id, { demo }), 'Обращение закрыто')}>
             <Check size={18} /> Закрыть
           </button>
         </div>
@@ -70,7 +82,7 @@ export default function TicketView({ id }: { id: number }) {
           {toKb && (
             <select aria-label="Площадка для ответа" value={kbSite} onChange={(e) => setKbSite(e.target.value as SiteCode | 'all')}>
               <option value="all">Все площадки</option>
-              {SITES.map((s) => (
+              {sites.map((s) => (
                 <option key={s.code} value={s.code}>{s.name}</option>
               ))}
             </select>
@@ -105,10 +117,12 @@ export default function TicketView({ id }: { id: number }) {
       title={t?.category_label ?? 'Обращение'}
       back={{ label: nav.backLabel, onClick: nav.pop }}
       noTabbar
+      demo={demo}
       bottom={composer}
       bottomPad={t && t.status !== 'closed' ? 200 : 24}
     >
-      {loading && !t && <SkeletonList rows={2} />}
+      {showSkeleton && <SkeletonList rows={2} />}
+      {error && <ErrorState error={error} onRetry={reload} title={error.status === 404 ? 'Обращение не найдено' : undefined} />}
       {t && (
         <>
           <div className="ticket-info">
@@ -119,13 +133,13 @@ export default function TicketView({ id }: { id: number }) {
               <Chip tone={t.status === 'open' ? 'warning' : t.status === 'in_progress' ? 'primary' : 'success'}>{STATUS_LABEL[t.status]}</Chip>
             </div>
             <div className="ticket-info-row num">
-              {t.employee_name} · {t.site} · день {t.day}
+              {t.employee_name} · {siteName(t.site)} · день {t.day}
               {t.assignee && <> · отвечает {t.assignee}</>}
             </div>
             {t.red_flag && (
               <div className="flag-banner">
                 <ShieldAlert />
-                <span>Красный флаг. Видит только HR — руководителю не передаётся. Свяжитесь с новичком в течение часа.</span>
+                <span>Красный флаг. Его видит только HR, руководителю он не уходит. Свяжитесь с новичком в течение часа.</span>
               </div>
             )}
           </div>
@@ -155,7 +169,7 @@ export default function TicketView({ id }: { id: number }) {
             })}
             <div ref={endRef} />
           </div>
-          {t.status === 'closed' && <p className="footnote">Обращение закрыто. Новичок получил уведомление.</p>}
+          {t.status === 'closed' && <p className="footnote">Обращение закрыто.</p>}
         </>
       )}
     </Screen>

@@ -7,6 +7,8 @@ export type Route =
   | { name: 'tickets' }
   | { name: 'ticket'; id: number }
   | { name: 'kb' }
+  | { name: 'upload-doc' }
+  | { name: 'scenario' }
   | { name: 'more' }
   | { name: 'manager' }
   | { name: 'manager-employee'; id: number }
@@ -18,9 +20,11 @@ export type Nav = {
   pop: () => void
   backLabel: string
   refreshBadge: () => void
+  /** Экран сейчас наверху стека и его вкладка открыта */
+  active: boolean
 }
 
-export const NavCtx = createContext<Nav>({ push: () => {}, pop: () => {}, backLabel: 'Назад', refreshBadge: () => {} })
+export const NavCtx = createContext<Nav>({ push: () => {}, pop: () => {}, backLabel: 'Назад', refreshBadge: () => {}, active: true })
 export const useNav = () => useContext(NavCtx)
 
 export const ROUTE_TITLES: Record<Route['name'], string> = {
@@ -30,6 +34,8 @@ export const ROUTE_TITLES: Record<Route['name'], string> = {
   tickets: 'Обращения',
   ticket: 'Обращение',
   kb: 'База',
+  'upload-doc': 'Документ',
+  scenario: 'Сценарий',
   more: 'Ещё',
   manager: 'Мои новички',
   'manager-employee': 'Новичок',

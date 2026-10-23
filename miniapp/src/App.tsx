@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { BookOpen, MessageSquare, MoreHorizontal, Users } from 'lucide-react'
-import { api, roleParam } from './api/client'
+import { BookOpen, Lock, MessageSquare, MoreHorizontal, ShieldOff, Users } from 'lucide-react'
+import { api, toApiError, type ApiError } from './api/client'
 import type { Role } from './api/types'
-import { ToastProvider } from './components/ui'
-import { haptic, setBackButton } from './lib/bridge'
-import { NavCtx, ROUTE_TITLES, type Route, type Tab } from './lib/nav'
+import { ErrorState, SkeletonList, ToastProvider, useDelayed } from './components/ui'
+import { haptic, isInMax, setBackButton, startParam } from './lib/bridge'
+import { NavCtx, ROUTE_TITLES, type Nav, type Route, type Tab } from './lib/nav'
 import Employees from './screens/Employees'
 import EmployeeCard from './screens/EmployeeCard'
 import NewEmployee from './screens/NewEmployee'
 import Tickets from './screens/Tickets'
 import TicketView from './screens/TicketView'
 import Kb from './screens/Kb'
+import UploadDoc from './screens/UploadDoc'
+import ScenarioImport from './screens/ScenarioImport'
 import More from './screens/More'
 import { ManagerHome, ManagerEmployee } from './screens/Manager'
 
@@ -22,7 +24,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'more', label: 'Ещё', Icon: MoreHorizontal },
 ]
 
-const HIDE_TABBAR: Route['name'][] = ['ticket', 'new-employee']
+const HIDE_TABBAR: Route['name'][] = ['ticket', 'new-employee', 'upload-doc', 'scenario']
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -32,39 +34,110 @@ function renderRoute(r: Route) {
     case 'tickets': return <Tickets />
     case 'ticket': return <TicketView id={r.id} />
     case 'kb': return <Kb />
+    case 'upload-doc': return <UploadDoc />
+    case 'scenario': return <ScenarioImport />
     case 'more': return <More />
     case 'manager': return <ManagerHome />
     case 'manager-employee': return <ManagerEmployee id={r.id} />
   }
 }
 
-type Dir = 1 | -1 | 0
+/** Недоступные слои: не ловят фокус и касания, скринридер их не читает */
+const inert = (on: boolean): { 'aria-hidden'?: boolean } => (on ? ({ inert: '', 'aria-hidden': true } as { 'aria-hidden': boolean }) : {})
+
+type Entry = { key: number; route: Route }
+let seq = 0
+const entry = (route: Route): Entry => ({ key: ++seq, route })
 
 export default function App() {
-  const [role, setRole] = useState<Role | null>(roleParam === 'manager' ? 'manager' : null)
+  const [state, setState] = useState<{ role: Role } | { error: ApiError } | null>(null)
+  const [tick, setTick] = useState(0)
   useEffect(() => {
-    api.me().then((me) => setRole(me.role)).catch(() => setRole('hr'))
-  }, [])
-  if (!role) return <div className="app" />
+    setState(null)
+    api.me().then((me) => setState({ role: me.role })).catch((e) => setState({ error: toApiError(e) }))
+  }, [tick])
+  const slow = useDelayed(state === null, 300)
+
+  if (!state) return <div className="app">{slow && <LaunchSkeleton />}</div>
+  if ('error' in state) return <AccessScreen error={state.error} onRetry={() => setTick((t) => t + 1)} />
   return (
     <ToastProvider>
-      <Shell role={role} />
+      <Shell role={state.role} />
     </ToastProvider>
   )
 }
 
+function LaunchSkeleton() {
+  return (
+    <div className="screen" aria-busy="true" aria-label="Загрузка">
+      <div className="launch">
+        <div className="skeleton" style={{ width: 140, height: 30, borderRadius: 8 }} />
+        <div className="skeleton" style={{ width: '100%', height: 36, borderRadius: 10, marginTop: 16 }} />
+      </div>
+      <div className="content">
+        <SkeletonList rows={6} />
+      </div>
+    </div>
+  )
+}
+
+function AccessScreen({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
+  const noAuth = error.status === 401
+  const forbidden = error.status === 403
+  // внутри «МАКС» 401 значит, что подпись не сошлась или устарела: помогает открыть панель заново
+  const inMax = isInMax()
+  return (
+    <div className="app">
+      <div className="screen no-tabbar access">
+        {noAuth || forbidden ? (
+          <div className="empty">
+            {noAuth ? <Lock /> : <ShieldOff />}
+            <h3>{noAuth ? (inMax ? 'Не получилось подтвердить вход' : 'Откройте панель в «МАКС»') : 'Нет доступа'}</h3>
+            <p>
+              {noAuth
+                ? inMax
+                  ? 'Закройте панель и откройте её снова из чата с Корсиком.'
+                  : 'Панель работает внутри чата с Корсиком. Нажмите в боте кнопку «Открыть панель».'
+                : error.message && error.message !== 'Нет доступа к этому разделу'
+                  ? error.message
+                  : 'Панель видят HR и руководители. Если доступ нужен вам, напишите в HR.'}
+            </p>
+            <button className="btn secondary small fit" onClick={onRetry}>Повторить</button>
+          </div>
+        ) : (
+          <ErrorState error={error} onRetry={onRetry} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Куда открыть панель по кнопке из бота: обращение или карточка новичка */
+function deepLink(isManager: boolean): { tab: Tab; route: Route } | null {
+  const m = /^(ticket|employee)_(\d+)$/.exec(startParam() ?? '')
+  if (!m) return null
+  const id = Number(m[2])
+  if (m[1] === 'ticket') return isManager ? null : { tab: 'tickets', route: { name: 'ticket', id } }
+  return { tab: 'employees', route: isManager ? { name: 'manager-employee', id } : { name: 'employee', id } }
+}
+
 function Shell({ role }: { role: Role }) {
   const isManager = role === 'manager'
-  const [tab, setTab] = useState<Tab>('employees')
-  const [stacks, setStacks] = useState<Record<Tab, Route[]>>(() => ({
-    employees: [isManager ? { name: 'manager' } : { name: 'employees' }],
-    tickets: [{ name: 'tickets' }],
-    kb: [{ name: 'kb' }],
-    more: [{ name: 'more' }],
-  }))
-  const [dir, setDir] = useState<Dir>(0)
+  const [link] = useState(() => deepLink(isManager))
+  const [tab, setTab] = useState<Tab>(link?.tab ?? 'employees')
+  const [visited, setVisited] = useState<Tab[]>([link?.tab ?? 'employees'])
+  const [stacks, setStacks] = useState<Record<Tab, Entry[]>>(() => {
+    const s: Record<Tab, Entry[]> = {
+      employees: [entry(isManager ? { name: 'manager' } : { name: 'employees' })],
+      tickets: [entry({ name: 'tickets' })],
+      kb: [entry({ name: 'kb' })],
+      more: [entry({ name: 'more' })],
+    }
+    if (link) s[link.tab] = [...s[link.tab], entry(link.route)]
+    return s
+  })
   const [badge, setBadge] = useState(0)
-  const reduce = useReducedMotion()
+  const reduce = !!useReducedMotion()
 
   const refreshBadge = useCallback(() => {
     if (isManager) return
@@ -72,97 +145,128 @@ function Shell({ role }: { role: Role }) {
   }, [isManager])
   useEffect(refreshBadge, [refreshBadge])
 
-  const stack = stacks[tab]
-  const top = stack[stack.length - 1]
+  const push = useCallback((t: Tab, r: Route) => {
+    setStacks((s) => ({ ...s, [t]: [...s[t], entry(r)] }))
+  }, [])
+  const pop = useCallback((t: Tab) => {
+    setStacks((s) => (s[t].length > 1 ? { ...s, [t]: s[t].slice(0, -1) } : s))
+  }, [])
 
-  const push = useCallback((r: Route) => {
-    setDir(1)
-    setStacks((s) => ({ ...s, [tab]: [...s[tab], r] }))
-  }, [tab])
-  const pop = useCallback(() => {
-    setDir(-1)
-    setStacks((s) => (s[tab].length > 1 ? { ...s, [tab]: s[tab].slice(0, -1) } : s))
-  }, [tab])
+  const stack = stacks[tab]
+  const top = stack[stack.length - 1].route
 
   useEffect(() => {
-    setBackButton(stack.length > 1 ? pop : null)
-  }, [stack.length, pop])
-
-  const nav = useMemo(
-    () => ({ push, pop, refreshBadge, backLabel: stack.length > 1 ? ROUTE_TITLES[stack[stack.length - 2].name] : '' }),
-    [push, pop, refreshBadge, stack],
-  )
+    setBackButton(stack.length > 1 ? () => pop(tab) : null)
+  }, [stack.length, tab, pop])
 
   const switchTab = (t: Tab) => {
     haptic.select()
     if (t === tab) {
-      // повторное нажатие — к корню вкладки
-      if (stack.length > 1) {
-        setDir(-1)
-        setStacks((s) => ({ ...s, [t]: [s[t][0]] }))
-      }
+      // повторное нажатие: к корню вкладки
+      if (stack.length > 1) setStacks((s) => ({ ...s, [t]: [s[t][0]] }))
       return
     }
-    setDir(0)
+    setVisited((v) => (v.includes(t) ? v : [...v, t]))
     setTab(t)
   }
 
-  const variants = {
-    initial: (d: Dir) => (reduce || d === 0 ? { opacity: d === 0 ? 1 : 0, x: 0 } : { x: d > 0 ? '100%' : '-28%', zIndex: d > 0 ? 2 : 1 }),
-    animate: { x: 0, opacity: 1 },
-    exit: (d: Dir) =>
-      d === 0
-        ? { opacity: 0, transition: { duration: 0 } }
-        : reduce
-          ? { opacity: 0 }
-          : { x: d > 0 ? '-28%' : '100%', zIndex: d > 0 ? 1 : 2 },
-  }
-
+  const tabs: Tab[] = isManager ? ['employees'] : TABS.map((t) => t.id)
   const showTabbar = !isManager && !HIDE_TABBAR.includes(top.name)
 
   return (
-    <NavCtx.Provider value={nav}>
-      <div className="app">
-        <AnimatePresence initial={false} custom={dir}>
-          <motion.div
-            key={`${tab}:${stack.length}:${top.name}:${'id' in top ? top.id : ''}`}
-            className="layer"
-            custom={dir}
-            variants={variants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={reduce ? { duration: 0.2 } : { type: 'spring', bounce: 0, duration: 0.35 }}
-          >
-            {renderRoute(top)}
-          </motion.div>
-        </AnimatePresence>
+    <div className="app">
+      {tabs
+        .filter((t) => visited.includes(t))
+        .map((t) => (
+          <div key={t} className="pane" data-visible={t === tab} {...inert(t !== tab)}>
+            <AnimatePresence initial={false}>
+              {stacks[t].map((e, i) => (
+                <Layer
+                  key={e.key}
+                  route={e.route}
+                  index={i}
+                  depth={stacks[t].length - 1 - i}
+                  backLabel={i > 0 ? ROUTE_TITLES[stacks[t][i - 1].route.name] : ''}
+                  active={t === tab && i === stacks[t].length - 1}
+                  tab={t}
+                  push={push}
+                  pop={pop}
+                  refreshBadge={refreshBadge}
+                  reduce={reduce}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        ))}
 
-        <AnimatePresence initial={false}>
-          {showTabbar && (
-            <motion.nav
-              className="tabbar"
-              aria-label="Разделы"
-              initial={reduce ? { opacity: 0 } : { y: '100%' }}
-              animate={reduce ? { opacity: 1 } : { y: 0 }}
-              exit={reduce ? { opacity: 0 } : { y: '100%' }}
-              transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-            >
-              <div className="tabbar-row" role="tablist">
-                {TABS.map(({ id, label, Icon }) => (
-                  <button key={id} className="tab" role="tab" aria-selected={tab === id} onClick={() => switchTab(id)}>
-                    <span className="tab-icon">
-                      <Icon />
-                      {id === 'tickets' && badge > 0 && <span className="tab-badge num">{badge}</span>}
-                    </span>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </motion.nav>
-          )}
-        </AnimatePresence>
-      </div>
-    </NavCtx.Provider>
+      <AnimatePresence initial={false}>
+        {showTabbar && (
+          <motion.nav
+            className="tabbar"
+            aria-label="Разделы"
+            initial={reduce ? { opacity: 0 } : { transform: 'translateY(100%)' }}
+            animate={reduce ? { opacity: 1 } : { transform: 'translateY(0%)' }}
+            exit={reduce ? { opacity: 0 } : { transform: 'translateY(100%)' }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+          >
+            <div className="tabbar-row" role="tablist">
+              {TABS.map(({ id, label, Icon }) => (
+                <button key={id} className="tab" role="tab" aria-selected={tab === id} onClick={() => switchTab(id)}>
+                  <span className="tab-icon">
+                    <Icon />
+                    {id === 'tickets' && badge > 0 && <span className="tab-badge num">{badge > 99 ? '99+' : badge}</span>}
+                  </span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </motion.nav>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+type LayerProps = {
+  route: Route
+  index: number
+  depth: number
+  backLabel: string
+  active: boolean
+  tab: Tab
+  push: (t: Tab, r: Route) => void
+  pop: (t: Tab) => void
+  refreshBadge: () => void
+  reduce: boolean
+}
+
+/** Экран в стеке. Нижние экраны остаются смонтированными: скролл и состояние на месте */
+function Layer({ route, index, depth, backLabel, active, tab, push, pop, refreshBadge, reduce }: LayerProps) {
+  const nav = useMemo<Nav>(
+    () => ({ push: (r) => push(tab, r), pop: () => pop(tab), backLabel, refreshBadge, active }),
+    [push, pop, tab, backLabel, refreshBadge, active],
+  )
+  const variants = reduce
+    ? { enter: { opacity: 0 }, top: { opacity: 1 }, under: { opacity: 1 }, exit: { opacity: 0 } }
+    : {
+        enter: { transform: 'translateX(100%)' },
+        top: { transform: 'translateX(0%)' },
+        under: { transform: 'translateX(-28%)' },
+        exit: { transform: 'translateX(100%)' },
+      }
+  return (
+    <motion.div
+      className="layer"
+      data-root={index === 0}
+      style={{ zIndex: index + 1, visibility: depth >= 2 ? 'hidden' : undefined }}
+      variants={variants}
+      initial="enter"
+      animate={depth === 0 ? 'top' : 'under'}
+      exit="exit"
+      transition={reduce ? { duration: 0.2 } : { type: 'spring', bounce: 0, duration: 0.35 }}
+      {...inert(depth > 0)}
+    >
+      <NavCtx.Provider value={nav}>{renderRoute(route)}</NavCtx.Provider>
+    </motion.div>
   )
 }
