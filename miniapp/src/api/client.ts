@@ -211,6 +211,7 @@ function normEmployee<T extends EmployeeShort>(raw: T): T {
     open_tickets: e.open_tickets ?? 0,
     red_flag: !!e.red_flag,
     connected: !!e.connected,
+    stopped: !!e.stopped,
     next_meeting: e.next_meeting ?? null,
     probation_days: e.probation_days || 90,
     day: typeof e.day === 'number' ? e.day : 0,

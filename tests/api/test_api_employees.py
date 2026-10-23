@@ -373,3 +373,11 @@ async def test_create_employee_warns_about_weekend_start(client, world):
     body["full_name"] = "Понедельникова Синтия"
     r = await client.post("/api/employees", headers=auth(world.hr), json=body)
     assert "warning" not in r.json()
+
+
+async def test_list_marks_stopped_bot(client, world, session):
+    """Новичок отключил бота: в списке «Отключил бота», а не «Не подключился»."""
+    world.other.status = "stopped"
+    await session.flush()
+    rows = {e["id"]: e for e in (await client.get("/api/employees", headers=auth(world.hr))).json()}
+    assert rows[world.other.id]["stopped"] is True and rows[world.emp.id]["stopped"] is False

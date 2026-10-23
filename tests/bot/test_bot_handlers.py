@@ -160,6 +160,10 @@ async def test_free_text_then_forward(ctx, repo, api):
     assert repo.tickets[-1].text == "Где взять спецодежду?"
     # «Передать HR?» превратилось в «Передал HR» в том же сообщении
     assert api.answers[-1]["message"]["text"] == T.HR_DONE[0]
+    # повторное нажатие той же кнопки: второго обращения нет, «Передал HR» не затирается
+    await handle_update(ctx, repo, ev_cb("hr:forward"))
+    assert len(repo.tickets) == 1
+    assert api.answers[-1]["message"] is None and api.answers[-1]["notification"] == T.ALREADY_DONE
 
 
 # bot_added / bot_removed: группа больше не становится HR-группой сама, её выбирает HR кнопкой.

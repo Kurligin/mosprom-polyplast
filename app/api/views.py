@@ -554,6 +554,7 @@ class EmployeeViews:
             "open_tickets": len(open_t),
             "red_flag": bool(red),
             "connected": connected(emp),
+            "stopped": emp.status == "stopped",  # отключил бота: сообщения не доходят
             "next_meeting": next((m for m in meetings if not m["done"]), None),
             "synthetic": bool(emp.is_synthetic),
             "test": bool(emp.is_test),  # тестовый новичок команды: только его можно перематывать в демо

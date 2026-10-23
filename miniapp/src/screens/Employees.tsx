@@ -13,7 +13,8 @@ export function EmployeeChips({ e }: { e: EmployeeShort }) {
   if (e.red_flag) chips.push(<Chip key="f" tone="danger" icon={<ShieldAlert />}>Красный флаг</Chip>)
   if (e.open_tickets > 0) chips.push(<Chip key="t" tone="primary" icon={<MessageSquare />}>Обращение{e.open_tickets > 1 ? ` · ${e.open_tickets}` : ''}</Chip>)
   if (e.pending_surveys > 0) chips.push(<Chip key="s" tone="warning" icon={<ClipboardList />}>Опрос не пройден{e.pending_surveys > 1 ? ` · ${e.pending_surveys}` : ''}</Chip>)
-  if (!e.connected) chips.push(<Chip key="c" icon={<UserX />}>Не подключился</Chip>)
+  if (e.stopped) chips.push(<Chip key="c" tone="danger" icon={<UserX />}>Отключил бота</Chip>)
+  else if (!e.connected) chips.push(<Chip key="c" icon={<UserX />}>Не подключился</Chip>)
   return chips.length ? <div className="chips">{chips}</div> : null
 }
 

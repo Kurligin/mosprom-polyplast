@@ -52,6 +52,7 @@ export interface EmployeeShort {
   open_tickets: number
   red_flag: boolean
   connected: boolean // подключился ли к боту в «МАКС»
+  stopped?: boolean // отключил бота: сообщения не доходят
   next_meeting: Meeting | null
   synthetic: boolean
   test?: boolean // тестовый новичок команды: только его можно перематывать машиной времени

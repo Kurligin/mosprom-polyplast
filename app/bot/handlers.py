@@ -317,12 +317,16 @@ async def create_hr_ticket(ctx: BotCtx, repo, emp, text: str, source: str, **kw)
 
 async def _hr_callback(cb: Callback, emp) -> None:
     if cb.payload == "hr:forward":
-        question = (emp.dialog_data or {}).get("last_question")
+        data = emp.dialog_data or {}
+        question = data.get("last_question")
         if question:
-            _set_state(emp, emp.dialog_state, last_question=None)
+            _set_state(emp, emp.dialog_state, last_question=None, forwarded_mid=cb.mid)
             await create_hr_ticket(cb.ctx, cb.repo, emp, question, source="unknown")
             # «Передать вопрос HR?» превращается в «Передал HR» в том же сообщении
             await cb.replace(T.tv(emp, T.HR_DONE), employee=emp)
+        elif cb.mid and data.get("forwarded_mid") == cb.mid:
+            # повторное нажатие на уже переданный вопрос: «Передал HR» не затираем
+            await cb.toast(T.ALREADY_DONE)
         else:
             _enter_hr_question(emp)
             _remember_hr_ask(emp, cb.mid)
