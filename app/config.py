@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_model: str = "GigaChat-2"
 
+    # LLM: gigachat (облако) или openai — любой OpenAI-совместимый сервер в закрытом контуре (vLLM, Ollama)
+    llm_provider: str = "gigachat"
+    llm_base_url: str = ""      # например http://ollama:11434/v1 или http://vllm:8000/v1
+    llm_model: str = ""         # имя модели на этом сервере
+    llm_api_key: str = ""       # если сервер требует ключ
+
     # Инфраструктура
     database_url: str = "postgresql+asyncpg://korsik:korsik@postgres:5432/korsik"
     public_base_url: str = ""

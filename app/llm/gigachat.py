@@ -110,14 +110,50 @@ async def _persist(kind: str, classes: list[str], ms: int, ok: bool) -> None:
         from app.db.session import async_session
 
         async with async_session() as session:
-            session.add(LlmLog(call_type=kind, data_classes=classes, model=_settings().gigachat_model or None,
+            session.add(LlmLog(call_type=kind, data_classes=classes, model=_model_name(),
                                latency_ms=ms, ok=ok))
             await session.commit()
     except Exception as e:  # noqa: BLE001 — журнал не должен ломать ответ
         log.debug("llm_log не записан: %s", e)
 
 
+def _provider() -> str:
+    return (getattr(_settings(), "llm_provider", "") or "gigachat").lower()
+
+
+def _model_name() -> str | None:
+    s = _settings()
+    if _provider() == "openai":
+        return getattr(s, "llm_model", "") or None
+    return s.gigachat_model or None
+
+
+async def _complete_openai(system: str, user: str, temperature: float) -> str:
+    """OpenAI-совместимый /chat/completions: локальная модель в закрытом контуре (vLLM, Ollama)."""
+    import httpx
+
+    s = _settings()
+    base = (getattr(s, "llm_base_url", "") or "").rstrip("/")
+    if not base:
+        raise RuntimeError("LLM_BASE_URL не задан")
+    headers = {"Authorization": f"Bearer {s.llm_api_key}"} if getattr(s, "llm_api_key", "") else {}
+    body = {
+        "model": getattr(s, "llm_model", "") or "default",
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "temperature": temperature,
+        "max_tokens": 300,
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(f"{base}/chat/completions", json=body, headers=headers)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"] or ""
+
+
 async def _complete(system: str, user: str, temperature: float = 0.01) -> str:
+    if _provider() == "openai":
+        async with _SEM:
+            return await _complete_openai(system, user, temperature)
+
     from gigachat.models import Chat, Messages, MessagesRole
 
     chat = Chat(
