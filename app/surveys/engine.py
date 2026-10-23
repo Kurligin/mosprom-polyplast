@@ -449,6 +449,11 @@ async def handle_callback(cb, person) -> None:
     if not (st and st.get("code") == sv.code and st.get("q") == i and i < len(qs)):
         await _stale_action(cb, emp, sv, i, act)
         return
+    if act in ("o", "s", "m", "md") and st.get("answer_id"):
+        # ответ на этот вопрос уже записан (двойной тап, пока шёл первый): второй ответ, флаг и обращение
+        # не нужны, а правка затёрла бы вопрос Корсика. Сбрасывает answer_id только переход к следующему вопросу
+        await cb.toast(T.ANSWER_SAVED)
+        return
     st["mid"] = cb.mid or st.get("mid")
     try:
         await _dispatch(cb, emp, sv, st, i, qs[i], act, arg)
@@ -730,6 +735,8 @@ async def remind_all(session, now: datetime | None = None, employee_ids=None) ->
     """Задача survey_reminders: разослать наступившие напоминания. Возвращает число отправленных.
 
     employee_ids — только эти новички (тесты, точечный запуск); None — все активные.
+    Коммит после каждого напоминания: блокировка новичка не держится, пока задача пишет остальным,
+    и бот (он обрабатывает события по одному) не ждёт конца рассылки.
     """
     from sqlalchemy import select
 
@@ -740,7 +747,7 @@ async def remind_all(session, now: datetime | None = None, employee_ids=None) ->
     tzs = {s.code: s.tz for s in (await session.scalars(select(Site))).all()}
     emps = (await session.scalars(select(Employee).where(
         Employee.status == "active", Employee.dialog_data.has_key(STATE_KEY),
-        *([Employee.id.in_(list(employee_ids))] if employee_ids is not None else [])))).all()
+        *([Employee.id.in_(list(employee_ids))] if employee_ids is not None else [])).order_by(Employee.id))).all()
     sent = 0
     for emp in emps:
         st = _state(emp)
@@ -764,4 +771,5 @@ async def remind_all(session, now: datetime | None = None, employee_ids=None) ->
                 sent += 1
             except Exception:
                 log.exception("Напоминание об опросе новичку %s", emp.id)
+        await session.commit()  # отпускаем блокировку новичка сразу, а не в конце рассылки
     return sent

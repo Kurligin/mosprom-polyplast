@@ -65,9 +65,14 @@ INTRO_WAIT = "intro_wait"       # dialog_data: ждём рассказ о себ
 INTRO_TTL = timedelta(hours=48)  # дольше не ждём: дальше всё, что пишет новичок, идёт обычным маршрутом
 INTRO_MIN_TEXT = 25             # короче — реплика («спасибо», «сейчас пришлю»), а не рассказ о себе
 INTRO_SKIP = "skip"             # кнопка «Пропустить» у просьбы рассказать о себе: sc:<delivery_id>:skip
-# начало вопроса без «?»; «как» и «что» не берём: «Как оператор экструдера, я…» — тоже рассказ о себе
-_QUESTION_RE = re.compile(r"^(где|когда|куда|почему|зачем|сколько|можно|нужно ли|надо ли|подскаж\w*)\b",
-                          re.IGNORECASE)
+# начало вопроса без «?». «Как» и «что» — только в вопросных оборотах: «Как получить…», «Как мне…»,
+# «Что делать…»; «Как оператор экструдера, я…» и «Что обо мне…» — рассказ о себе
+_QUESTION_RE = re.compile(
+    r"^(где|когда|куда|откуда|почему|зачем|сколько|можно|нужно ли|надо ли|есть ли|подскаж\w*|скажите|расскажите|"
+    r"кто|как(ой|ая|ое|ие|ую|им|их|ого|ому|ова|овы)|"
+    r"что (делать|нужно|надо|значит|такое|будет|если|можно|с)|"
+    r"как (мне|нам|тут|здесь|там|долго|часто|быстро|правильно|лучше|\w{2,}[аяеиоуыс]ть(ся)?|\w{2,}(ти|чь)(сь)?))\b",
+    re.IGNORECASE)
 _NOTE_RE = re.compile(r"\s*[\[(][^\])]*[\])]")
 COVERED_NOTE = "знакомство в боте"
 TRAVEL_NOTE = "перемотка времени"
@@ -551,6 +556,9 @@ def _deliver_soon(emp_id: int, delay: float = 1.5) -> None:
         async with async_session() as session:
             try:
                 emp = await session.get(Employee, emp_id)
+                # API (перемотка, отмашка) держит блокировку новичка до коммита: ждём его и читаем свежие
+                # time_shift_hours и отправки, иначе шаги дня уйдут только со следующим тиком
+                await lock_employee(session, emp)
                 if emp is not None and _onboarded(emp) and emp.status == "active":
                     await deliver_due(session, emp, sender=ctx.sender, commit=True)
                     await session.commit()
@@ -748,7 +756,9 @@ async def on_intro(ctx, repo, emp, text: str, msg: dict) -> bool:
     """Рассказ о себе и фото после просьбы «представлю тебя коллегам» → dialog_data["intro"].
 
     False — это не рассказ (вопрос, «спасибо», короткая реплика) или ожидания нет: бот ведёт текст
-    обычным маршрутом, а ожидание рассказа остаётся. «Пришли фото» и «напиши о себе» — по разу.
+    обычным маршрутом, а ожидание рассказа остаётся. Рассказ — одно сообщение: когда он есть, ждём только
+    фото, а другие тексты новичка (вопросы, «сейчас найду фото», жалобы) идут обычным маршрутом и в чат
+    команды не попадают. True — всегда с ответом новичку.
     """
     if intro_wait(emp) is None:
         if (emp.dialog_data or {}).get(INTRO_WAIT) is not None or emp.dialog_state == INTRO_STATE:
@@ -756,14 +766,15 @@ async def on_intro(ctx, repo, emp, text: str, msg: dict) -> bool:
         return False
     photo = _photo_url(msg)
     text = (text or "").strip()
-    is_text = _is_intro_text(text)
+    intro = dict((emp.dialog_data or {}).get("intro") or {})
+    # рассказ уже есть: ждём только фото, подпись к фото в рассказ не дописываем
+    is_text = not (intro.get("text") or "").strip() and _is_intro_text(text)
     if not photo and not is_text:
         return False
     w = dict(intro_wait(emp))
     asked = list(w.get("asked") or [])
-    intro = dict((emp.dialog_data or {}).get("intro") or {})
     if is_text:
-        intro["text"] = f"{intro['text']}\n{text}" if intro.get("text") else text
+        intro["text"] = text
     if photo:
         intro["photo_url"] = photo
     intro["at"] = utcnow().isoformat()
@@ -779,8 +790,9 @@ async def on_intro(ctx, repo, emp, text: str, msg: dict) -> bool:
                                                                     site=emp.site_code))
         return True
     need = "photo" if intro.get("text") else "text"
+    # отвечаем на каждое принятое сообщение (второе фото без рассказа — снова «напиши пару слов»)
+    await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_NEED_PHOTO if need == "photo" else T.INTRO_NEED_TEXT), [])
     if need not in asked:
-        await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_NEED_PHOTO if need == "photo" else T.INTRO_NEED_TEXT), [])
         asked.append(need)
     _set_data(emp, **{INTRO_WAIT: {**w, "asked": asked}})
     return True
@@ -927,7 +939,8 @@ def _forget_gates(emp, ctx: EmployeeCtx, plan: Plan, since: datetime) -> None:
         if p.gate and p.gate in raw and p.due_at >= since:
             raw.pop(p.gate)
             if p.gate == "recruiter_go":
-                _set_data(emp, intro=None)
+                # рассказ и вопрос «опубликовать?» про него забываем вместе: старая кнопка ничего не опубликует
+                _set_data(emp, intro=None, intro_post=None)
                 _drop_intro_wait(emp)
     _set_data(emp, gates=raw)
 

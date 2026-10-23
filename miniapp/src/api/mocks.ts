@@ -365,22 +365,21 @@ function mockRisks(site?: SiteCode | null): RiskItem[] {
 const CLUSTERS: Cluster[] = [
   { topic: 'доступы', label: 'Доступы', count: 9, people: 7, negative: 6, prev: 4, delta: 5, trend: 'up',
     trend_text: 'в 2 раза больше, чем месяц назад',
-    sites: [{ code: 'GTP', count: 6, prev: 2, people: 5 }, { code: 'GrPP', count: 3, prev: 2, people: 2 }],
+    sites: [{ code: 'GTP', count: 6, prev: 2, people: 5 }, { code: 'other', name: 'Другие площадки', count: 3, prev: 2, people: 2 }],
     quotes: [
-      { text: 'Ноутбук выдали, а учётки нет. Айтишники говорят, заявку должен был подать руководитель', site: 'GTP', mood: 'negative', at: hoursAgo(30) },
-      { text: 'Пропуск сделали только к обеду, до этого ходил по журналу', site: 'GrPP', mood: 'negative', at: hoursAgo(80) },
-    ] },
+      { text: 'Ноутбук выдали, а учётки нет. Айтишники говорят, заявку должен был подать руководитель', mood: 'negative', at: hoursAgo(30) },
+      { text: 'Пропуск сделали только к обеду, до этого ходил по журналу', mood: 'negative', at: hoursAgo(80) },
+    ], quotes_reason: null },
   { topic: 'понимание задач', label: 'Понимание задач', count: 7, people: 6, negative: 4, prev: 3, delta: 4, trend: 'up',
-    trend_text: 'в 2 раза больше, чем месяц назад', sites: [{ code: 'GTP', count: 4, prev: 1, people: 3 }, { code: 'Luzhniki', count: 3, prev: 2, people: 3 }],
-    quotes: [{ text: 'Каждый день ставят на новую линию, никто не объясняет почему', site: 'GTP', mood: 'negative', at: hoursAgo(50) }] },
+    trend_text: 'в 2 раза больше, чем месяц назад', sites: [],
+    quotes: [{ text: 'Каждый день ставят на новую линию, никто не объясняет почему', mood: 'negative', at: hoursAgo(50) }],
+    quotes_reason: null },
   { topic: 'наставник', label: 'Наставник', count: 4, people: 3, negative: 3, prev: 0, delta: 4, trend: 'new',
-    trend_text: 'новая тема', sites: [{ code: 'GrPP', count: 4, prev: 0, people: 3 }],
-    quotes: [{ text: 'Наставника неделю не видел, но это ничего, наверное', site: 'GrPP', mood: 'neutral', at: hoursAgo(120) }] },
+    trend_text: 'новая тема', sites: [], quotes: [], quotes_reason: 'few' },
   { topic: 'нагрузка', label: 'Нагрузка', count: 5, people: 4, negative: 3, prev: 6, delta: -1, trend: 'flat',
-    trend_text: 'на 1 меньше, чем месяц назад', sites: [{ code: 'GTP', count: 3, prev: 4, people: 2 }, { code: 'GrPP', count: 2, prev: 2, people: 2 }],
-    quotes: [{ text: 'Две смены подряд третью неделю, потому что людей нет', site: 'GTP', mood: 'negative', at: hoursAgo(60) }] },
+    trend_text: 'на 1 меньше, чем месяц назад', sites: [], quotes: [], quotes_reason: 'few' },
   { topic: 'быт и транспорт', label: 'Быт и транспорт', count: 2, people: 2, negative: 1, prev: 5, delta: -3, trend: 'down',
-    trend_text: 'на 3 меньше, чем месяц назад', sites: [{ code: 'GTP', count: 2, prev: 5, people: 2 }], quotes: [] },
+    trend_text: 'на 3 меньше, чем месяц назад', sites: [], quotes: [], quotes_reason: 'few' },
 ]
 
 function mockWeeks(): MoodWeek[] {
@@ -434,7 +433,9 @@ function mockAnalytics(site?: SiteCode | null): Analytics {
            signals_open: 5, signals_red_open: 1, risks: risks.length, risks_high: risks.filter((r) => r.level === 'high').length },
     funnel,
     mood: { sites: siteRows, low_data: [], weeks: mockWeeks() },
-    clusters: CLUSTERS.filter((c) => !site || c.sites.some((s) => s.code === site)),
+    // по одной площадке ответивших в демо меньше порога: темы не показываем, как на сервере
+    clusters: site ? [] : CLUSTERS,
+    clusters_low_data: !!site,
     risks: { total: risks.length, high: risks.filter((r) => r.level === 'high').length,
              medium: risks.filter((r) => r.level === 'medium').length, reasons: [...reasons.values()].sort((a, b) => b.count - a.count) },
     sites: sites.map((s) => ({ code: s.code, name: s.name })),

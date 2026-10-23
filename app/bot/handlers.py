@@ -15,6 +15,7 @@ from app.bot import hooks
 from app.bot import texts as T
 from app.bot.hooks import Callback
 from app.bot.keyboards import callback, keyboard, open_app
+from app.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,10 @@ _SMALL_TALK_RE = re.compile(
     r"ок|окей|ok|понял|поняла|понятно|ясно|хорошо|ладно|угу|ага|👍|👌)[\s!.,)🙏👋]*$", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"^(отмена|отменить|не надо|не нужно|передумал\w*|неважно|забудь\w*)[\s!.,)]*$",
                         re.IGNORECASE)
+CANCEL_COMMANDS = ("/cancel", "/отмена")
+HELP_COMMANDS = ("/help", "/помощь", "/menu")
+# кнопки сотрудника: аккаунт тестового новичка в демо бывает привязан и как HR — эти нажатия от имени сотрудника
+STAFF_BUTTONS = ("tk:", "mg:", "ch:hr")
 
 
 @dataclass
@@ -78,13 +83,40 @@ def _enter_hr_question(emp) -> None:
     _set_state(emp, S_HR_QUESTION, **{HR_WAIT_KEY: {"at": datetime.now(UTC).isoformat(), "resume": resume}})
 
 
-def _leave_hr_question(emp) -> None:
-    """Вопрос передан, отменён или ожидание истекло: возвращаем прежнее ожидание (опрос) или ничего."""
+def _leave_hr_question(emp) -> dict:
+    """Вопрос передан, отменён или ожидание истекло: возвращаем прежнее ожидание (опрос) или ничего.
+
+    → бывшее ожидание `hr_wait` ({} — его не было): в нём mid сообщения «Напиши свой вопрос» с кнопкой «Отмена».
+    """
     data = dict(emp.dialog_data or {})
     wait = data.pop(HR_WAIT_KEY, None)
     emp.dialog_data = data
     if _state(emp) == S_HR_QUESTION:
         emp.dialog_state = (wait or {}).get("resume") if isinstance(wait, dict) else None
+    return wait if isinstance(wait, dict) else {}
+
+
+def _remember_hr_ask(emp, mid: str | None) -> None:
+    """mid сообщения «Напиши свой вопрос»: когда вопрос уйдёт HR, у него уберём кнопку «Отмена»."""
+    wait = (emp.dialog_data or {}).get(HR_WAIT_KEY)
+    if mid and isinstance(wait, dict):
+        _set_state(emp, emp.dialog_state, **{HR_WAIT_KEY: {**wait, "mid": mid}})
+
+
+async def _close_hr_ask(ctx: BotCtx, emp, wait: dict, *, keep: str | None = None) -> None:
+    """Убрать кнопку «Отмена» у «Напиши свой вопрос»: вопрос уже у HR (или отменён). keep — это сообщение
+    меняет сам обработчик кнопки."""
+    mid = wait.get("mid")
+    if not mid or mid == keep:
+        return
+    try:
+        await ctx.sender.edit(mid, T.tv(emp, T.HR_ASK), attachments=[], key=emp.chat_id)
+    except Exception as e:  # noqa: BLE001 — кнопка останется, нажатие ответит всплывашкой
+        log.info("Кнопка «Отмена» у сообщения %s не убрана: %s", mid, e)
+
+
+async def _leave_hr(ctx: BotCtx, emp) -> None:
+    await _close_hr_ask(ctx, emp, _leave_hr_question(emp))
 
 
 def _hr_wait_expired(emp) -> bool:
@@ -190,7 +222,8 @@ async def _onboarding_callback(cb: Callback, emp) -> None:
         # кнопка из старого сообщения: показываем актуальный шаг в нём же
         await cb.replace(*onboarding_view(emp), employee=emp)
     else:
-        await cb.mark()
+        # знакомство уже пройдено (двойной тап): сообщение не трогаем, иначе старый снимок затрёт приветствие
+        await cb.toast(T.ALREADY_DONE)
 
 
 # --- привязка ---
@@ -229,11 +262,33 @@ async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int 
         if staff.max_user_id and staff.max_user_id != user_id:
             await ctx.sender.send(repo, T.CODE_TAKEN, chat_id=chat_id, user_id=user_id)
             return True
+        if staff.max_user_id != user_id and not await _free_for_staff(ctx, repo, staff, user_id, chat_id):
+            return True
         staff.max_user_id = user_id
         staff.chat_id = chat_id
+        await repo.flush()  # привязка в БД до «Готово»: ошибка не оставит отправленное подтверждение
         await greet_staff(ctx, repo, staff)
         return True
     return False
+
+
+async def _free_for_staff(ctx: BotCtx, repo, staff, user_id: int, chat_id: int | None) -> bool:
+    """Аккаунт можно привязать к сотруднику. Уже другая роль: в демо старую привязку снимаем (ведущий показывает
+    руководителя тем же аккаунтом), иначе ACCOUNT_TAKEN. Аккаунт настоящего новичка сотрудником не делаем;
+    тестовый новичок остаётся новичком, кнопки HR (STAFF_BUTTONS) работают от имени сотрудника."""
+    prev = await repo.staff_by_user(user_id)
+    if prev is not None and prev is not staff:
+        if not settings.demo_enabled:
+            await ctx.sender.send(repo, T.ACCOUNT_TAKEN, chat_id=chat_id, user_id=user_id)
+            return False
+        prev.max_user_id = None
+        prev.chat_id = None
+        await repo.flush()
+    emp = await repo.employee_by_user(user_id)
+    if emp is not None and not _is_demo(emp):
+        await ctx.sender.send(repo, T.ACCOUNT_TAKEN, chat_id=chat_id, user_id=user_id)
+        return False
+    return True
 
 
 async def greet_staff(ctx: BotCtx, repo, staff) -> None:
@@ -270,13 +325,15 @@ async def _hr_callback(cb: Callback, emp) -> None:
             await cb.replace(T.tv(emp, T.HR_DONE), employee=emp)
         else:
             _enter_hr_question(emp)
+            _remember_hr_ask(emp, cb.mid)
             await cb.replace(T.tv(emp, T.HR_ASK), _hr_ask_keyboard(), employee=emp)
     elif cb.payload == "hr:cancel":
         if _state(emp) == S_HR_QUESTION:
-            _leave_hr_question(emp)
+            await _close_hr_ask(cb.ctx, emp, _leave_hr_question(emp), keep=cb.mid)
             await cb.replace(T.tv(emp, T.HR_CANCELLED), employee=emp)
         else:
-            await cb.mark()
+            # вопрос уже у HR или отменён: «✅ Отмена» под ним была бы неправдой
+            await cb.toast(T.ALREADY_DONE)
     else:
         await cb.mark()
 
@@ -398,7 +455,7 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
         for pre in hooks.pre_routes():
             if getattr(pre, "always", False) and await pre(ctx, repo, emp, alert, body):
                 if state == S_HR_QUESTION:
-                    _leave_hr_question(emp)  # текст уже у HR
+                    await _leave_hr(ctx, emp)  # текст уже у HR
                 return
 
     if state in ONBOARDING:
@@ -411,14 +468,18 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
         if question and not _SMALL_TALK_RE.match(question):
             # «/hr Когда зарплата» — вопрос в той же строке, переспрашивать не нужно
             if state == S_HR_QUESTION:
-                _leave_hr_question(emp)
+                await _leave_hr(ctx, emp)
             await _hr_question(ctx, repo, emp, question)
             return
         if state != S_HR_QUESTION:
             _enter_hr_question(emp)
-        await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard())
+        _remember_hr_ask(emp, (await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard()) or [None])[-1])
         return
     if cmd:
+        if cmd in CANCEL_COMMANDS and state == S_HR_QUESTION:
+            await _leave_hr(ctx, emp)
+            await _say(ctx, repo, emp, T.tv(emp, T.HR_CANCELLED))
+            return
         handler = hooks.command_handler(cmd.lstrip("/"))
         if handler is not None:
             await handler(ctx, repo, emp, arg.strip())
@@ -426,22 +487,26 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
         if cmd == "/food":
             await _say(ctx, repo, emp, T.tv(emp, T.FOOD_STUB))
             return
+        # команды не знаем: не обращение HR, не вопрос в базу знаний и не ответ опроса
+        lead = "" if cmd in HELP_COMMANDS else T.tv(emp, T.UNKNOWN_COMMAND)
+        await _say(ctx, repo, emp, lead + T.tv(emp, T.HELP))
+        return
 
     # ждём текст по состоянию диалога
     if _state(emp) == S_HR_QUESTION:
         if _hr_wait_expired(emp):
-            _leave_hr_question(emp)  # давно открыл /hr: это уже обычный вопрос
+            await _leave_hr(ctx, emp)  # давно открыл /hr: это уже обычный вопрос
         elif not text:
-            await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard())
+            _remember_hr_ask(emp, (await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard()) or [None])[-1])
             return
         elif _CANCEL_RE.match(text):
-            _leave_hr_question(emp)
+            await _leave_hr(ctx, emp)
             await _say(ctx, repo, emp, T.tv(emp, T.HR_CANCELLED))
             return
         elif _SMALL_TALK_RE.match(text):
             return  # «ок», «спасибо» — не вопрос: ждём сам вопрос, обращение не создаём
         else:
-            _leave_hr_question(emp)
+            await _leave_hr(ctx, emp)  # вопрос уходит HR: «Отмена» под «Напиши свой вопрос» больше не нужна
             await _hr_question(ctx, repo, emp, text)
             return
     handler = hooks.state_handler(_state(emp))
@@ -492,6 +557,11 @@ async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
     try:
         emp = await repo.employee_by_user(cb.user_id)
         staff = None if emp else await repo.staff_by_user(cb.user_id)
+        if emp is not None and payload.startswith(STAFF_BUTTONS):
+            # аккаунт тестового новичка привязан и как сотрудник: кнопки HR и руководителя — от его имени
+            staff = await repo.staff_by_user(cb.user_id)
+            if staff is not None:
+                emp = None
         if emp is None and staff is None:
             handler = hooks.callback_handler(payload.split(":", 1)[0])
             if getattr(handler, "anyone", False):

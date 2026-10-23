@@ -316,14 +316,15 @@ export interface MoodSite {
 }
 
 export interface ClusterQuote {
-  text: string // обезличенная цитата: имена и телефоны замаскированы
-  site: SiteCode
-  site_name?: string
+  text: string // обезличенная цитата: имена и телефоны замаскированы; площадки нет — по ней легко найти автора
   mood: 'positive' | 'neutral' | 'negative' | null
   at: string
 }
 
-/** Тема ответов опросов: упоминания, динамика к прошлым 4 неделям, цитаты */
+/** Почему у темы нет цитат: few — о теме пишут меньше 5 человек, no_text — ответы кнопками, hidden — без подробностей */
+export type QuotesReason = 'few' | 'no_text' | 'hidden'
+
+/** Тема ответов опросов: упоминания, динамика к прошлым 4 неделям, цитаты. Тема одного человека не приходит */
 export interface Cluster {
   topic: string
   label: string
@@ -334,8 +335,10 @@ export interface Cluster {
   delta: number
   trend: 'up' | 'down' | 'flat' | 'new'
   trend_text: string // «в 2 раза больше, чем месяц назад»
-  sites: { code: SiteCode; name?: string; count: number; prev: number; people: number }[]
+  // площадки, где о теме пишут от 5 человек; остальные — одной строкой { code: 'other', name: 'Другие площадки' }
+  sites: { code: SiteCode | 'other'; name?: string; count: number; prev: number; people: number }[]
   quotes: ClusterQuote[]
+  quotes_reason?: QuotesReason | null
 }
 
 export interface Analytics {
@@ -357,6 +360,7 @@ export interface Analytics {
   funnel: FunnelStage[]
   mood: { sites: MoodSite[]; low_data: string[]; weeks: MoodWeek[] }
   clusters: Cluster[]
+  clusters_low_data?: boolean // за 4 недели ответили меньше threshold новичков: темы не показываем
   risks: { total: number; high: number; medium: number; reasons: { code: string; label: string; count: number }[] }
   sites: { code: SiteCode; name: string }[]
   synthetic: boolean

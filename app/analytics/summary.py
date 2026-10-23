@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.analytics.clusters import clusters as load_clusters
+from app.analytics.clusters import cluster_view
 from app.analytics.risks import RiskItem, reason_counts, risks
 from app.analytics.stages import (
     DONE_RECENT_DAYS,
@@ -142,12 +142,11 @@ async def summary(session, now: datetime | None = None, *, site: str | None = No
         items = await risks(session, now, site=site)
     risky = {i.employee_id: i.level for i in items}
     names = dict((await session.execute(select(Site.code, Site.name))).all())
-    cl = await load_clusters(session, weeks, now, site=site)
+    view = await cluster_view(session, weeks, now, site=site)
+    cl = view["clusters"]
     for c in cl:
         for s in c["sites"]:
-            s["name"] = names.get(s["code"], s["code"])
-        for q in c["quotes"]:
-            q["site_name"] = names.get(q["site"], q["site"])
+            s["name"] = s.get("name") or names.get(s["code"], s["code"])
     m = await mood(session, now, site=site)
     return {
         "generated_at": now.isoformat(),
@@ -159,6 +158,8 @@ async def summary(session, now: datetime | None = None, *, site: str | None = No
         "funnel": await funnel(session, now, site=site, risky=risky),
         "mood": {k: m[k] for k in ("overall", "sites", "low_data", "weeks")},
         "clusters": cl,
+        # за окно ответили меньше порога: темы не показываем, по ним можно узнать автора
+        "clusters_low_data": view["low_data"],
         "risks": {
             "total": len(items),
             "high": sum(1 for i in items if i.level == "high"),

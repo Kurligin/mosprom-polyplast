@@ -275,7 +275,8 @@ def test_day2_intro_published_only_with_consent(journey):
     posts = [i for i, e in enumerate(log) if e["op"] == "send" and e["chat_id"] == J.GTP_CHAT.chat_id]
     assert len(posts) == 1 and posts[0] > press, "без согласия в чат ничего не уходит"
     post = log[posts[0]]
-    assert post["text"] == f"Знакомьтесь, это Иван Смирнов! Теперь работает с нами на площадке GTP.\n\n{J.INTRO_TEXT}"
+    assert post["text"] == f"Знакомьтесь, это Иван Смирнов! Теперь работает с нами, площадка GTP.\n\n{J.INTRO_TEXT}"
+    assert ask["text"].endswith(post["text"]), "согласие давали на этот самый текст"
     assert post["attachments"] == J.PHOTO
     done = [e for e in edits(journey, st, J.NEWCOMER) if e["mid"] == ask["mid"]]
     assert done and done[-1]["text"].endswith("Загляни туда, коллеги наверняка уже здороваются!") and not labels(done[-1])

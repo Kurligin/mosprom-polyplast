@@ -71,7 +71,7 @@ export default function Analytics() {
           />
           <FunnelSection funnel={data.funnel} />
           <MoodSection weeks={data.mood.weeks} sites={data.mood.sites} lowData={data.mood.low_data} threshold={data.threshold} />
-          <ClusterSection clusters={data.clusters} siteName={siteName} />
+          <ClusterSection clusters={data.clusters} lowData={!!data.clusters_low_data} threshold={data.threshold} siteName={siteName} />
           <p className="footnote">
             Зона риска считается по понятным правилам: сигналы, оценки, пропуски опросов, молчание, встречи и обращения без ответа.
             Срезы настроения показываем от {data.threshold} ответивших.{data.synthetic ? ' Данные синтетические.' : ''}
@@ -349,7 +349,9 @@ function MoodSiteRow({ s }: { s: MoodSite }) {
 
 /* ---------- Темы ---------- */
 
-function ClusterSection({ clusters, siteName }: { clusters: Cluster[]; siteName: (code: string) => string }) {
+function ClusterSection({ clusters, lowData, threshold, siteName }: {
+  clusters: Cluster[]; lowData: boolean; threshold: number; siteName: (code: string) => string
+}) {
   const [open, setOpen] = useState<string | null>(null)
   const list = useMemo(() => clusters.filter((c) => c.count > 0), [clusters])
   return (
@@ -359,9 +361,12 @@ function ClusterSection({ clusters, siteName }: { clusters: Cluster[]; siteName:
         <span>за 4 недели</span>
       </div>
       <div className="group">
-        {list.length === 0 && (
+        {list.length === 0 && (lowData ? (
+          <Empty icon={<ShieldCheck />} title="Мало ответов"
+            text={`Темы покажем, когда за 4 недели ответят хотя бы ${threshold} новичков: так по теме не узнать автора.`} />
+        ) : (
           <Empty icon={<ChartColumnIncreasing />} title="Тем пока мало" text="Темы появятся, когда новички напишут о трудностях в опросах." />
-        )}
+        ))}
         {list.map((c) => (
           <ClusterRow
             key={c.topic}
@@ -369,12 +374,14 @@ function ClusterSection({ clusters, siteName }: { clusters: Cluster[]; siteName:
             siteName={siteName}
             open={open === c.topic}
             onToggle={() => setOpen(open === c.topic ? null : c.topic)}
+            threshold={threshold}
           />
         ))}
       </div>
       {list.length > 0 && (
         <div className="section-footer">
-          Темы и настроение определяет ИИ по ответам. Цитаты без имён и только от тех, кто согласился на ИИ-разбор.
+          Темы и настроение определяет ИИ по ответам. Тему одного человека не показываем. Цитаты без имён,
+          когда о теме пишут от {threshold} новичков, и только от тех, кто согласился на ИИ-разбор.
         </div>
       )}
     </section>
@@ -383,13 +390,19 @@ function ClusterSection({ clusters, siteName }: { clusters: Cluster[]; siteName:
 
 const TREND_ICON = { up: ArrowUpRight, new: Plus, down: ArrowDownRight, flat: Minus }
 
-function ClusterRow({ c, open, onToggle, siteName }: {
-  c: Cluster; open: boolean; onToggle: () => void; siteName: (code: string) => string
+const NO_QUOTES: Record<string, (threshold: number) => string> = {
+  few: (n) => `Цитаты показываем, когда о теме пишут от ${n} новичков.`,
+  no_text: () => 'Цитат нет: ответили кнопками, без своего текста.',
+}
+
+function ClusterRow({ c, open, onToggle, siteName, threshold }: {
+  c: Cluster; open: boolean; onToggle: () => void; siteName: (code: string) => string; threshold: number
 }) {
   const reduce = useReducedMotion()
   const Icon = TREND_ICON[c.trend] ?? Minus
   const tone = c.trend === 'up' || c.trend === 'new' ? 'danger' : c.trend === 'down' ? 'success' : ''
-  const where = c.sites.filter((s) => s.count > 0).map((s) => `${siteName(s.code)} ${s.count}`).join(' · ')
+  const where = c.sites.filter((s) => s.count > 0)
+    .map((s) => `${s.code === 'other' ? (s.name ?? 'Другие площадки') : siteName(s.code)} ${s.count}`).join(' · ')
   const quotes = open ? c.quotes : c.quotes.slice(0, 1)
   return (
     <button className="cell cluster-cell" aria-expanded={open} onClick={() => { haptic.select(); onToggle() }}>
@@ -419,7 +432,9 @@ function ClusterRow({ c, open, onToggle, siteName }: {
                 {c.people} {plural(c.people, ['новичок', 'новичка', 'новичков'])}{where ? ` · ${where}` : ''}
                 {c.prev > 0 ? ` · месяц назад ${c.prev}` : ''}
               </div>
-              {c.quotes.length === 0 && <div className="cell-meta">Цитат нет: эти новички не давали согласие на ИИ-разбор.</div>}
+              {c.quotes.length === 0 && (
+                <div className="cell-meta">{NO_QUOTES[c.quotes_reason ?? '']?.(threshold) ?? 'Цитат нет.'}</div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

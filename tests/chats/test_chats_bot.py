@@ -335,15 +335,16 @@ async def test_intro_asks_consent_in_thanks_message_and_publishes(db, ctx, api):
     emp_id = await intro_setup(db)
     await tell_about_me(db, ctx, emp_id)
     ask = api.to(500)[-1]
+    post_text = f"Знакомьтесь, это Тест Тестов! Теперь работает с нами, площадка GTP.\n\n{INTRO}"
     assert ask["text"] == (ST.INTRO_THANKS[0] + "\n\nХочешь, я сам представлю тебя коллегам в чате «Команда GTP»? "
-                           "Опубликую твой рассказ и фото, так тебя узнают ещё до встречи.")
+                           "Так тебя узнают ещё до встречи. Вот что опубликую вместе с твоим фото:\n\n" + post_text)
     assert [(b["text"], b["payload"]) for b in api.buttons(ask)] == [
         ("Опубликовать в чате команды", "ch:pub:-2"), ("Не нужно", "ch:nopub")]
     assert not api.to(-2), "без согласия в чат ничего не уходит"
     sends = len(api.sent)
     await feed(db, ctx, ev_press(100, 500, ask, "ch:pub:-2", chat_type="dialog"))
     (post,) = api.to(-2)
-    assert post["text"] == f"Знакомьтесь, это Тест Тестов! Теперь работает с нами на площадке GTP.\n\n{INTRO}"
+    assert post["text"] == post_text, "в чат уходит ровно то, что новичок видел в вопросе"
     assert post["attachments"] == [PHOTO] and post["fmt"] is None
     assert len(api.sent) == sends + 1, "новичку новых сообщений нет: ответ правит то же сообщение"
     done = api.answers[-1]["message"]
@@ -385,7 +386,8 @@ async def test_text_only_intro_offered_by_job_after_wait(db, ctx, sender, api):
     later = datetime.now(UTC) + engine.INTRO_TTL + timedelta(hours=1)  # фото так и не пришло
     await service.tick(later, sender=sender, session_factory=db)
     ask = api.to(500)[-1]
-    assert ask["text"].startswith("Хочешь, я сам представлю тебя коллегам в чате «Команда GTP»? Опубликую твой рассказ,")
+    assert ask["text"].startswith("Хочешь, я сам представлю тебя коллегам в чате «Команда GTP»? Так тебя узнают ещё "
+                                  "до встречи. Вот что опубликую:\n\nЗнакомьтесь, это Тест Тестов!")
     await service.tick(later, sender=sender, session_factory=db)
     assert api.to(500)[-1] is ask, "спрашиваем один раз"
 

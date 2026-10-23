@@ -154,12 +154,13 @@ async def test_intro_short_replies_and_questions_go_normal_route(routes, monkeyp
 
     await w.say(ABOUT)
     assert w.api.text(w.api.last(500)) == ST.INTRO_NEED_PHOTO[0]
-    n = len(w.api.sent(500))
     await w.say("Ещё умею настраивать экструдер и читать техкарты")
-    assert len(w.api.sent(500)) == n, "«пришли фото» — один раз"
+    assert w.api.text(w.api.last(500)) != ST.INTRO_NEED_PHOTO[0], "«пришли фото» — один раз"
+    assert w.emp.dialog_data.get("last_question") == "Ещё умею настраивать экструдер и читать техкарты", \
+        "рассказ уже есть: следующий текст идёт обычным маршрутом, а не дописывается в пост для коллег"
     await handle_update(w.ctx, w.repo, ev_photo())
     intro = w.emp.dialog_data["intro"]
-    assert intro["text"].startswith(ABOUT) and intro["photo_url"] == PHOTO[0]["payload"]["url"]
+    assert intro["text"] == ABOUT and intro["photo_url"] == PHOTO[0]["payload"]["url"]
     assert w.api.text(w.api.last(500)) == ST.INTRO_THANKS[0] and engine.intro_wait(w.emp) is None
     group = w.api.text(w.api.last(900))
     assert "Опросова Анна, GrPP" in group and "[тест]" not in group and "прислал" not in group

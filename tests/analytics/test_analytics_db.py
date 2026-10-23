@@ -38,6 +38,9 @@ async def test_risks_rules_on_db(world):
     for i, key in enumerate(("fin_load", "fin_manager", "fin_goals")):
         await answer(s, ids, drop, "final", key, score=5, value="5", at=now - timedelta(hours=2, minutes=i))
     await answer(s, ids, drop, "final", "fin_stay", value="Не уверен", mood="neutral", at=now - timedelta(hours=2))
+    # оба опроса пройдены: средние считаются (посреди опроса — нет)
+    drop.dialog_data = {"surveys": {c: {"started_at": now.isoformat(), "done_at": now.isoformat()}
+                                    for c in ("week2", "final")}}
 
     waiting = await world.new("Без Бота", days_ago=3, status="waiting", synthetic=False)
     meeting = await world.new("Без Встречи", days_ago=40)
@@ -102,16 +105,19 @@ async def test_clusters_quotes_need_ai_consent_and_are_masked(world):
     now = datetime.now(UTC)
     agree, silent, revoked = (await world.new("Согласен Первый"), await world.new("Без Согласия"),
                               await world.new("Передумал Третий"))
+    more = [await world.new("Кнопкой Четвёртый"), await world.new("Кнопкой Пятый")]
     s.add(Consent(employee_id=agree.id, purpose="ai_analysis", given=True, given_at=now - timedelta(days=30)))
     s.add(Consent(employee_id=revoked.id, purpose="ai_analysis", given=True, given_at=now - timedelta(days=30)))
     s.add(Consent(employee_id=revoked.id, purpose="ai_analysis", given=False, given_at=now - timedelta(days=5)))
-    # текущие 4 недели: доступы — 3 упоминания (2 текста и негативная кнопка), позитивные — не упоминания
+    # текущие 4 недели: доступы — 5 упоминаний от 5 человек (2 текста и негативные кнопки): цитаты возможны
     await answer(s, ids, agree, "week2", "w2_info", value="Нет", topic="доступы", mood="negative",
                  text="Начальников Пётр Андреевич обещал учётку, звоню ему 8 916 123-45-67, пока тишина.",
                  at=now - timedelta(days=3))
     await answer(s, ids, silent, "week2", "w2_info", value="Нет", topic="доступы", mood="negative",
                  text="Нет доступа к почте вторую неделю", at=now - timedelta(days=2))
     await answer(s, ids, revoked, "day1", "d1_access", value="Нет", mood="negative", at=now - timedelta(days=4))
+    for e in more:
+        await answer(s, ids, e, "day1", "d1_access", value="Нет", mood="negative", at=now - timedelta(days=5))
     await answer(s, ids, revoked, "week2", "w2_tasks", value="Нет", topic="понимание задач", mood="negative",
                  text="Не понимаю, что от меня хотят", at=now - timedelta(days=4))
     await answer(s, ids, agree, "day3", "d3_colleagues", value="Отлично!", mood="positive",
@@ -128,13 +134,13 @@ async def test_clusters_quotes_need_ai_consent_and_are_masked(world):
     cl = {c["topic"]: c for c in await clusters(s, 4, now, site=world.site.code)}
     assert "другое" not in cl and "коллектив" not in cl  # «другое» и позитив — не кластер
     acc = cl["доступы"]
-    assert (acc["count"], acc["prev"], acc["people"], acc["trend"]) == (3, 1, 3, "up")
-    assert acc["trend_text"] == "в 3 раза больше, чем месяц назад"
-    assert acc["sites"] == [{"code": world.site.code, "count": 3, "prev": 1, "people": 3}]
+    assert (acc["count"], acc["prev"], acc["people"], acc["trend"]) == (5, 1, 5, "up")
+    assert acc["trend_text"] == "в 5 раз больше, чем месяц назад"
+    assert acc["sites"] == [{"code": world.site.code, "count": 5, "prev": 1, "people": 5}]
+    # нет согласия на ИИ-разбор (или его отозвали) — нет цитаты; имя и телефон замаскированы
     assert [q["text"] for q in acc["quotes"]] == ["[ФИО] обещал учётку, звоню ему [ТЕЛЕФОН], пока тишина."]
-    # нет согласия на ИИ-разбор (или его отозвали) — нет цитаты; тема здоровья — тоже без цитаты
-    assert cl["понимание задач"]["quotes"] == [] and cl["понимание задач"]["count"] == 1
-    assert cl["нагрузка"]["quotes"] == [] and cl["нагрузка"]["trend_text"] == "новая тема"
+    # темы одного человека («понимание задач» у отозвавшего согласие, «нагрузка» о здоровье) — не кластеры
+    assert "понимание задач" not in cl and "нагрузка" not in cl
 
 
 async def test_funnel_counts_stages(world):

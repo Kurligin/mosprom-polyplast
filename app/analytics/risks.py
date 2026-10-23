@@ -116,6 +116,26 @@ async def in_adaptation(session, now: datetime, *, site: str | None = None) -> l
     return out
 
 
+def _scored(emp: Employee, code: str, answered: set) -> bool:
+    """Средняя опроса учитывается, когда опрос пройден или отвечены все его шкалы (для площадки новичка).
+
+    Шкалы пишутся по одной: посреди опроса средняя по первой оценке дала бы ложное «Оценка упала с 9 до 4».
+    """
+    done = (((emp.dialog_data or {}).get("surveys") or {}).get(code) or {}).get("done_at")
+    if done:
+        return True
+    try:
+        from app.surveys import config as C
+
+        sv = C.get(code)
+    except Exception:  # noqa: BLE001 — без конфига опросов судим только по отметке «пройден»
+        return False
+    if sv is None:
+        return False
+    scales = {q.key for q in sv.visible(emp.site_code) if q.kind == "scale"}
+    return bool(scales) and scales <= answered
+
+
 async def _question_keys(session) -> dict[int, str]:
     rows = await session.execute(select(SurveyQuestion.id, SurveyQuestion.branches))
     return {qid: (b or {}).get(QUESTION_KEY) for qid, b in rows.all()}
@@ -153,13 +173,15 @@ async def collect(session, emps: list[tuple[Employee, int, int]], now: datetime)
                                            status=status, source=source, created_at=_aware(created)))
 
     for eid, created in (await session.execute(
+            # «Взять в работу» без ответа — тоже ожидание: как в карточке обращения (views._due)
             select(Ticket.employee_id, Ticket.created_at)
-            .where(Ticket.employee_id.in_(ids), Ticket.status == "new", Ticket.first_response_at.is_(None)))).all():
+            .where(Ticket.employee_id.in_(ids), Ticket.status != "closed", Ticket.first_response_at.is_(None)))).all():
         if created is not None:
             facts[eid].tickets_waiting.append(_aware(created))
 
     # ответы: оценки по опросам, «Не уверен» в итоговом, последняя активность
     keys = await _question_keys(session)
+    emp_by_id = {e.id: e for e, _, _ in emps}
     by_survey: dict[tuple[int, str], dict] = {}
     last: dict[int, datetime] = {}
     for eid, qid, code, title, score, value, created in (await session.execute(
@@ -173,12 +195,15 @@ async def collect(session, emps: list[tuple[Employee, int, int]], now: datetime)
             continue
         last[eid] = max(last.get(eid, created), created)
         if score is not None:
-            s = by_survey.setdefault((eid, code), {"title": title, "scores": [], "at": created})
+            s = by_survey.setdefault((eid, code), {"title": title, "scores": [], "at": created, "keys": set()})
             s["scores"].append(score)
+            s["keys"].add(keys.get(qid))
             s["at"] = max(s["at"], created)
         if keys.get(qid) == STAY_KEY and (value or "").strip() == STAY_UNSURE:
             facts[eid].stay_unsure_at = created
     for (eid, code), s in sorted(by_survey.items(), key=lambda kv: kv[1]["at"]):
+        if not _scored(emp_by_id[eid], code, s["keys"]):
+            continue  # опрос в процессе: по первой шкале средняя ещё ничего не значит
         facts[eid].scores.append(R.SurveyScore(code=code, title=s["title"], at=s["at"],
                                                avg=sum(s["scores"]) / len(s["scores"])))
 
@@ -195,7 +220,6 @@ async def collect(session, emps: list[tuple[Employee, int, int]], now: datetime)
         facts[eid].last_activity = at
 
     # встречи с руководителем: непроведённые, по «сегодня» новичка
-    emp_by_id = {e.id: e for e, _, _ in emps}
     for t in (await session.scalars(select(ManagerTask).where(ManagerTask.employee_id.in_(ids),
                                                               ManagerTask.status != "done"))).all():
         e = emp_by_id[t.employee_id]

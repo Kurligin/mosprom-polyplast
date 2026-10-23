@@ -265,13 +265,14 @@
       <div class="risk-num num">{{ pz.high }}</div>
       <div>
         <div class="risk-lead">{{ pz.high | plural("новичок", "новичка", "новичков") }} в зоне высокого риска</div>
-        <div class="risk-why">{{ pz.reasons | join(", ") }}{% if pz.medium %} · ещё {{ pz.medium }} со средним риском{% endif %}</div>
+        {% set why = pz.reasons | join(", ") %}
+        {% if why or pz.medium %}<div class="risk-why">{{ why }}{% if why and pz.medium %} · {% endif %}{% if pz.medium %}ещё {{ pz.medium }} со средним риском{% endif %}</div>{% endif %}
       </div>
       {% elif pz.total %}
       <div class="risk-num medium num">{{ pz.total }}</div>
       <div>
         <div class="risk-lead">{{ pz.total | plural("новичок", "новичка", "новичков") }} в зоне риска</div>
-        <div class="risk-why">{{ pz.reasons | join(", ") }}</div>
+        {% if pz.reasons %}<div class="risk-why">{{ pz.reasons | join(", ") }}</div>{% endif %}
       </div>
       {% else %}
       <div class="risk-num calm num">0</div>

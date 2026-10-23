@@ -288,7 +288,8 @@ function normAnalytics(raw: Analytics): Analytics {
   const out: Analytics = {
     ...(raw as Analytics),
     funnel: arr(a.funnel),
-    clusters: arr(a.clusters).map((c) => ({ ...c, sites: arr(c.sites), quotes: arr(c.quotes) })),
+    clusters: arr(a.clusters).map((c) => ({ ...c, sites: arr(c.sites), quotes: arr(c.quotes), quotes_reason: c.quotes_reason ?? null })),
+    clusters_low_data: a.clusters_low_data ?? false,
     mood: { sites: arr(a.mood?.sites), low_data: arr(a.mood?.low_data), weeks: arr(a.mood?.weeks) },
     risks: { total: a.risks?.total ?? 0, high: a.risks?.high ?? 0, medium: a.risks?.medium ?? 0, reasons: arr(a.risks?.reasons) },
     sites: arr(a.sites),

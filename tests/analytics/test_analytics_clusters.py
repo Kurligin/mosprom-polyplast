@@ -58,13 +58,13 @@ def test_aggregate_counts_sites_and_order():
         row(5, "Другое", days=1), row(6, "коллектив", mood="positive", days=1),
         row(7, "наставник", days=35),  # только в прошлом периоде
     ]
-    out = aggregate(rows, LO)
-    assert [c["topic"] for c in out] == ["доступы", "нагрузка", "наставник"]
+    out = aggregate(rows, LO, site_min=1)
+    # «нагрузка» — один человек, «наставник» — только прошлый период: не кластеры
+    assert [c["topic"] for c in out] == ["доступы"]
     acc = out[0]
     assert (acc["label"], acc["count"], acc["people"], acc["prev"], acc["negative"]) == ("Доступы", 3, 3, 1, 3)
     assert [(s["code"], s["count"], s["prev"]) for s in acc["sites"]] == [("GTP", 2, 1), ("GrPP", 1, 0)]
-    assert out[1]["people"] == 1
-    assert out[2]["count"] == 0 and out[2]["trend_text"] == "на 1 меньше, чем месяц назад"
+    assert aggregate(rows, LO)[0]["sites"] == [], "по умолчанию площадка видна от 5 человек в теме"
 
 
 def test_quotes_prefer_negative_unmasked_fresh_one_per_person():

@@ -6,16 +6,21 @@
   сужает до офиса или производства, `for_intro` — чат для представлений. `bot_removed` → `active = False`;
 - HR-группа — по-прежнему `Setting('hr_group_chat_id')` (его читают `runtime.notify_hr_group` и модули).
   Пока она не выбрана, бот пишет в новой группе короткое сообщение с кнопкой «Сделать эту группу HR-группой».
-  Нажать может только привязанный сотрудник HR, остальным — всплывашка. Переназначить — из Mini App.
+  Нажать может только привязанный сотрудник HR, остальным — всплывашка. Переназначить — из Mini App:
+  кнопка работает, только пока HR-группа не выбрана, и только в последнем сообщении с ней (`prompt_mid`).
   HR-группе новичков не добавляем и представления туда не публикуем.
 
 Добавление новичка (`add_to_chats`): в первый рабочий день (`engine.adaptation_day >= 1`, с машиной времени),
 сразу после знакомства или задачей `team_chats` раз в 5 минут. Один раз на чат: итог в
-`dialog_data["chats"][str(chat_id)] = {"status": added | link | failed, "at", "title", "error"?, "mid"?}`.
-Не добавили (приватность и т. п.) — одно сообщение новичку со ссылками на эти чаты. Синтетику не трогаем.
+`dialog_data["chats"][str(chat_id)] = {"status": added | link | failed | retry, "at", "title", "error"?, "mid"?}`.
+Не добавили (приватность и т. п.) — одно сообщение новичку со ссылками на эти чаты. Окончательный отказ
+(`failed`) — только приватность и «аккаунт не найден»; нет прав у бота и прочие ошибки чата — `retry`:
+пробуем снова не чаще раза в `RETRY_AFTER` (HR мог сделать бота админом). Синтетику не трогаем.
 
 Представление коллегам: рассказ о себе собран (`engine.on_intro`) → «Спасибо» и вопрос «опубликовать в чате
-команды?» одним сообщением (`offer_intro`). Кнопка меняет то же сообщение, без согласия не публикуем.
+команды?» одним сообщением (`offer_intro`), в нём же — пост целиком, как он уйдёт в чат. Кнопка меняет то же
+сообщение, без согласия не публикуем. Нажатие принимаем только в последнем вопросе и про тот же рассказ;
+чат из вопроса пропал или больше не подходит — в другой чат не публикуем, спрашиваем заново.
 Итог — `dialog_data["intro_post"] = {"status": asked | published | declined | failed, "chat_id", "mid",
 "intro_at", "post_mid"?, "at"}`. Основной чат — с отметкой «для представлений», иначе чат площадки новичка.
 """
@@ -48,6 +53,8 @@ AUDIENCES = ("none", "all", "sites")
 WORK_TYPES = ("office", "production")
 HR_ROLES = ("hr", "recruiter", "head_recruitment")
 PRIVACY = "add.participant.privacy"
+FINAL_ERRORS = (PRIVACY, "add.participant.not.found")  # отказ про самого новичка: повтор не поможет
+RETRY_AFTER = timedelta(minutes=10)  # ошибка чата (бот не админ и т. п.): следующая попытка не раньше
 INFO_TTL = timedelta(hours=1)  # название, ссылку и число участников перечитываем не чаще раза в час
 GONE = ("removed", "left", "closed")
 
@@ -154,6 +161,8 @@ async def register(ctx, repo, chat_id: int, user: dict | None = None) -> TeamCha
     if hr_id == chat_id:
         text = T.HR_GROUP_DONE
     elif hr_id is None:
+        if chat.prompt_mid:
+            return chat  # повторная доставка bot_added: сообщение с кнопкой уже в группе
         text = T.GROUP_PROMPT
         kb = keyboard([callback(T.MAKE_HR_BUTTON, f"ch:hr:{chat_id}")])
     else:
@@ -272,13 +281,27 @@ def _specific(chat: TeamChat) -> tuple:
     return (0 if by_site else 1, len(chat.sites or []) if by_site else 0, 0 if chat.work_type else 1, chat.chat_id)
 
 
+def _marked(chat: TeamChat, emp) -> bool:
+    return chat.for_intro and (chat.audience == "none" or matches(chat, emp))
+
+
+def _site_chat(chat: TeamChat, emp) -> bool:
+    return chat.audience == "sites" and matches(chat, emp)
+
+
 def intro_chat(chats: list[TeamChat], emp, hr_id: int | None) -> TeamChat | None:
     """Основной чат команды для представления: с отметкой «для представлений», иначе чат площадки новичка."""
     pool = [c for c in chats if c.active and c.chat_id != hr_id]
-    marked = [c for c in pool if c.for_intro and (c.audience == "none" or matches(c, emp))]
-    site = [c for c in pool if c.audience == "sites" and matches(c, emp)]
+    marked = [c for c in pool if _marked(c, emp)]
+    site = [c for c in pool if _site_chat(c, emp)]
     found = marked or site
     return min(found, key=_specific) if found else None
+
+
+def fits_intro(chat: TeamChat | None, emp, hr_id: int | None) -> bool:
+    """В этот чат можно публиковать представление новичка: активен, не HR-группа и всё ещё «свой» чат."""
+    return (chat is not None and chat.active and chat.chat_id != hr_id
+            and (_marked(chat, emp) or _site_chat(chat, emp)))
 
 
 async def intro_chat_for(session, emp) -> TeamChat | None:
@@ -295,15 +318,35 @@ def _eligible(emp) -> bool:
             and _onboarded(emp))
 
 
+def _retry_due(entry) -> bool:
+    """Ошибка чата (`retry`) — пробуем снова, когда с прошлой попытки прошло RETRY_AFTER."""
+    if not isinstance(entry, dict) or entry.get("status") != "retry":
+        return False
+    try:
+        return utcnow() - datetime.fromisoformat(entry["at"]) >= RETRY_AFTER
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
 def pending_chats(chats: list[TeamChat], emp, hr_id: int | None) -> list[TeamChat]:
     done = _data(emp).get(CHATS_KEY) or {}
-    return [c for c in chats if c.chat_id != hr_id and matches(c, emp) and str(c.chat_id) not in done]
+    return [c for c in chats if c.chat_id != hr_id and matches(c, emp)
+            and (str(c.chat_id) not in done or _retry_due(done[str(c.chat_id)]))]
 
 
 # --- добавление новичка ------------------------------------------------------------------------
 
+def _refused(error: str) -> tuple[str, str]:
+    """Отказ addMembers: окончательный (приватность, нет аккаунта) или ошибка чата, которую повторим."""
+    return ("failed" if error in FINAL_ERRORS else "retry"), error
+
+
 async def _add_one(sender, chat: TeamChat, user_id: int) -> tuple[str | None, str | None]:
-    """addMembers для одного чата → ("added" | "failed", код ошибки) или (None, None): сеть или 5xx, позже."""
+    """addMembers для одного чата → ("added" | "failed" | "retry", код ошибки) или (None, None): сеть или 5xx.
+
+    failed — отказ про самого новичка (приватность, аккаунт не найден), повтор не поможет. retry — ошибка
+    чата (бот не админ, нет прав): повторим позже, HR мог дать боту права.
+    """
     try:
         res = await sender.call(chat.chat_id, sender.api.add_members, chat.chat_id, [user_id])
     except MaxApiError as e:
@@ -311,18 +354,18 @@ async def _add_one(sender, chat: TeamChat, user_id: int) -> tuple[str | None, st
             log.warning("Чат %s: «МАКС» не ответил (%s), добавим позже", chat.chat_id, e)
             return None, None
         log.info("Чат %s: новичка не добавить: %s", chat.chat_id, e)
-        return "failed", f"{e.status} {e.code}".strip()
+        return _refused(e.code if e.code in T.ERRORS else f"{e.status} {e.code}".strip())
     except httpx.TransportError as e:
         log.warning("Чат %s: сеть (%s), добавим позже", chat.chat_id, e)
         return None, None
     res = res if isinstance(res, dict) else {}
     for d in res.get("failed_user_details") or []:
         if not d.get("user_ids") or user_id in d["user_ids"]:
-            return "failed", str(d.get("error_code") or "add.failed")
+            return _refused(str(d.get("error_code") or "add.failed"))
     if user_id in (res.get("failed_user_ids") or []):
-        return "failed", "add.failed"
+        return _refused("add.failed")
     if res.get("success") is False:
-        return "failed", str(res.get("message") or "add.failed")[:200]
+        return _refused(str(res.get("message") or "add.failed")[:200])
     return "added", None
 
 
@@ -345,13 +388,13 @@ def links_text(emp, added: list[str], privacy: bool, links: int = 1) -> str:
 
 async def add_to_chats(session, emp, *, sender, repo=None, now: datetime | None = None,
                        chats: list[TeamChat] | None = None) -> dict:
-    """Добавить новичка в подходящие чаты, один раз на чат. → {"added": [...], "link": [...], "failed": [...]}.
+    """Добавить новичка в подходящие чаты, один раз на чат. → {"added", "link", "failed", "retry": [chat_id, ...]}.
 
     Только с первого рабочего дня (по времени новичка) и только живого подключившегося новичка.
     Кого «МАКС» не дал добавить, получают одно сообщение со ссылками-приглашениями на эти чаты.
     Вызывающий держит блокировку новичка (обработчик бота или lock_employee) и коммитит.
     """
-    out: dict[str, list[int]] = {"added": [], "link": [], "failed": []}
+    out: dict[str, list[int]] = {"added": [], "link": [], "failed": [], "retry": []}
     if not _eligible(emp) or engine.adaptation_day(emp, now) < 1:
         return out
     hr_id = await hr_group_id(session)
@@ -364,7 +407,8 @@ async def add_to_chats(session, emp, *, sender, repo=None, now: datetime | None 
         status, error = await _add_one(sender, chat, emp.max_user_id)
         if status is not None:
             results[chat.chat_id] = (status, error)
-    with_link = [c for c in todo if results.get(c.chat_id, ("",))[0] == "failed" and c.link]
+    refused = ("failed", "retry")
+    with_link = [c for c in todo if results.get(c.chat_id, ("",))[0] in refused and c.link]
     mids = None
     if with_link:
         added = [title_of(c) for c in todo if results.get(c.chat_id, ("",))[0] == "added"]
@@ -383,15 +427,15 @@ async def add_to_chats(session, emp, *, sender, repo=None, now: datetime | None 
             continue
         status, error = results[chat.chat_id]
         entry: dict = {"status": status, "at": stamp, "title": title_of(chat)}
-        if status == "failed" and mids and chat in with_link:
-            entry.update(status="link", mid=mids[-1])
+        if status in refused and mids and chat in with_link:
+            entry.update(status="link", mid=mids[-1])  # ссылка у новичка: больше не пробуем
         if error:
             entry["error"] = error
         done[str(chat.chat_id)] = entry
         out[entry["status"]].append(chat.chat_id)
     _set_data(emp, **{CHATS_KEY: done})
-    log.info("Чаты команды, новичок %s: добавлен %s, ссылки %s, не вышло %s",
-             emp.id, len(out["added"]), len(out["link"]), len(out["failed"]))
+    log.info("Чаты команды, новичок %s: добавлен %s, ссылки %s, не вышло %s, повторим %s",
+             emp.id, len(out["added"]), len(out["link"]), len(out["failed"]), len(out["retry"]))
     return out
 
 
@@ -419,24 +463,35 @@ def offer_due(emp, now: datetime | None = None) -> bool:
     return not (isinstance(post, dict) and post.get("intro_at") == intro.get("at"))
 
 
+def _post_kb(chat: TeamChat) -> list[dict]:
+    return keyboard([callback(T.PUBLISH_BUTTON, f"ch:pub:{chat.chat_id}")], [callback(T.NO_PUBLISH_BUTTON, "ch:nopub")])
+
+
+async def ask_text(session, emp, chat: TeamChat) -> str:
+    """Вопрос «представить тебя в чате …?» и пост целиком, ровно как он уйдёт в чат: согласие на конкретный текст."""
+    what = tv(emp, T.WHAT_PHOTO if _intro(emp).get("photo_url") else T.WHAT_TEXT)
+    ask = tv(emp, T.ASK_PUBLISH).format(title=title_of(chat), what=what)
+    return f"{ask}\n\n{intro_post_text(emp, await site_name(session, emp))}"
+
+
 async def offer_intro(sender, repo, emp, lead: str | None = None) -> bool:
     """«Опубликовать рассказ в чате команды?» с кнопками. lead — «Спасибо…» перед вопросом в том же сообщении.
 
+    В том же сообщении — пост целиком (подводка и рассказ), без markdown, как он уйдёт в чат.
     False — не спросили: синтетика, рассказа нет, уже спрашивали или чата команды для новичка нет.
     """
     intro = _intro(emp)
     post = _data(emp).get(POST_KEY)
-    if getattr(emp, "is_synthetic", False) or not intro.get("text") or \
+    if getattr(emp, "is_synthetic", False) or not (intro.get("text") or "").strip() or \
             (isinstance(post, dict) and post.get("intro_at") == intro.get("at")):
         return False
     chat = await intro_chat_for(repo.s, emp)
     if chat is None:
         return False
-    what = tv(emp, T.WHAT_PHOTO if intro.get("photo_url") else T.WHAT_TEXT)
-    ask = tv(emp, T.ASK_PUBLISH).format(title=title_of(chat), what=what)
-    kb = keyboard([callback(T.PUBLISH_BUTTON, f"ch:pub:{chat.chat_id}")], [callback(T.NO_PUBLISH_BUTTON, "ch:nopub")])
+    ask = await ask_text(repo.s, emp, chat)
+    # без markdown: рассказ новичка может содержать * и _, показываем ровно то, что уйдёт в чат
     mids = await sender.send(repo, f"{lead}\n\n{ask}" if lead else ask, chat_id=emp.chat_id,
-                             user_id=emp.max_user_id, attachments=kb, employee=emp)
+                             user_id=emp.max_user_id, attachments=_post_kb(chat), employee=emp, fmt=None)
     if not mids:
         return False
     _set_data(emp, **{POST_KEY: {"status": "asked", "chat_id": chat.chat_id, "mid": mids[-1],
@@ -459,13 +514,35 @@ async def _photo(photo: str | None, repo, sender) -> list[dict]:
     return [{"type": "image", "payload": {"token": photo}}]
 
 
-def intro_post_text(emp) -> str:
-    """Подводка «Знакомьтесь, это …» и рассказ новичка дословно."""
+def site_label(name: str | None, code: str) -> str:
+    """Площадка для подводки: «Площадка GTP» → «площадка GTP», «Офис «Лужники»» → «офис «Лужники»».
+
+    Пометки в скобках убираем («Группа ПОЛИПЛАСТИК (GrPP)» → «Группа ПОЛИПЛАСТИК»). Нет названия, есть только
+    латинский код — «площадка GTP».
+    """
+    label = engine.clean_name(name) or (code or "").strip()
+    first = label.split(" ", 1)[0]
+    if first in ("Офис", "Площадка", "Завод", "Склад"):
+        return label[:1].lower() + label[1:]
+    if not any("а" <= ch.lower() <= "я" or ch.lower() == "ё" for ch in label):
+        return f"площадка {label}"
+    return label
+
+
+async def site_name(session, emp) -> str:
+    """Название площадки новичка из справочника (в обработчике кнопки emp.site не подгружен)."""
+    site = await session.get(Site, emp.site_code) if emp.site_code else None
+    return site_label(site.name if site is not None else None, emp.site_code or "")
+
+
+def intro_post_text(emp, site: str | None = None) -> str:
+    """Подводка «Знакомьтесь, это …» и рассказ новичка дословно. site — `site_name()`, иначе по коду площадки."""
     position = (_data(emp).get("position") or "").strip()
     name = display_name(emp)
-    lead = (T.INTRO_LEAD_POSITION.format(name=name, position=position, site=emp.site_code) if position
-            else T.INTRO_LEAD.format(name=name, site=emp.site_code))
-    return f"{lead}\n\n{_intro(emp).get('text', '').strip()}"
+    site = site or site_label(None, emp.site_code or "")
+    lead = (T.INTRO_LEAD_POSITION.format(name=name, position=position, site=site) if position
+            else T.INTRO_LEAD.format(name=name, site=site))
+    return f"{lead}\n\n{(_intro(emp).get('text') or '').strip()}"
 
 
 async def publish(sender, repo, emp, chat: TeamChat) -> str | None:
@@ -473,7 +550,7 @@ async def publish(sender, repo, emp, chat: TeamChat) -> str | None:
 
     Без markdown: текст новичка — как написал. Фото не прошло — публикуем без него.
     """
-    text = intro_post_text(emp)
+    text = intro_post_text(emp, await site_name(repo.s, emp))
     photo = await _photo(_intro(emp).get("photo_url"), repo, sender)
     for atts in ([photo, None] if photo else [None]):
         try:
@@ -501,6 +578,9 @@ async def on_button(cb, person) -> None:
 
 
 async def _hr_button(cb, person, parts: list[str]) -> None:
+    """«Сделать эту группу HR-группой» работает, только пока HR-группа не выбрана, и только в последнем сообщении
+    с кнопкой в этой группе (`prompt_mid`). Иначе HR-группу не трогаем: сменить её можно только в панели.
+    """
     if not cb.is_staff or getattr(person, "role", None) not in HR_ROLES:
         await cb.toast(T.ONLY_HR)
         return
@@ -512,40 +592,80 @@ async def _hr_button(cb, person, parts: list[str]) -> None:
         await cb.mark()
         return
     s = cb.repo.s
-    chat = await _get_or_create(s, chat_id)
+    hr_id = await hr_group_id(s)
+    chat = await s.get(TeamChat, chat_id)
+    live = chat is not None and bool(cb.mid) and chat.prompt_mid == cb.mid
+    if hr_id == chat_id:
+        await cb.replace(T.HR_GROUP_DONE, staff=person)  # уже HR-группа: повторное нажатие
+        return
+    if hr_id is not None or not live:
+        # HR-группа уже выбрана или кнопка из старого сообщения: в чат команды обращения не переносим
+        if live:
+            chat.prompt_mid = None
+        await cb.replace(T.TEAM_HELLO, notification=T.HR_ALREADY if hr_id is not None else T.HR_PROMPT_STALE,
+                         staff=person)
+        return
     chat.active = True
     await set_hr_group(s, chat, sender=cb.ctx.sender, repo=cb.repo, pressed_mid=cb.mid)
     await cb.replace(T.HR_GROUP_DONE, staff=person)
 
 
 async def _post_button(cb, emp, kind: str, parts: list[str]) -> None:
+    """Ответ на «опубликовать рассказ?». Принимаем только в последнем вопросе (`intro_post.mid`) и про тот же
+    рассказ (`intro_at`): после перемотки или нового рассказа старая кнопка ничего не публикует.
+    Чат из вопроса пропал или больше не «свой» — в другой чат без нового согласия не публикуем.
+    """
     post = dict(_data(emp).get(POST_KEY) or {})
+    intro = _intro(emp)
+    if not cb.mid or cb.mid != post.get("mid") or (post.get("status") == "asked" and (
+            post.get("intro_at") != intro.get("at") or not (intro.get("text") or "").strip())):
+        # старый вопрос: кнопки снимаем, текст не трогаем, ничего не публикуем
+        if cb.orig_text:
+            await cb.replace(cb.orig_text, notification=T.POST_STALE, employee=emp, fmt=None)
+        else:
+            await cb.toast(T.POST_STALE)
+        return
     if post.get("status") != "asked":
-        await cb.mark()  # уже ответил: старое сообщение просто закрываем
+        await cb.toast(T.POST_DONE)  # двойной тап: сообщение уже с ответом, старым снимком его не затираем
         return
     label = cb.label or (T.PUBLISH_BUTTON if kind == "pub" else T.NO_PUBLISH_BUTTON)
     head = f"{cb.orig_text}\n\n✅ {label}" if cb.orig_text else f"✅ {label}"
     now = utcnow().isoformat()
     if kind == "nopub":
         _set_data(emp, **{POST_KEY: {**post, "status": "declined", "at": now}})
-        await cb.replace(f"{head}\n\n{tv(emp, T.NOT_PUBLISHED)}", employee=emp)
+        await cb.replace(f"{head}\n\n{tv(emp, T.NOT_PUBLISHED)}", employee=emp, fmt=None)
         return
     s = cb.repo.s
-    hr_id = await hr_group_id(s)
     try:
         chat = await s.get(TeamChat, int(parts[2]))
     except (IndexError, ValueError):
         chat = None
-    if chat is None or not chat.active or chat.chat_id == hr_id:
-        chat = await intro_chat_for(s, emp)  # чат из вопроса пропал — основной чат сейчас
-    mid = await publish(cb.ctx.sender, cb.repo, emp, chat) if chat is not None else None
+    if not fits_intro(chat, emp, await hr_group_id(s)):
+        await _ask_again(cb, emp, post, chat, now)
+        return
+    mid = await publish(cb.ctx.sender, cb.repo, emp, chat)
     if mid is None:
         _set_data(emp, **{POST_KEY: {**post, "status": "failed", "at": now}})
-        await cb.replace(f"{head}\n\n{tv(emp, T.PUBLISH_FAILED)}", employee=emp)
+        await cb.replace(f"{head}\n\n{tv(emp, T.PUBLISH_FAILED)}", employee=emp, fmt=None)
         return
     _set_data(emp, **{POST_KEY: {**post, "status": "published", "chat_id": chat.chat_id, "post_mid": mid,
                                  "at": now}})
-    await cb.replace(f"{head}\n\n{tv(emp, T.PUBLISHED).format(title=title_of(chat))}", employee=emp)
+    await cb.replace(f"{head}\n\n{tv(emp, T.PUBLISHED).format(title=title_of(chat))}", employee=emp, fmt=None)
+
+
+async def _ask_again(cb, emp, post: dict, gone: TeamChat | None, now: str) -> None:
+    """Чат из вопроса недоступен: в том же сообщении спрашиваем про чат, подходящий сейчас. Нет такого — не публикуем."""
+    s = cb.repo.s
+    chat = await intro_chat_for(s, emp)
+    if chat is None:
+        label = cb.label or T.PUBLISH_BUTTON
+        head = f"{cb.orig_text}\n\n✅ {label}" if cb.orig_text else f"✅ {label}"
+        _set_data(emp, **{POST_KEY: {**post, "status": "failed", "at": now}})
+        await cb.replace(f"{head}\n\n{tv(emp, T.PUBLISH_FAILED)}", employee=emp, fmt=None)
+        return
+    why = T.CHAT_GONE.format(title=title_of(gone)) if gone is not None else T.CHAT_GONE_ANY
+    _set_data(emp, **{POST_KEY: {**post, "status": "asked", "chat_id": chat.chat_id, "at": now}})
+    await cb.replace(f"{why}\n\n{await ask_text(s, emp, chat)}", _post_kb(chat), employee=emp, fmt=None)
 
 
 # --- задача team_chats ---------------------------------------------------------------------------
@@ -575,7 +695,7 @@ async def tick(now: datetime | None = None, *, sender=None, session_factory=None
 
     now — для дня адаптации (тесты); сведения о чатах — по настоящему времени.
     """
-    stats = {"refreshed": 0, "added": 0, "link": 0, "failed": 0, "offers": 0}
+    stats = {"refreshed": 0, "added": 0, "link": 0, "failed": 0, "retry": 0, "offers": 0}
     if sender is None:
         sender = _sender()
         if sender is None:
@@ -603,14 +723,22 @@ async def tick(now: datetime | None = None, *, sender=None, session_factory=None
                 await lock_employee(s, emp)  # бот мог поменять dialog_data: дальше работаем со свежими данными
                 repo = SqlRepo(s)
                 res = await add_to_chats(s, emp, sender=sender, repo=repo, now=now)
-                for k in ("added", "link", "failed"):
+                for k in ("added", "link", "failed", "retry"):
                     stats[k] += len(res[k])
-                if offer_due(emp, now) and await offer_intro(sender, repo, emp):
-                    stats["offers"] += 1
+                # добавления и ссылки уже у новичка: сбой вопроса о публикации их не откатывает
                 await s.commit()
             except Exception:
                 await s.rollback()
                 log.exception("team_chats: новичок %s", emp_id)
+                continue
+            try:
+                await lock_employee(s, emp)
+                if offer_due(emp, now) and await offer_intro(sender, SqlRepo(s), emp):
+                    stats["offers"] += 1
+                await s.commit()
+            except Exception:
+                await s.rollback()
+                log.exception("team_chats: вопрос о публикации, новичок %s", emp_id)
     return stats
 
 
@@ -625,8 +753,9 @@ def reason(error: str | None) -> str | None:
 async def card(session, emp) -> list[dict]:
     """Чаты новичка для карточки: [{chat_id, title, status, at, reason, link, intro}].
 
-    status: added — добавлен, link — отправили ссылку, failed — не добавили и ссылки нет,
-    pending — добавим в первый рабочий день, intro — только опубликовали представление.
+    status: added — добавлен, link — отправили ссылку, failed — не добавили и ссылки нет (в том числе пока
+    бот повторяет попытки после ошибки чата), pending — добавим в первый рабочий день, intro — только
+    опубликовали представление.
     intro — в этом чате опубликован рассказ о себе. Синтетике бот ничего не делает: список пустой.
     """
     if getattr(emp, "is_synthetic", False):
@@ -643,12 +772,16 @@ async def card(session, emp) -> list[dict]:
         except ValueError:
             continue
         chat = rows.get(cid)
+        status = entry.get("status") or "failed"
         out.append({"chat_id": cid, "title": title_of(chat) if chat else (entry.get("title") or title_of(None)),
-                    "status": entry.get("status") or "failed", "at": entry.get("at"),
+                    # retry — бот повторит сам, но HR пока видит отказ и причину (например, бот не админ)
+                    "status": "failed" if status == "retry" else status, "at": entry.get("at"),
                     "reason": reason(entry.get("error")) if entry.get("status") != "added" else None,
                     "link": chat.link if chat else None, "intro": cid == posted})
     seen = {x["chat_id"] for x in out}
     for chat in pending_chats([c for c in rows.values() if c.active], emp, hr_id):
+        if chat.chat_id in seen:
+            continue  # retry: уже в списке со статусом и причиной
         out.append({"chat_id": chat.chat_id, "title": title_of(chat), "status": "pending", "at": None,
                     "reason": None, "link": chat.link, "intro": chat.chat_id == posted})
         seen.add(chat.chat_id)

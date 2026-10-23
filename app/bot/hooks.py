@@ -48,12 +48,17 @@ class Callback:
     answered: bool = False
 
     async def replace(self, text: str, attachments: list[dict] | None = None, *,
-                      notification: str | None = None, employee=None, staff=None) -> None:
+                      notification: str | None = None, employee=None, staff=None,
+                      fmt: str | None = "markdown") -> None:
         """Заменить сообщение с кнопкой: новый текст и новая клавиатура (по умолчанию — без кнопок).
 
         Главный способ не флудить: следующий шаг диалога показывается в том же сообщении.
+        fmt=None — без разметки: в тексте чужие слова (рассказ новичка), * и _ показываем как есть.
         """
-        await self._answer({"text": text, "attachments": attachments or [], "format": "markdown"}, notification)
+        message = {"text": text, "attachments": attachments or []}
+        if fmt:
+            message["format"] = fmt
+        await self._answer(message, notification)
         if self.repo is not None:
             await self.repo.add_message(employee_id=getattr(employee, "id", None),
                                         staff_id=getattr(staff, "id", None), chat_id=self.chat_id,

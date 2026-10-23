@@ -313,13 +313,18 @@ NEWBIES = ("новичок", "новичка", "новичков")
 
 
 def _top_reasons(items, level: str | None) -> list[str]:
-    """Самые частые причины: у высокого уровня — только причины высокого уровня."""
+    """Самые частые причины: у высокого уровня — только причины высокого уровня.
+
+    Высокий уровень бывает и без них (три средние причины): тогда — все причины этих новичков.
+    """
     from app.analytics.rules import REASON_LABELS
 
     order = list(REASON_LABELS)
     c: Counter[str] = Counter()
     for it in items:
         c.update({r.code for r in it.reasons if level is None or r.level == level})
+    if not c and level is not None:
+        return _top_reasons(items, None)
     ranked = sorted(c.items(), key=lambda kv: (-kv[1], order.index(kv[0]) if kv[0] in order else 99))
     return [REASON_LABELS.get(code, code) for code, _ in ranked[:2]]
 
@@ -338,11 +343,11 @@ def risk_zone(report: dict, items: list, clusters: list[dict], *, threshold: int
     medium = len(items) - len(high)
     people = {"total": len(items), "high": len(high), "medium": medium,
               "reasons": _top_reasons(high, "high") if high else _top_reasons(items, None)}
+    why = f": {', '.join(people['reasons'])}" if people["reasons"] else ""
     if high:
-        people["text"] = (f"{len(high)} {plural(len(high), NEWBIES)} в зоне высокого риска: "
-                          + ", ".join(people["reasons"]))
+        people["text"] = f"{len(high)} {plural(len(high), NEWBIES)} в зоне высокого риска{why}"
     elif items:
-        people["text"] = f"{medium} {plural(medium, NEWBIES)} в зоне риска: " + ", ".join(people["reasons"])
+        people["text"] = f"{medium} {plural(medium, NEWBIES)} в зоне риска{why}"
     else:
         people["text"] = "Новичков в зоне риска нет"
 
@@ -376,7 +381,8 @@ async def _risk_zone(session, report: dict, p: dict, now: datetime | None) -> di
         from app.analytics import clusters, risks
 
         items = await risks(session, now)
-        found = await clusters(session, WINDOW_WEEKS, now, until=p["to_dt"], quotes=0)
+        # площадку в теме сводка проверяет сама (срез от 5 ответивших и 2+ человека в теме)
+        found = await clusters(session, WINDOW_WEEKS, now, until=p["to_dt"], quotes=0, site_min=2)
     except Exception:
         log.exception("Сводка: зоны риска не посчитались")
         return None
@@ -404,13 +410,13 @@ def _num(x: float) -> str:
 
 def risk_caption(zone: dict) -> str:
     """Одна строка про риски: «В зоне высокого риска 7 новичков: красные сигналы, намерение уйти; ещё 11 со средним»."""
-    why = ", ".join(zone["reasons"])
+    why = f": {', '.join(zone['reasons'])}" if zone.get("reasons") else ""
     if zone["high"]:
-        line = f"В зоне высокого риска {zone['high']} {plural(zone['high'], NEWBIES)}: {why}"
+        line = f"В зоне высокого риска {zone['high']} {plural(zone['high'], NEWBIES)}{why}"
         if zone["medium"]:
             line += f"; ещё {zone['medium']} со средним"
     else:
-        line = f"В зоне риска {zone['total']} {plural(zone['total'], NEWBIES)}: {why}"
+        line = f"В зоне риска {zone['total']} {plural(zone['total'], NEWBIES)}{why}"
     return line + ". Подробно в Mini App, раздел «Аналитика»."
 
 
