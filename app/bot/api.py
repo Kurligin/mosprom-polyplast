@@ -189,3 +189,17 @@ class MaxApi:
         """POST /chats/{chatId}/actions: «печатает…» (typing_on), «отправляет фото» и т. п."""
         return await self._request("POST", f"/chats/{chat_id}/actions", json={"action": action})
 
+    # --- групповые чаты ---
+
+    async def get_chat(self, chat_id: int) -> dict:
+        """GET /chats/{chatId}: название (title), ссылка-приглашение (link), participants_count, status."""
+        return await self._request("GET", f"/chats/{chat_id}")
+
+    async def add_members(self, chat_id: int, user_ids: list[int]) -> dict:
+        """POST /chats/{chatId}/members (addMembers). Бот должен быть админом чата.
+
+        Ответ — ModifyMembersResult: success, failed_user_ids, failed_user_details[{error_code, user_ids}]
+        (add.participant.privacy — не пускают настройки приватности, add.participant.not.found).
+        """
+        return await self._request("POST", f"/chats/{chat_id}/members", json={"user_ids": list(user_ids)})
+

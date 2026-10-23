@@ -227,6 +227,7 @@ function normEmployee<T extends EmployeeShort>(raw: T): T {
     full.steps = e.steps ?? []
     full.surveys = e.surveys ?? []
     full.tickets = e.tickets ?? []
+    full.chats = e.chats ?? []
     full.meetings = e.meetings ?? []
   }
   if (isDemoData(raw)) markDemo(out)

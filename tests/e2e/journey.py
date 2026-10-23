@@ -8,6 +8,10 @@
 а между ними «живое время»: сдвиг часов новичка на каждый день, когда по плану что-то происходит.
 После каждого шага вызываем задачи планировщика: scenario_tick, manager_tasks, survey_reminders.
 
+Чаты команды: HR добавляет бота в HR-группу (выбирает её кнопкой), в общий чат и в чат площадки GTP.
+В первый рабочий день бот добавляет новичка в оба чата; в общий «МАКС» не пускает (приватность), и новичок
+получает одно сообщение со ссылкой. Рассказ о себе бот публикует в чате GTP после согласия новичка.
+
 Прогон пишет маршрут для людей: eval/journey/gtp-operator.md. Проверки — tests/e2e/test_e2e_journey.py.
 """
 
@@ -49,6 +53,7 @@ from app.db.models import (
     Survey,
     SurveyAnswer,
     SurveyQuestion,
+    TeamChat,
     Ticket,
 )
 from app.kb.search import Hit
@@ -89,12 +94,24 @@ MANAGER = Person("manager", "Руководитель Сергей", "Волко
 HEAD = Person("head", "Глава подбора Елена", "Соколова Елена (синтетика)", "head_recruitment", 204, 604,
               "STF-head-sokolova")
 HR_GROUP = Person("hr_group", "HR-группа", "HR-группа", None, None, 900, icon="👥")
+# Чаты команды в «МАКС» (синтетика): бот в них админ
+GENERAL_CHAT = Person("general", "Общий чат", "Общий чат ПОЛИПЛАСТИК", None, None, 910, icon="👥")
+GTP_CHAT = Person("gtp_chat", "Команда GTP", "Команда GTP", None, None, 920, icon="👥")
+TEAM_CHATS = (GENERAL_CHAT, GTP_CHAT)
+CHAT_INFO = {
+    HR_GROUP.chat_id: {"title": "HR ПОЛИПЛАСТИК", "participants_count": 6},
+    GENERAL_CHAT.chat_id: {"title": GENERAL_CHAT.full_name, "link": "https://max.ru/join/polyplastic-demo-general",
+                           "participants_count": 240},
+    GTP_CHAT.chat_id: {"title": GTP_CHAT.full_name, "link": "https://max.ru/join/polyplastic-demo-gtp",
+                       "participants_count": 35},
+}
+PRIVACY = "add.participant.privacy"
 CLOCK = Person("clock", "Время", "", None, None, None, icon="⏩")
 # Проверки вне маршрута (в md не попадают): ещё два новичка той же площадки
 PETR = Person("petr", "Пётр", "Орлов Пётр (синтетика)", None, 110, 510, icon="👤")
 ANNA = Person("anna", "Анна", "Белова Анна (синтетика)", None, 120, 520, icon="👤")
 STAFF = (HR, RECRUITER, MANAGER, HEAD)
-PEOPLE = (NEWCOMER, HR, RECRUITER, MANAGER, HEAD, HR_GROUP, CLOCK, PETR, ANNA)
+PEOPLE = (NEWCOMER, HR, RECRUITER, MANAGER, HEAD, HR_GROUP, GENERAL_CHAT, GTP_CHAT, CLOCK, PETR, ANNA)
 BY_CHAT = {p.chat_id: p for p in PEOPLE if p.chat_id is not None}
 BY_KEY = {p.key: p for p in PEOPLE}
 
@@ -132,7 +149,7 @@ SURVEY_SCRIPTS: dict[str, list[tuple[str, str]]] = {
 }
 
 STAGE_TITLES = {
-    "setup": "Подготовка: HR завёл новичка, команда подключилась к боту",
+    "setup": "Подготовка: HR завёл новичка, команда подключилась к боту, бот в чатах команды",
     "onboarding": "Приглашение и знакомство",
     "day0": "Накануне выхода",
     "day1": "Первый рабочий день",
@@ -179,12 +196,16 @@ def media(atts: list[dict] | None) -> list[str]:
     out = []
     for a in atts or []:
         if a.get("type") in ("image", "file", "video", "audio"):
-            token = str((a.get("payload") or {}).get("token") or "")
-            out.append(re.sub(r"^(img|file)-", "", token) or a["type"])
+            payload = a.get("payload") or {}
+            token = str(payload.get("token") or "")
+            name = str(payload.get("url") or "").rsplit("/", 1)[-1]  # фото по адресу: имя файла
+            out.append(re.sub(r"^(img|file)-", "", token) or name or a["type"])
     return out
 
 
-def ev_press(api, p: Person, mid: str, label: str) -> dict:
+def ev_press(api, p: Person, mid: str, label: str, chat: Person | None = None) -> dict:
+    """Нажатие кнопки label. chat — группа, где висит сообщение (по умолчанию личный чат человека)."""
+    chat = chat or p
     msg = api.msgs.get(mid) or {}
     btns = buttons(msg.get("attachments"))
     btn = next((b for b in btns if b.get("type") == "callback"
@@ -194,7 +215,7 @@ def ev_press(api, p: Person, mid: str, label: str) -> dict:
     return {"update_type": "message_callback",
             "callback": {"callback_id": f"{mid}|{next(_events)}", "payload": btn["payload"],
                          "user": {"user_id": p.user_id}},
-            "message": {"recipient": {"chat_id": p.chat_id, "chat_type": "dialog"},
+            "message": {"recipient": {"chat_id": chat.chat_id, "chat_type": "dialog" if chat is p else "chat"},
                         "body": {"mid": mid, "text": msg.get("text") or "", "attachments": msg.get("attachments")}}}
 
 
@@ -237,6 +258,12 @@ async def snapshot(s) -> dict[str, dict[int, dict]]:
                        for m in (await s.scalars(select(Message))).all()}
     out["consents"] = {c.id: {"purpose": c.purpose, "given": c.given}
                        for c in (await s.scalars(select(Consent))).all()}
+    out["employees"] = {e.id: {"chats": dict((e.dialog_data or {}).get("chats") or {}),
+                               "intro_post": dict((e.dialog_data or {}).get("intro_post") or {})}
+                        for e in (await s.scalars(select(Employee))).all()}
+    out["team_chats"] = {c.chat_id: {"title": c.title, "audience": c.audience, "sites": list(c.sites or []),
+                                     "active": c.active}
+                         for c in (await s.scalars(select(TeamChat))).all()}
     return out
 
 
@@ -345,11 +372,11 @@ class Journey:
         """Событие «МАКС» — как в боте: одна транзакция на событие (runner.process_update)."""
         await runner.process_update(self.ctx, upd)
 
-    async def press(self, who: Person, mid: str | None, label: str) -> None:
+    async def press(self, who: Person, mid: str | None, label: str, chat: Person | None = None) -> None:
         if mid is None:
             raise AssertionError(f"Нет сообщения с кнопкой «{label}»")
-        upd = ev_press(self.api, who, mid, label)
-        self.act(who, f"нажимает «{label}»")
+        upd = ev_press(self.api, who, mid, label, chat)
+        self.act(who, f"нажимает «{label}»" + (f" в чате «{chat.label}»" if chat else ""))
         await self.feed(upd)
 
     async def say(self, who: Person, text: str, attachments: list[dict] | None = None, note: str | None = None):
@@ -377,13 +404,15 @@ class Journey:
     # --- время и планировщик ---
 
     async def jobs(self) -> None:
-        """Задачи планировщика, как в app/main.py: шаги сценария, push руководителю, напоминания об опросах."""
+        """Задачи планировщика, как в app/main.py: шаги сценария, чаты команды, push руководителю, опросы."""
+        from app.chats.hooks import team_chats
         from app.manager.hooks import manager_tasks
         from app.scenario.hooks import scenario_tick
         from app.surveys.hooks import survey_reminders
 
         await self.flush_soon()
         await scenario_tick()
+        await team_chats()
         await manager_tasks()
         await survey_reminders()
 
@@ -556,8 +585,27 @@ class Journey:
         for p in STAFF:
             self.act(p, "подключается к боту по ссылке из панели")
             await self.feed(ev_started(p, p.bind))
+        self.api.chats.update(CHAT_INFO)
+        self.api.member_errors[GENERAL_CHAT.chat_id] = PRIVACY  # у Ивана закрыто добавление в чаты
         self.act(HR, "добавляет бота в HR-группу «МАКС»")
         await self.feed(ev_bot_added(HR_GROUP.chat_id, HR))
+        await self.press(HR, self.last_sent(HR_GROUP)["mid"], "Сделать эту группу HR-группой", HR_GROUP)
+        for chat in TEAM_CHATS:
+            self.act(HR, f"добавляет бота админом в чат «{chat.full_name}»")
+            await self.feed(ev_bot_added(chat.chat_id, HR))
+        await self.setup_chats()
+
+    async def setup_chats(self) -> None:
+        """Экран «Чаты» в Mini App (PATCH /api/chats/{id}): общий чат всем, чат GTP площадке GTP."""
+        from app.chats import service as chats
+
+        async with self.factory() as s:
+            await chats.update_chat(s, await s.get(TeamChat, GENERAL_CHAT.chat_id), fields={"audience": "all"})
+            await chats.update_chat(s, await s.get(TeamChat, GTP_CHAT.chat_id),
+                                    fields={"audience": "sites", "sites": ["GTP"]})
+            await s.commit()
+        self.act(HR, f"в Mini App, раздел «Чаты»: «{GENERAL_CHAT.full_name}» нужен всем новичкам, "
+                     f"«{GTP_CHAT.full_name}» площадке GTP")
 
     async def run(self) -> None:
         async with self.stage("setup"):
@@ -605,6 +653,10 @@ class Journey:
             await self.flush_soon()
             await self.say(NEWCOMER, INTRO_TEXT)
             await self.say(NEWCOMER, "", PHOTO, note="присылает фото")
+            ask = self.last_sent(NEWCOMER)
+            self.handled.add(ask["mid"])
+            await self.jobs()  # без согласия задача ничего не публикует и не переспрашивает
+            await self.press(NEWCOMER, ask["mid"], "Опубликовать в чате команды")
             await self.jobs()
             await self.respond()
 
@@ -864,6 +916,11 @@ def _kb(atts: list[dict] | None) -> str:
 
 
 def render_entry(e: dict) -> str:
+    if e["op"] == "members":
+        who = next((p.label for p in PEOPLE if p.user_id in (e.get("user_ids") or [])), "новичка")
+        chat = BY_CHAT.get(e["chat_id"])
+        result = f"«МАКС» отказал ({e['text']})" if e["text"] else "добавлен"
+        return f"👥 бот добавляет **{who}** в чат **{chat.label if chat else e['chat_id']}**: {result}"
     if e["op"] == "act":
         who = BY_KEY.get(e["who"], NEWCOMER)
         return f"{who.icon} **{who.label}** {e['text']}"
@@ -880,6 +937,17 @@ def render_entry(e: dict) -> str:
 SOURCE_LABELS = {"button": "кнопка «Связаться с HR»", "flag": "красный флаг", "survey": "опрос",
                  "unknown": "бот не знает ответ", "personal": "личный вопрос", "hr_command": "команда /hr"}
 CONSENTS = {"adaptation": "согласие на сопровождение", "ai_analysis": "согласие на ИИ-разбор ответов"}
+CHAT_STATUS = {"added": "добавлен", "link": "отправлена ссылка", "failed": "не добавлен, ссылки нет"}
+POST_STATUS = {"asked": "спросили разрешение", "published": "опубликовано", "declined": "новичок отказался",
+               "failed": "не получилось опубликовать"}
+
+
+def _audience(c: dict) -> str:
+    if c["audience"] == "all":
+        return "нужен всем новичкам"
+    if c["audience"] == "sites":
+        return "нужен площадкам " + ", ".join(c["sites"])
+    return "новичков не добавляем"
 
 
 def _answer(a: dict) -> str:
@@ -932,6 +1000,23 @@ def records(st: Stage) -> list[str]:
             out.append(f"{name}: push руководителю отправлен")
         if b["status"] != a["status"]:
             out.append(f"{name}: {b['status']} → {a['status']}")
+    for i, b, a in st.changed("employees"):
+        new = {k: v for k, v in a["chats"].items() if k not in b["chats"]}
+        if new:
+            out.append("чаты команды: " + ", ".join(
+                f"«{v.get('title')}» {CHAT_STATUS.get(v['status'], v['status'])}"
+                + (f" ({v['error']})" if v.get("error") else "") for v in new.values()))
+        post = a["intro_post"]
+        if post.get("status") != b["intro_post"].get("status"):
+            chat = BY_CHAT.get(post.get("chat_id"))
+            out.append(f"представление коллегам: {POST_STATUS.get(post['status'], post['status'])}"
+                       + (f" в чате «{chat.full_name}»" if chat and post["status"] == "published" else ""))
+    chats = st.new("team_chats")
+    if chats:
+        out.append("чаты в учёте: " + ", ".join(f"«{c['title']}» ({_audience(c)})" for c in chats.values()))
+    for i, b, a in st.changed("team_chats"):
+        if (b["audience"], b["sites"]) != (a["audience"], a["sites"]):
+            out.append(f"чат «{a['title']}»: {_audience(a)}")
     linked = [m for m in st.new("messages").values() if m["direction"] == "in" and m["ticket_id"]]
     for m in linked:
         out.append(f"сообщение новичка «{short(m['text'], 60)}» → в обращение #{m['ticket_id']}")
@@ -977,23 +1062,26 @@ def render_md(run: Journey) -> str:
       f"испытательный срок 3 месяца, до {fmt_date(PROBATION_END, True)}.")
     w(f"- **HR:** {HR.full_name}. **Рекрутер:** {RECRUITER.full_name}, закреплена за новичком.")
     w(f"- **Руководитель:** {MANAGER.full_name}. **Глава подбора:** {HEAD.full_name}.")
-    w("- **HR-группа** в «МАКС»: сюда приходят обращения и красные флаги.")
+    w("- **HR-группа** в «МАКС»: сюда приходят обращения и красные флаги. HR выбирает её кнопкой в самой группе.")
+    w(f"- **Чаты команды** в «МАКС»: «{GENERAL_CHAT.full_name}» (всем новичкам) и «{GTP_CHAT.full_name}» "
+      "(площадке GTP), бот в них админ. У новичка закрыто добавление в чаты: в общий чат он попадает по ссылке.")
     w("")
     w("Обозначения: 🤖 → новое сообщение бота, ✎ то же сообщение изменено на месте (бот не плодит сообщения), "
-      "👤 / 🧑‍💼 / 👔 действия людей, ⏩ время, [Кнопка], 📎 вложение.")
+      "👤 / 🧑‍💼 / 👔 действия людей, 👥 бот добавляет в чат, ⏩ время, [Кнопка], 📎 вложение.")
     w("")
     w("## Сводка")
     w("")
-    w("| Этап | Дата у новичка | Новичку: новых / правок | HR-группе | Руководителю | Записи |")
-    w("|---|---|---|---|---|---|")
+    w("| Этап | Дата у новичка | Новичку: новых / правок | HR-группе | Руководителю | Чатам команды | Записи |")
+    w("|---|---|---|---|---|---|---|")
     for st in run.stages:
         if st.key == "setup":
             continue
         c = run.counts(st)
         n, g, m = c.get("newcomer", Counter()), c.get("hr_group", Counter()), c.get("manager", Counter())
+        team = sum(c.get(p.key, Counter())["new"] for p in TEAM_CHATS)
         rec = records(st)
         w(f"| {day_label(st.day)}: {st.title} | {fmt_date(st.vdate)} | {n['new']} / {n['edit']} | {g['new']} | "
-          f"{m['new']} | {len(rec)} |")
+          f"{m['new']} | {team} | {len(rec)} |")
     w("")
     for st in run.stages:
         head = "Подготовка" if st.key == "setup" else f"{day_label(st.day)} · {fmt_date(st.vdate)}"

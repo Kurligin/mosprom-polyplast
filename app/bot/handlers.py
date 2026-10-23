@@ -493,11 +493,16 @@ async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
         emp = await repo.employee_by_user(cb.user_id)
         staff = None if emp else await repo.staff_by_user(cb.user_id)
         if emp is None and staff is None:
+            handler = hooks.callback_handler(payload.split(":", 1)[0])
+            if getattr(handler, "anyone", False):
+                await handler(cb, None)  # кнопка в группе: всплывашку не подключённому выбирает модуль
+                return
             await cb.toast(T.NOT_BOUND)
             return
         cb.is_staff = staff is not None
-        if emp is not None and cb.chat_id and not emp.chat_id:
-            emp.chat_id = cb.chat_id
+        in_dialog = (msg.get("recipient") or {}).get("chat_type") in (None, "dialog")
+        if emp is not None and cb.chat_id and not emp.chat_id and in_dialog:
+            emp.chat_id = cb.chat_id  # кнопка в группе (чаты команды) личный чат не задаёт
         await repo.add_message(employee_id=getattr(emp, "id", None), staff_id=getattr(staff, "id", None),
                                chat_id=cb.chat_id, direction="in", text=f"[кнопка] {cb.label or payload}", mid=None)
 
@@ -520,19 +525,24 @@ async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
 
 
 async def on_bot_added(ctx: BotCtx, repo, upd: dict) -> None:
+    """Бота добавили в группу: чат в учёт (app/chats). HR-группу выбирает HR кнопкой в группе или в Mini App."""
     if upd.get("is_channel"):
         return
     chat_id = upd.get("chat_id")
     if chat_id:
-        await repo.set_setting("hr_group_chat_id", chat_id)
-        log.info("HR-группа: chat_id сохранён")
-        await ctx.sender.send(repo, T.HR_GROUP_HELLO, chat_id=chat_id)
+        from app.chats import service as chats
+
+        await chats.register(ctx, repo, int(chat_id), upd.get("user"))
 
 
 async def on_bot_removed(ctx: BotCtx, repo, upd: dict) -> None:
     chat_id = upd.get("chat_id")
     if chat_id and await repo.get_setting("hr_group_chat_id") == chat_id:
         await repo.set_setting("hr_group_chat_id", None)
+    if chat_id:
+        from app.chats import service as chats
+
+        await chats.unregister(repo, int(chat_id))
 
 
 async def on_bot_stopped(ctx: BotCtx, repo, upd: dict) -> None:

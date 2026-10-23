@@ -162,10 +162,8 @@ async def test_free_text_then_forward(ctx, repo, api):
     assert api.answers[-1]["message"]["text"] == T.HR_DONE[0]
 
 
-async def test_bot_added_saves_group(ctx, repo, api):
-    await handle_update(ctx, repo, {"update_type": "bot_added", "chat_id": -777, "user": {"user_id": 1},
-                                    "is_channel": False})
-    assert repo.settings["hr_group_chat_id"] == -777
+# bot_added / bot_removed: группа больше не становится HR-группой сама, её выбирает HR кнопкой.
+# Проверки — tests/chats/test_chats_bot.py (чаты хранятся в БД, фейковому репозиторию не под силу).
 
 
 async def test_bot_stopped(ctx, repo, api):

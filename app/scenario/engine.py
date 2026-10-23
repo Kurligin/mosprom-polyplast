@@ -726,6 +726,19 @@ def _is_intro_text(text: str) -> bool:
     return len(text) >= INTRO_MIN_TEXT and not text.rstrip().endswith("?") and not _QUESTION_RE.match(text)
 
 
+async def _offer_intro_post(ctx, repo, emp, lead: str) -> bool:
+    """Модуль чатов спрашивает разрешение опубликовать рассказ в чате команды. False — не спросил."""
+    try:
+        from app.chats.service import offer_intro
+    except ImportError:
+        return False
+    try:
+        return bool(await offer_intro(ctx.sender, repo, emp, lead))
+    except Exception as e:  # noqa: BLE001 — рассказ уже сохранён, без вопроса о публикации просто «Спасибо»
+        log.warning("Вопрос о публикации рассказа новичку %s: %s", emp.id, e)
+        return False
+
+
 def clean_name(full_name: str | None) -> str:
     """ФИО без пометок в скобках: «Смирнов Иван (синтетика)» → «Смирнов Иван»."""
     return _NOTE_RE.sub("", full_name or "").strip()
@@ -759,7 +772,9 @@ async def on_intro(ctx, repo, emp, text: str, msg: dict) -> bool:
         emp.dialog_state = None
     if intro.get("text") and intro.get("photo_url"):
         _drop_intro_wait(emp)
-        await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_THANKS), [])
+        # «Спасибо» и вопрос «опубликовать в чате команды?» одним сообщением; чата команды нет — просто «Спасибо»
+        if not await _offer_intro_post(ctx, repo, emp, tv(emp, T.INTRO_THANKS)):
+            await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_THANKS), [])
         await runtime.notify_hr_group(repo, T.HR_GROUP_INTRO.format(name=clean_name(emp.full_name),
                                                                     site=emp.site_code))
         return True

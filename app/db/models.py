@@ -394,3 +394,31 @@ class LlmLog(Base):
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ok: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+# --- Чаты команды -----------------------------------------------------------
+
+
+class TeamChat(Base):
+    """Групповой чат «МАКС», куда добавили бота: чат команды или HR-группа (app/chats).
+
+    Кому нужен чат: audience none — никому (по умолчанию, пока HR не настроил), all — всем новичкам,
+    sites — новичкам площадок из sites; work_type office | production сужает до офиса или производства.
+    HR-группа — Setting('hr_group_chat_id'), здесь её не храним.
+    """
+
+    __tablename__ = "team_chats"
+
+    chat_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    link: Mapped[str | None] = mapped_column(String(500), nullable=True)  # ссылка-приглашение из GET /chats/{id}
+    members_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audience: Mapped[str] = mapped_column(String(16), default="none", server_default="none")  # none | all | sites
+    sites: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    work_type: Mapped[str | None] = mapped_column(String(16), nullable=True)  # office | production | None — все
+    for_intro: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # для представлений
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # False — бота удалили
+    prompt_mid: Mapped[str | None] = mapped_column(String(128), nullable=True)  # сообщение с кнопкой «HR-группа»
+    added_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # кто добавил бота (user_id «МАКС»)
+    info_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # когда читали GET /chats
+    created_at: Mapped[datetime] = created_at_col()

@@ -604,8 +604,20 @@ class EmployeeViews:
             "gates": gates_of(emp),
             "plan_step": await self.plan_step(emp),
             "status": emp.status,
+            "chats": await self.chats(emp),
         })
         return data
+
+    async def chats(self, emp) -> list[dict]:
+        """Чаты команды: куда бот добавил новичка и куда отправил ссылку (app.chats.service.card)."""
+        fn = optional("app.chats.service", "card")
+        if fn is None:
+            return []
+        try:
+            return list(await call(fn, self.s, emp) or [])
+        except Exception as e:  # noqa: BLE001 — без чатов карточка всё равно открывается
+            log.warning("Чаты команды (%s): %s", emp.id, e)
+            return []
 
 
 # --- база знаний ---------------------------------------------------------------------

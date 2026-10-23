@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { BarChart3, FileBarChart, FlaskConical, RotateCcw, UserCog } from 'lucide-react'
+import { BarChart3, FileBarChart, FlaskConical, MessagesSquare, RotateCcw, UserCog } from 'lucide-react'
 import { api, demoEnabled, toApiError } from '../api/client'
 import type { ShiftTo } from '../api/types'
+import { useNav } from '../lib/nav'
 import { Cell, Empty, ErrorState, Screen, Section, Segmented, useAsync, useToast } from '../components/ui'
 
 const SHIFTS: { value: ShiftTo; label: string }[] = [
@@ -30,6 +31,7 @@ function TopicsSkeleton() {
 
 export default function More() {
   const toast = useToast()
+  const nav = useNav()
   const reduce = useReducedMotion()
   const topics = useAsync(() => api.topics(), [])
   // перематывать можно только тестовых новичков команды: у живого человека перемотка пропустит шаги
@@ -172,6 +174,15 @@ export default function More() {
         </div>
         </>
       )}
+
+      <Section header="Чаты команды" footer="Кому из новичков нужен каждый чат и какая группа получает обращения.">
+        <Cell
+          left={<span className="cell-icon" style={{ background: 'var(--primary)' }}><MessagesSquare /></span>}
+          title="Чаты команды"
+          chevron
+          onClick={() => nav.push({ name: 'chats' })}
+        />
+      </Section>
 
       <Section header="Режим">
         <Cell

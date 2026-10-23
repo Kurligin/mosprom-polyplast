@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import {
-  AlertTriangle, Briefcase, Check, Clock, Factory, FileCheck2, Megaphone, MessageSquare, Phone, QrCode, ShieldAlert, UserX,
+  AlertTriangle, Briefcase, Check, Clock, Factory, FileCheck2, Megaphone, MessageSquare, MessagesSquare, Phone, QrCode,
+  ShieldAlert, UserX,
 } from 'lucide-react'
+import { EMPLOYEE_CHAT_STATUS } from '../api/chats'
 import { api, toApiError } from '../api/client'
 import type { Employee, Step } from '../api/types'
 import InviteSheet from '../components/InviteSheet'
@@ -258,6 +260,7 @@ export default function EmployeeCard({ id }: { id: number }) {
 
           <ConnectionSection e={e} />
           <IntroSection e={e} demo={demo} canGate onUpdate={setData} />
+          <ChatsSection e={e} />
           <PlanSection e={e} demo={demo} onUpdate={setData} />
 
           <Section header="Ближайшие шаги">
@@ -335,3 +338,24 @@ export default function EmployeeCard({ id }: { id: number }) {
     </Screen>
   )
 }
+
+/** Чаты команды: куда Корсик добавил новичка и куда отправил ссылку */
+function ChatsSection({ e }: { e: Employee }) {
+  const chats = e.chats ?? []
+  if (!chats.length) return null
+  return (
+    <Section header="Чаты команды" footer="Корсик добавляет новичка в чаты в первый рабочий день. Если не пустили настройки приватности, присылает ссылку.">
+      {chats.map((c) => (
+        <Cell
+          key={c.chat_id}
+          left={<MessagesSquare size={20} color={c.status === 'added' ? 'var(--success)' : c.status === 'failed' ? 'var(--danger)' : 'var(--primary)'} />}
+          inset={50}
+          title={<span className="clamp-1">{c.title}</span>}
+          meta={[EMPLOYEE_CHAT_STATUS[c.status], c.reason, c.intro && c.status !== 'intro' ? 'опубликовали представление' : null].filter(Boolean).join(' · ')}
+          value={c.at ? <span className="cell-meta">{fmtDate(c.at)}</span> : undefined}
+        />
+      ))}
+    </Section>
+  )
+}
+

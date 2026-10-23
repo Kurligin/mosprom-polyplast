@@ -113,6 +113,8 @@ export interface Employee extends EmployeeShort {
   surveys: SurveyItem[]
   tickets: TicketShort[]
   meetings: Meeting[]
+  /** Чаты команды: куда бот добавил новичка и куда отправил ссылку */
+  chats?: import('./chats').EmployeeChat[]
 }
 
 export interface NewEmployeeInput {

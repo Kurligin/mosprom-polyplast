@@ -17,6 +17,7 @@ import ScenarioImport from './screens/ScenarioImport'
 import More from './screens/More'
 import { ManagerHome, ManagerEmployee } from './screens/Manager'
 import Analytics from './screens/Analytics'
+import Chats from './screens/Chats'
 
 const TAB_INFO: Record<Tab, { label: string; Icon: typeof Users }> = {
   analytics: { label: 'Аналитика', Icon: ChartColumnIncreasing },
@@ -50,6 +51,7 @@ function renderRoute(r: Route) {
     case 'manager': return <ManagerHome />
     case 'manager-employee': return <ManagerEmployee id={r.id} />
     case 'analytics': return <Analytics />
+    case 'chats': return <Chats />
   }
 }
 

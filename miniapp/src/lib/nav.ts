@@ -13,6 +13,7 @@ export type Route =
   | { name: 'manager' }
   | { name: 'manager-employee'; id: number }
   | { name: 'analytics' }
+  | { name: 'chats' }
 
 export type Tab = 'employees' | 'tickets' | 'analytics' | 'kb' | 'more'
 
@@ -41,4 +42,5 @@ export const ROUTE_TITLES: Record<Route['name'], string> = {
   manager: 'Мои новички',
   'manager-employee': 'Новичок',
   analytics: 'Аналитика',
+  chats: 'Чаты',
 }

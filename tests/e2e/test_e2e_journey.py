@@ -2,7 +2,8 @@
 
 Прогон один на модуль (фикстура `journey` в conftest.py, сценарий — tests/e2e/journey.py), тесты проверяют
 его по этапам: нет исключений, бот не флудит, статусы отправок, ответы опросов, флаги, обращения,
-встречи руководителя, руководитель не видит ответов и обращений, в своих фразах бота нет «—».
+встречи руководителя, руководитель не видит ответов и обращений, в своих фразах бота нет «—»,
+HR-группа выбрана кнопкой, новичок в чатах команды, представление коллегам только с согласия.
 Маршрут для людей — eval/journey/gtp-operator.md (пишется при каждом прогоне).
 """
 
@@ -17,24 +18,26 @@ from app.scenario import engine
 from tests.e2e import journey as J
 
 # Бот не флудит: сколько НОВЫХ сообщений получатель может получить за этап (правки на месте не считаются).
-# (новичку, HR-группе, руководителю)
+# (новичку, HR-группе, руководителю, каждому чату команды)
 LIMITS = {
-    "onboarding": (3, 0, 0),     # знакомство одним сообщением + шаги «за 2–3 дня до выхода» (картинка и текст)
-    "day0": (2, 0, 0),           # «завтра первый день» с кнопками + напоминание про документы
-    "day1": (10, 0, 1),          # 7 шагов первого дня + карта и файл «где пообедать» по кнопкам; push про доступы
-    "day1-question": (1, 1, 0),  # карточка ответа; обращение по кнопке «Связаться с HR»
-    "day2": (3, 1, 0),           # просьба рассказать о себе, «пришли фото», «спасибо»
-    "day3": (3, 0, 1),           # шаг дня + опрос одним сообщением; push «проведи встречу»
-    "day3-red": (1, 1, 0),       # «передал HR, увидит только HR»; красный флаг в HR-группу
-    "day3-hr": (2, 2, 0),        # ответ HR + «Передал HR.»; в группе: правка статуса и «новый ответ»
-    "day14": (3, 0, 0),          # опрос + следующий вопрос после текстового ответа
-    "live": (4, 0, 1),           # дни без перемотки: шаги дня и опрос
-    "day60": (2, 0, 1),
-    "end": (6, 0, 0),            # поздравление, опрос (+2 после текстовых ответов), прощание
+    "onboarding": (3, 0, 0, 0),     # знакомство одним сообщением + шаги «за 2–3 дня до выхода» (картинка и текст)
+    "day0": (2, 0, 0, 0),           # «завтра первый день» с кнопками + напоминание про документы
+    # 7 шагов первого дня + карта и файл «где пообедать» по кнопкам + одна ссылка на общий чат; push про доступы
+    "day1": (10, 0, 1, 0),
+    "day1-question": (1, 1, 0, 0),  # карточка ответа; обращение по кнопке «Связаться с HR»
+    # просьба рассказать о себе, «пришли фото», «спасибо» с вопросом о публикации; рассказ в чате GTP
+    "day2": (3, 1, 0, 1),
+    "day3": (3, 0, 1, 0),           # шаг дня + опрос одним сообщением; push «проведи встречу»
+    "day3-red": (1, 1, 0, 0),       # «передал HR, увидит только HR»; красный флаг в HR-группу
+    "day3-hr": (2, 2, 0, 0),        # ответ HR + «Передал HR.»; в группе: правка статуса и «новый ответ»
+    "day14": (3, 0, 0, 0),          # опрос + следующий вопрос после текстового ответа
+    "live": (4, 0, 1, 0),           # дни без перемотки: шаги дня и опрос
+    "day60": (2, 0, 1, 0),
+    "end": (6, 0, 0, 0),            # поздравление, опрос (+2 после текстовых ответов), прощание
 }
 
 
-def limits(key: str) -> tuple[int, int, int]:
+def limits(key: str) -> tuple[int, int, int, int]:
     return LIMITS["live" if key.startswith("live") else key]
 
 
@@ -85,7 +88,8 @@ def test_no_exceptions(journey):
     assert journey.llm_calls == [], "в e2e LLM не нужен: ответ по базе знаний уверенный"
 
 
-@pytest.mark.parametrize("who, idx", [(J.NEWCOMER, 0), (J.HR_GROUP, 1), (J.MANAGER, 2)])
+@pytest.mark.parametrize("who, idx", [(J.NEWCOMER, 0), (J.HR_GROUP, 1), (J.MANAGER, 2), (J.GENERAL_CHAT, 3),
+                                      (J.GTP_CHAT, 3)])
 def test_bot_does_not_flood(journey, who, idx):
     over = []
     for st in journey.stages:
@@ -110,6 +114,45 @@ def test_deliveries_resolved_and_for_gtp_production(journey):
             assert not r["office_only"] or r["gate"] == "plan_ready", f"офисный шаг производству: {r}"
     sent = [r for r in rows.values() if r["status"] == "sent" and r["error"] != engine.COVERED_NOTE]
     assert all(r["mid"] or (r["error"] or "").startswith("в составе опроса") for r in sent)
+
+
+def test_setup_hr_group_by_button_and_team_chats(journey):
+    """HR-группа — кнопкой в самой группе, ответ на месте; в чатах команды — одно знакомство без кнопки."""
+    st = ok(journey, "setup")
+    (prompt,) = new_sends(journey, st, J.HR_GROUP)
+    assert labels(prompt) == ["Сделать эту группу HR-группой"]
+    done = edits(journey, st, J.HR_GROUP)
+    assert [e["mid"] for e in done] == [prompt["mid"]] and done[0]["text"].startswith("Готово, теперь это HR-группа")
+    assert not labels(done[0])
+    for chat in J.TEAM_CHATS:
+        (hello,) = new_sends(journey, st, chat)
+        assert not labels(hello) and "первый рабочий день" in hello["text"]
+    chats = st.db_after["team_chats"]
+    assert chats[J.GENERAL_CHAT.chat_id]["audience"] == "all"
+    assert (chats[J.GTP_CHAT.chat_id]["audience"], chats[J.GTP_CHAT.chat_id]["sites"]) == ("sites", ["GTP"])
+    assert chats[J.HR_GROUP.chat_id]["audience"] == "none" and chats[J.HR_GROUP.chat_id]["title"] == "HR ПОЛИПЛАСТИК"
+
+
+def test_day1_team_chats_added_and_one_link(journey):
+    """Первый рабочий день: в чат GTP добавлен, в общий «МАКС» не пустил — одно сообщение со ссылкой."""
+    st = ok(journey, "day1")
+    members = [e for e in journey.api.log if e["op"] == "members"]
+    assert sorted((e["chat_id"], e["text"]) for e in members) == [
+        (J.GENERAL_CHAT.chat_id, J.PRIVACY), (J.GTP_CHAT.chat_id, "")], "по разу в каждый чат за весь путь"
+    assert all(st.start <= journey.api.log.index(e) < st.end for e in members), "добавляем в первый рабочий день"
+    links = [e for e in new_sends(journey, st, J.NEWCOMER) if any(b["type"] == "link" for b in J.buttons(e["attachments"]))]
+    (msg,) = links
+    assert msg["text"] == ("Вот чаты твоей команды. В чат «Команда GTP» я тебя уже добавил, а сюда сам не смог: "
+                           "так настроена приватность в «МАКС». Вступи по кнопке ниже, там коллеги и все новости.")
+    assert [(b["text"], b["url"]) for b in J.buttons(msg["attachments"])] == [
+        (J.GENERAL_CHAT.full_name, J.CHAT_INFO[J.GENERAL_CHAT.chat_id]["link"])]
+    every = [e for e in journey.api.log if e["op"] == "send" and e["chat_id"] == J.NEWCOMER.chat_id
+             and any(b["type"] == "link" for b in J.buttons(e["attachments"]))]
+    assert every == [msg], "ссылки — одно сообщение за весь путь"
+    chats = journey.final["dialog_data"]["chats"]
+    assert {k: v["status"] for k, v in chats.items()} == {str(J.GENERAL_CHAT.chat_id): "link",
+                                                          str(J.GTP_CHAT.chat_id): "added"}
+    assert not any(e["op"] == "members" for e in journey.api.log[:journey.stage_by("day1").start])
 
 
 def test_staff_personal_chats_quiet(journey):
@@ -219,6 +262,26 @@ def test_day2_intro_for_colleagues(journey):
     intro = journey.final["dialog_data"].get("intro") or {}
     assert intro.get("text") == J.INTRO_TEXT and intro.get("photo_url")
     assert len(new_sends(journey, st, J.HR_GROUP)) == 1
+
+
+def test_day2_intro_published_only_with_consent(journey):
+    """«Спасибо» и вопрос о публикации — одно сообщение; публикация в чате GTP только после кнопки."""
+    st = ok(journey, "day2")
+    ask = new_sends(journey, st, J.NEWCOMER)[-1]
+    assert ask["text"].startswith("Спасибо! Передал рекрутеру") and "в чате «Команда GTP»?" in ask["text"]
+    assert labels(ask) == ["Опубликовать в чате команды", "Не нужно"]
+    log = journey.api.log[st.start:st.end]
+    press = next(i for i, e in enumerate(log) if e["op"] == "act" and "Опубликовать в чате команды" in e["text"])
+    posts = [i for i, e in enumerate(log) if e["op"] == "send" and e["chat_id"] == J.GTP_CHAT.chat_id]
+    assert len(posts) == 1 and posts[0] > press, "без согласия в чат ничего не уходит"
+    post = log[posts[0]]
+    assert post["text"] == f"Знакомьтесь, это Иван Смирнов! Теперь работает с нами на площадке GTP.\n\n{J.INTRO_TEXT}"
+    assert post["attachments"] == J.PHOTO
+    done = [e for e in edits(journey, st, J.NEWCOMER) if e["mid"] == ask["mid"]]
+    assert done and done[-1]["text"].endswith("Загляни туда, коллеги наверняка уже здороваются!") and not labels(done[-1])
+    assert not new_sends(journey, st, J.GENERAL_CHAT), "общий чат без отметки «для представлений»"
+    post_data = journey.final["dialog_data"]["intro_post"]
+    assert post_data["status"] == "published" and post_data["chat_id"] == J.GTP_CHAT.chat_id
 
 
 def test_day3_meeting_push_and_yellow_flag(journey):

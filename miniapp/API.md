@@ -119,3 +119,73 @@
 - Вход без initData — только с `localhost` (без заголовков прокси и туннеля, без чужого `Origin`): проверяйте фронт через `http://localhost:5173`.
 
 - `POST /api/employees`: если дата выхода выпала на выходной или праздник, в ответе есть `warning` — текст для HR («31.10 нерабочий день. Первым рабочим днём новичка будет 02.11…»). Фронту показать его на листе с QR.
+
+### Чаты команды
+
+Групповые чаты «МАКС», куда добавлен Корсик. HR отмечает, кому из новичков нужен чат; в первый рабочий день бот сам добавляет туда новичка, а если «МАКС» не пускает (настройки приватности), присылает ему ссылки одним сообщением. Только HR (руководителю — `403`). Типы и запросы — `miniapp/src/api/chats.ts`, экран — `miniapp/src/screens/Chats.tsx`.
+
+| Экран | Метод и путь | Тело запроса | Ответ |
+|---|---|---|---|
+| Список чатов | `GET /api/chats` | — | `TeamChat[]`: HR-группа первой, дальше активные по названию, чаты без бота — в конце |
+| Правила чата | `PATCH /api/chats/{id}` | `TeamChatPatch`: только изменённые поля | `TeamChat` |
+
+`TeamChat`:
+
+```ts
+{
+  id: number               // chat_id «МАКС», у групп отрицательный
+  title: string
+  link: string | null      // ссылка-приглашение: её получит новичок, если добавить не вышло
+  audience: 'none' | 'all' | 'sites'   // никому (по умолчанию, пока HR не настроил) | всем | площадкам из sites
+  sites: string[]
+  work_type: 'office' | 'production' | null   // null — и офису, и производству
+  for_intro: boolean       // сюда бот публикует рассказ новичка о себе (с его согласия)
+  is_hr_group: boolean     // сюда приходят обращения и сигналы; новичков сюда не добавляем
+  active: boolean          // false — бота удалили из чата
+  members_count: number | null
+  added: number            // скольких новичков бот добавил
+  links_sent: number       // скольким отправил ссылку вместо добавления
+  created_at: string | null
+}
+```
+
+`TeamChatPatch`: `{audience?, sites?, work_type?: 'office' | 'production' | 'all' | null, for_intro?, is_hr_group?}`. Поле не передано — не меняется; `work_type: null` или `"all"` — всем.
+
+- `is_hr_group: true` — эта группа становится HR-группой (вместо прежней): правила сбрасываются (`audience: "none"`, `for_intro: false`). Если в группе висит сообщение с кнопкой «Сделать эту группу HR-группой», бот меняет его на месте, иначе коротко пишет в группу. `is_hr_group: false` у текущей — HR-группы больше нет.
+- Ошибки: `400` — неизвестная площадка или правила у HR-группы («В HR-группу новичков не добавляем…»); `404` — чата нет в учёте; `409` — HR-группой нельзя сделать чат, из которого бота удалили; `422` — неверное значение `audience` / `work_type`.
+- Чат появляется в списке, когда бота добавляют в группу. Пока HR-группа не выбрана, бот пишет в новой группе сообщение с кнопкой «Сделать эту группу HR-группой»: нажать может только подключённый к боту HR. Без прав админа бот не видит ссылку-приглашение и не может добавлять новичков: на экране — «Нет ссылки».
+- Основной чат для представления новичка: с отметкой `for_intro`, иначе чат его площадки (`audience: "sites"`).
+
+`Employee.chats` (карточка новичка) — куда бот добавил новичка:
+
+```ts
+{
+  chat_id: number
+  title: string
+  status: 'added' | 'link' | 'failed' | 'pending' | 'intro'
+  // добавлен | отправили ссылку | не получилось, ссылки нет | добавим в первый рабочий день | только опубликовали представление
+  at: string | null
+  reason: string | null    // почему не добавили: «не пустили настройки приватности»
+  link: string | null
+  intro: boolean           // в этом чате опубликован рассказ новичка о себе
+}[]
+```
+
+У синтетических новичков `chats` пустой: бот с ними не работает. Подписи статусов — `EMPLOYEE_CHAT_STATUS` в `src/api/chats.ts`.
+
+### Аналитика: руководитель HR и HR
+
+Экран «Аналитика»: у руководителя HR (`role: "head"`) — первая вкладка и главный экран, у HR — вкладка после «Обращений». Руководителю подразделения — `403` «Аналитика доступна HR и руководителю HR», вкладки у него нет.
+
+| Экран | Метод и путь | Ответ |
+|---|---|---|
+| Сводка | `GET /api/analytics[?site=GTP]` | `Analytics`: `funnel`, `mood.{sites, weeks, low_data}`, `clusters`, `risks.{total, high, medium, reasons}`, `kpi`, `sites`, `threshold`, `window` |
+| В зоне риска | `GET /api/analytics/risks[?site=GTP][&level=high\|medium]` | `RiskItem[]`: сначала высокий уровень |
+
+- `RiskItem`: `{employee_id, full_name, site, position, day, probation_days, stage, level: "high"|"medium", reasons: [{code, level, label, text, at}], connected, synthetic, card: "/api/employees/{id}", start_param: "employee_{id}"}`. Тап — карточка новичка (`GET /api/employees/{id}`).
+- Причины — прозрачные правила, текст для человека: «Оценка упала с 9 до 5», «Нет ответа HR 2 дня». Коды: `red_flag`, `intent`, `score_drop`, `low_score`, `yellow_flag`, `missed_surveys`, `silent`, `not_connected`, `meeting_overdue`, `ticket_waiting`, `bot_stopped` (правила — `app/CONTRACTS.md`, раздел «Аналитика»).
+- `funnel`: `[{stage: pre|week1|month1|month2|month3|done, label, count, risk, risk_high}]`, «Завершили» — за 3 месяца.
+- `mood.weeks`: 8 календарных недель, `{start, end, label, respondents, shown, avg_score, mood, mood_total, mood_share, current?}`. `shown: false` — ответили меньше `threshold` (5), цифр нет. `mood.sites` — как строки еженедельной сводки за 4 недели.
+- `clusters`: `[{topic, label, count, people, negative, prev, delta, trend: up|down|flat|new, trend_text, sites: [{code, name, count, prev, people}], quotes: [{text, site, site_name, mood, at}]}]` — за 4 недели и динамика к прошлым 4. Цитаты обезличены и только от тех, кто согласился на ИИ-разбор.
+- Демо-данные: `mock.analytics(site)`, `mock.risks(site)` в `src/api/mocks.ts`.
+

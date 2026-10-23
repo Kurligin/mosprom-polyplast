@@ -37,6 +37,8 @@ class FakeMax:
         self.log: list[dict] = []
         self.uploads: list[tuple[str, str]] = []
         self.other: list[tuple[str, tuple, dict]] = []
+        self.chats: dict[int, dict] = {}          # групповые чаты: ответ GET /chats/{id}
+        self.member_errors: dict[int, str] = {}   # чат → код отказа addMembers (add.participant.privacy)
         self._mid = itertools.count(1)
 
     def _entry(self, op: str, mid: str | None, chat_id, text: str, atts: list[dict]) -> None:
@@ -80,6 +82,20 @@ class FakeMax:
         return {"token": f"file-{filename}"}
 
     async def send_action(self, chat_id, action="typing_on"):
+        return {"success": True}
+
+    async def get_chat(self, chat_id):
+        info = self.chats.get(chat_id) or {}
+        return {"chat_id": chat_id, "type": "chat", "status": "active", "participants_count": 2, **info}
+
+    async def add_members(self, chat_id, user_ids):
+        """addMembers: успех или отказ из member_errors. В ленте прогона — op "members"."""
+        code = self.member_errors.get(chat_id)
+        self.log.append({"op": "members", "mid": None, "chat_id": chat_id, "text": code or "",
+                         "attachments": [], "user_ids": list(user_ids)})
+        if code:
+            return {"success": True, "failed_user_ids": list(user_ids),
+                    "failed_user_details": [{"error_code": code, "user_ids": list(user_ids)}]}
         return {"success": True}
 
     def __getattr__(self, name):
