@@ -21,6 +21,17 @@ pyyaml>=6
 gigachat>=0.1.35
 qrcode>=7.4
 
+# База знаний: эмбеддинги (torch только CPU) и разбор загружаемых PDF / PPTX
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers>=3
+pdfplumber>=0.11
+python-pptx>=1.0
+pillow>=10
+
+# Картинка еженедельной сводки: HTML → PNG
+playwright>=1.47
+
 # Разработка
 pytest>=8
 pytest-asyncio>=0.23

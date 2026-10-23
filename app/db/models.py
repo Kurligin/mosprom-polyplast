@@ -228,6 +228,7 @@ class Ticket(Base):
     created_at: Mapped[datetime] = created_at_col()
     first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    group_mid: Mapped[str | None] = mapped_column(String(128), nullable=True)  # уведомление в HR-группе
 
     employee: Mapped[Employee] = relationship()
     assignee: Mapped[Staff | None] = relationship()
@@ -290,6 +291,7 @@ class HrAnswer(Base):
     answer: Mapped[str] = mapped_column(Text)
     site_code: Mapped[str | None] = mapped_column(ForeignKey("sites.code"), nullable=True)  # None — все площадки
     author_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="draft", server_default="draft")  # draft | confirmed
     ticket_id: Mapped[int | None] = mapped_column(ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = created_at_col()
 
@@ -315,6 +317,8 @@ class KbChunk(Base):
     )
     path: Mapped[str] = mapped_column(Text, default="", server_default="")  # «раздел → пункт» / слайд
     point_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    chunk_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)  # pvtr:6.6.1, ac:slide9
+    source_label: Mapped[str | None] = mapped_column(Text, nullable=True)  # «ПВТР, п. 6.5.2, стр. 15»
     page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     text: Mapped[str] = mapped_column(Text)
     is_kt: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -372,6 +376,7 @@ class ManagerTask(Base):
     kind: Mapped[str] = mapped_column(String(32), default="meeting", server_default="meeting")
     status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")  # pending | done
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    mid: Mapped[str | None] = mapped_column(String(128), nullable=True)  # push руководителю (правка на месте)
     created_at: Mapped[datetime] = created_at_col()
 
 

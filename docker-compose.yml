@@ -24,6 +24,7 @@ services:
     env_file: .env
     volumes:
       - .:/code
+      - models:/models
     working_dir: /code
     depends_on:
       postgres:
@@ -47,6 +48,15 @@ services:
     depends_on:
       - app
 
+  # HTTPS-туннель к Mini App (make tunnel): «МАКС» открывает Mini App только по HTTPS
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://miniapp:5173
+    depends_on:
+      - miniapp
+    profiles: ["tunnel"]
+
 volumes:
   pgdata:
   miniapp_node_modules:
+  models:

@@ -8,8 +8,19 @@ ENV PYTHONPATH=/code \
 
 WORKDIR /code
 
+# Шрифты с кириллицей и эмодзи — для картинки сводки
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+
+# Chromium для Playwright (рендер сводки) — внутри образа, не в томе
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+
+# Кэш моделей (bge-m3) — в именованном томе, скачивается один раз
+ENV HF_HOME=/models/hf
 
 # Сертификаты НУЦ Минцифры (нужны для GigaChat) + стандартные из certifi — в один бандл
 COPY certs/russian_trusted_ca_bundle.pem /tmp/russian_ca.pem
