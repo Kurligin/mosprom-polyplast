@@ -328,11 +328,8 @@ def test_end_final_survey_goodbye_and_all_meetings_done(journey):
 
 # --- вне маршрута: найденные баги ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason=(
-    "Баг: в окне ответа HR (30 минут) любой текст новичка уходит в открытое обращение раньше сигналов. "
-    "Красный флаг не создаётся, новичок не получает «увидит только HR» и 112, обращение не краснеет. "
-    "app/plugins.py: app.tickets.hooks (reply_window) подключается раньше app.signals.hooks."))
 def test_red_flag_inside_hr_reply_window(journey):
+    """Угроза в окне ответа HR даёт красный флаг, а не уходит «ответом» в старое обращение (порядок плагинов)."""
     st = ok(journey, "edge-window-red")
     emp_id = journey.edge_ids["petr"]
     red = [f for f in mine(st.new("flags"), emp_id).values() if f["level"] == "red"]
