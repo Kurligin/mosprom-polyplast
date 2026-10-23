@@ -197,8 +197,23 @@ async def create_employee(body: NewEmployeeInput, staff: HrDep,
     emp = await load_employee(session, emp.id, staff)
     views = EmployeeViews(session, role_of(staff))
     await views.prepare([emp])
-    return {"employee": await views.short(emp), "invite_link": invite_link(emp.invite_code),
-            "code": emp.invite_code}
+    result = {"employee": await views.short(emp), "invite_link": invite_link(emp.invite_code),
+              "code": emp.invite_code}
+    warning = _start_warning(body.start_date)
+    if warning:
+        result["warning"] = warning
+    return result
+
+
+def _start_warning(start: date) -> str | None:
+    """Дата выхода на выходной или праздник: бот считает дни от первого рабочего дня, HR стоит знать."""
+    from app.scenario.workcal import is_workday, next_workday
+
+    if is_workday(start):
+        return None
+    first = next_workday(start)
+    return (f"{start:%d.%m} нерабочий день. Первым рабочим днём новичка будет {first:%d.%m}, "
+            "от него бот считает шаги и встречи.")
 
 
 class GateInput(BaseModel):

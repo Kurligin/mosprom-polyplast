@@ -358,3 +358,18 @@ async def test_list_marks_test_newbies(client, world, session):
     await session.flush()
     rows = {e["id"]: e for e in (await client.get("/api/employees", headers=auth(world.hr))).json()}
     assert rows[world.other.id]["test"] is True and rows[world.emp.id]["test"] is False
+
+
+async def test_create_employee_warns_about_weekend_start(client, world):
+    """Выход в субботу 31.10.2026: HR видит предупреждение, что первым рабочим днём будет 2.11."""
+    body = {"full_name": "Субботина Синтия", "site": world.site.code, "work_type": "office",
+            "start_date": "2026-10-31", "probation_days": 90, "manager_id": world.mgr.id,
+            "recruiter_id": world.rec.id}
+    r = await client.post("/api/employees", headers=auth(world.hr), json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["warning"].startswith("31.10 нерабочий день. Первым рабочим днём новичка будет 02.11")
+
+    body["start_date"] = "2026-11-02"
+    body["full_name"] = "Понедельникова Синтия"
+    r = await client.post("/api/employees", headers=auth(world.hr), json=body)
+    assert "warning" not in r.json()
