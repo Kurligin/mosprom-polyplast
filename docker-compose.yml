@@ -58,15 +58,7 @@ services:
       - miniapp
     profiles: ["tunnel"]
 
-  # Локальная LLM для закрытого контура (make local-llm): OpenAI-совместимый API на :11434/v1
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama:/root/.ollama
-    profiles: ["local-llm"]
-
 volumes:
-  ollama:
   pgdata:
   miniapp_node_modules:
   models:

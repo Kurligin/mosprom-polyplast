@@ -232,6 +232,10 @@ async def collect(rows: list[Row], use_llm: bool, verbose: bool) -> None:
     bm = BM25(chunks)
     vecs = await embed([r.question for r in rows])
     cache = json.loads(CACHE.read_text(encoding="utf-8")) if CACHE.exists() else {}
+    # у локальной модели свой кэш: ответы GigaChat ей не подставляются
+    from app.llm.gigachat import _model_name, _provider
+
+    llm_tag = f"@{_provider()}:{_model_name()}" if _provider() != "gigachat" else ""
 
     async with async_session() as session:
         for r, v in zip(rows, vecs, strict=True):
@@ -242,7 +246,7 @@ async def collect(rows: list[Row], use_llm: bool, verbose: bool) -> None:
             r.bm25 = [chunks[i].key for i, _ in bm.search(expand_synonyms(r.question), top=5)]
             safe = [h for h in hits if not h.is_kt]
             if use_llm and not r.personal and safe:
-                ck = f"v4|{r.question}|{','.join(str(h.chunk_id) for h in safe)}"
+                ck = f"v4{llm_tag}|{r.question}|{','.join(str(h.chunk_id) for h in safe)}"
                 if ck not in cache:
                     from app.llm.gigachat import choose_chunk
 

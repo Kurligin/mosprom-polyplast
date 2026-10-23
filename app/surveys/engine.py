@@ -682,8 +682,11 @@ async def send_reminder(repo, emp, st: dict, due: int) -> list[str] | None:
     return mids
 
 
-async def remind_all(session, now: datetime | None = None) -> int:
-    """Задача survey_reminders: разослать наступившие напоминания. Возвращает число отправленных."""
+async def remind_all(session, now: datetime | None = None, employee_ids=None) -> int:
+    """Задача survey_reminders: разослать наступившие напоминания. Возвращает число отправленных.
+
+    employee_ids — только эти новички (тесты, точечный запуск); None — все активные.
+    """
     from sqlalchemy import select
 
     from app.bot.repo import SqlRepo
@@ -692,7 +695,8 @@ async def remind_all(session, now: datetime | None = None) -> int:
     repo = SqlRepo(session)
     tzs = {s.code: s.tz for s in (await session.scalars(select(Site))).all()}
     emps = (await session.scalars(select(Employee).where(
-        Employee.status == "active", Employee.dialog_data.has_key(STATE_KEY)))).all()
+        Employee.status == "active", Employee.dialog_data.has_key(STATE_KEY),
+        *([Employee.id.in_(list(employee_ids))] if employee_ids is not None else [])))).all()
     sent = 0
     for emp in emps:
         st = _state(emp)

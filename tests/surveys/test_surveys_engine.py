@@ -201,13 +201,13 @@ async def test_reminders_next_day_and_day_after(world):
     day1 = started.replace(hour=8, minute=0) + timedelta(days=1)   # 11:00 МСК
     assert engine.reminder_due(world.emp, st, "Europe/Moscow", started + timedelta(hours=1)) == 0
     assert engine.reminder_due(world.emp, st, "Europe/Moscow", day1.replace(hour=5)) == 0, "до 10:00 не пишем"
-    assert await engine.remind_all(world.session, day1) == 1
+    assert await engine.remind_all(world.session, day1, [world.emp.id]) == 1
     rem = world.api.last()
     assert world.api.text(rem).startswith("Привет, Анна!\nПишу с небольшим напоминанием, что ты не прошел опрос.")
     assert world.api.rows(rem) == [["Продолжить опрос"]]
-    assert await engine.remind_all(world.session, day1 + timedelta(hours=3)) == 0
-    assert await engine.remind_all(world.session, day1 + timedelta(days=1)) == 1
-    assert await engine.remind_all(world.session, day1 + timedelta(days=5)) == 0
+    assert await engine.remind_all(world.session, day1 + timedelta(hours=3), [world.emp.id]) == 0
+    assert await engine.remind_all(world.session, day1 + timedelta(days=1), [world.emp.id]) == 1
+    assert await engine.remind_all(world.session, day1 + timedelta(days=5), [world.emp.id]) == 0
 
     await world.press("Продолжить опрос", rem)
     assert world.api.text(mid) == T.MOVED_DOWN and world.api.buttons(mid) == []
@@ -221,7 +221,7 @@ async def test_finished_survey_no_reminder(world):
     await world.press("Все хорошо! Продвигаюсь по плану", mid)
     assert world.api.text(mid) == "Прекрасно! Тогда, продолжай в том же духе 💪🏻"
     later = datetime.now(UTC) + timedelta(days=1, hours=12)
-    assert await engine.remind_all(world.session, later) == 0
+    assert await engine.remind_all(world.session, later, [world.emp.id]) == 0
 
 
 async def test_new_survey_closes_unfinished(world):
