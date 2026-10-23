@@ -39,6 +39,7 @@ from app.signals import rules
 from app.signals.service import TICKET_CATEGORY
 from app.surveys import config as C
 from app.surveys import store
+from seed.risks_seed import ensure_stories, is_story
 
 SYNTH = Path(__file__).resolve().parents[1] / "eval" / "flags" / "survey-synth.jsonl"
 MOOD = {"negative": "negative", "neutral": "neutral", "positive": "positive"}
@@ -258,6 +259,14 @@ def _ticket_status(created: datetime, now: datetime) -> tuple[str, datetime | No
     return "new", None, None
 
 
+async def _stories(s) -> None:
+    """Истории риска для «Аналитики» (seed/risks_seed.py): идемпотентно, создаёт только недостающее."""
+    stats = await ensure_stories(s)
+    await s.commit()
+    if stats["answers"]:
+        print(f"Истории риска: ответов {stats['answers']}, сигналов {stats['flags']} [синтетика]")
+
+
 async def seed(reset: bool = False, thin: str | None = None) -> None:
     rnd = random.Random(7)
     now = datetime.now(UTC)
@@ -269,12 +278,17 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
         # отвечают только подключившиеся (active): приглашённые в статусе waiting бота ещё не открыли
         emps = (await s.scalars(select(Employee).where(Employee.is_synthetic, Employee.status == "active")
                                 .order_by(Employee.id))).all()
+        # у историй риска (seed/risks_seed.py) ответы свои: общая раскладка их не трогает
+        emps = [e for e in emps if not is_story(e)]
         if not emps:
             print("Нет синтетических новичков: сначала make seed")
             return
-        have = await s.scalar(select(func.count()).select_from(SurveyAnswer).where(SurveyAnswer.is_synthetic))
+        have = await s.scalar(select(func.count()).select_from(SurveyAnswer).where(SurveyAnswer.is_synthetic,
+                                                                                   SurveyAnswer.employee_id.in_(
+                                                                                       [e.id for e in emps])))
         if have and not reset:
             print(f"Синтетические ответы уже есть ({have}). Пересоздать: python -m seed.surveys_seed --reset")
+            await _stories(s)
             return
         if reset:
             await _reset(s, list(emps))
@@ -380,6 +394,7 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
             e.dialog_data = data
 
         await s.commit()
+        await _stories(s)  # --reset удалил и ответы историй риска: вернуть
 
         # Итог: ответившие за 4 недели по площадкам (порог сводки — 5 разных новичков)
         since = now - timedelta(days=28)

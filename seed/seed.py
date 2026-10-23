@@ -3,6 +3,7 @@
 Идемпотентно: существующие записи и их коды не меняются.
 У синтетических новичков прошедшие встречи с руководителем отмечаются проведёнными,
 кроме двух самых свежих: на экране руководителя они «пора встретиться».
+Истории риска для экрана «Аналитика» и согласия синтетических новичков — seed/risks_seed.py.
 --links — только напечатать ссылки привязки, ничего не создавая.
 """
 
@@ -17,6 +18,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.models import Employee, Site, Staff, new_code
 from app.db.session import async_session, engine
+from seed.risks_seed import ensure_stories, is_story
 
 # Площадки — теги из docs/korsik-scenario.md; названия условные до ответа экспертов
 SITES = [
@@ -177,10 +179,14 @@ async def seed() -> None:
         synth = (await s.scalars(select(Employee).where(Employee.is_synthetic, Employee.status == "active",
                                                         Employee.manager_id.is_not(None))
                                  .order_by(Employee.id))).all()
-        done, kept = await settle_meetings(s, list(synth), today)
+        # у историй риска встречи свои (seed/risks_seed.py): просроченная встреча — часть истории
+        done, kept = await settle_meetings(s, [e for e in synth if not is_story(e)], today)
+        stories = await ensure_stories(s)
         await s.commit()
 
     print(f"Встречи синтетических новичков: отмечено проведёнными {done}, ждут отметки {kept} [синтетика]")
+    print(f"Истории риска для «Аналитики»: {stories['stories']}, согласия у {stories['consents']} новичков "
+          "[синтетика]")
     await print_links()
 
 

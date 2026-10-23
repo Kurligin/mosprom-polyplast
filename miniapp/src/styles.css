@@ -547,6 +547,88 @@ button.link-text { padding: 0; min-height: 0; }
 .answer-edit:focus { border-color: var(--primary); }
 .bar-label { min-width: 0; overflow-wrap: anywhere; }
 
+/* ---------- Аналитика ---------- */
+.an-filter { padding: var(--s1) 0 0; }
+.stat b.tone-danger { color: var(--danger); }
+.stat b.tone-warning { color: var(--warning); }
+
+/* В зоне риска: аватар с точкой уровня, причины списком */
+.risk-cell { align-items: flex-start; }
+.risk-cell .chev { align-self: center; }
+.risk-avatar { position: relative; flex: none; }
+.risk-avatar::after {
+  content: ""; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.risk-avatar.high::after { background: var(--danger); }
+.risk-avatar.medium::after { background: var(--warning); }
+.reasons { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.reasons li { position: relative; padding-left: 14px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.reasons li::before {
+  content: ""; position: absolute; left: 2px; top: 0.5em; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warning);
+}
+.reasons li.high::before { background: var(--danger); }
+.reasons li.more { color: var(--text-secondary); font-size: 13px; }
+.reasons li.more::before { display: none; }
+.risk-head { display: inline-flex; align-items: center; gap: 6px; }
+.risk-head::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.risk-head.high::before { background: var(--danger); }
+.more-row { color: var(--primary); }
+.more-row .cell-title { color: var(--primary); font-size: 15px; }
+.more-row .chev { color: var(--primary); opacity: 0.8; }
+
+/* Этапы */
+.stage-risk { font-size: 13px; white-space: nowrap; }
+.stage-risk.high { color: var(--danger); }
+.stage-risk.medium { color: var(--warning); }
+.bar-fill.muted { background: color-mix(in srgb, var(--primary) 40%, transparent); }
+
+/* Настроение по неделям: столбцы 100%, снизу вверх негатив, нейтрально, позитив */
+.mood-chart {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px;
+  padding: var(--s4) var(--s4) var(--s2);
+}
+.mood-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.mood-pct { font-size: 11px; font-weight: 600; color: var(--success); height: 14px; line-height: 14px; }
+.mood-stack { width: 100%; max-width: 30px; height: 112px; border-radius: 6px; overflow: hidden; background: var(--fill); }
+.mood-stack.blank { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--text-secondary) 40%, transparent); }
+.mood-fill { display: flex; flex-direction: column-reverse; gap: 2px; height: 100%; transform-origin: bottom; }
+.mood-fill i { display: block; min-height: 0; }
+.mood-col.current .mood-week { color: var(--primary); font-weight: 600; }
+.mood-week { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.pos { background: var(--success); }
+.neu { background: color-mix(in srgb, var(--text-secondary) 35%, transparent); }
+.neg { background: var(--danger); }
+.mood-legend {
+  display: flex; gap: var(--s4); justify-content: center; flex-wrap: wrap;
+  padding: 0 var(--s4) var(--s3); font-size: 13px; color: var(--text-secondary);
+}
+.mood-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.mood-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.mood-site::before { content: ""; position: absolute; top: 0; right: 0; left: 16px; height: 0.5px; background: var(--separator); }
+.mood-site-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.mood-site-pct { font-size: 15px; font-weight: 600; color: var(--success); white-space: nowrap; }
+.mood-bar { display: flex; gap: 2px; height: 6px; margin-top: 4px; border-radius: 3px; overflow: hidden; }
+.mood-bar i { display: block; height: 100%; min-width: 3px; }
+.mood-bar i.none { background: var(--fill); }
+
+/* Темы: упоминания, динамика, цитаты */
+.cluster-cell { align-items: flex-start; }
+.cluster-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.cluster-count { font-size: 17px; font-weight: 600; white-space: nowrap; }
+.cluster-count small { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+.cluster-cell .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.quote {
+  margin: 6px 0 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--separator);
+  font-size: 15px; line-height: 1.4; color: var(--text-secondary); overflow-wrap: anywhere;
+}
+.quote::before { content: "«"; }
+.quote::after { content: "»"; }
+.cluster-more { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.cluster-chev { margin-top: 2px; transition: transform 200ms var(--ease-out); }
+.cluster-chev.open { transform: rotate(180deg); }
+
 @media (hover: hover) and (pointer: fine) {
   button.cell:hover { background: color-mix(in srgb, var(--fill) 50%, var(--surface)); }
   .nav-btn:hover { opacity: 0.75; }

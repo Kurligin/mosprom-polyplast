@@ -233,3 +233,129 @@ export interface ReportResult {
   ok: boolean
   message: string
 }
+
+/* ---------- Аналитика: руководитель HR и HR (GET /api/analytics, /api/analytics/risks) ---------- */
+
+export type RiskLevel = 'high' | 'medium'
+
+/** Этап адаптации для воронки */
+export type StageCode = 'pre' | 'week1' | 'month1' | 'month2' | 'month3' | 'done'
+
+/** Причина риска: прозрачное правило и человеческий текст («Оценка упала с 9 до 5») */
+export interface RiskReason {
+  code: string // red_flag | intent | score_drop | low_score | yellow_flag | missed_surveys | silent | not_connected | meeting_overdue | ticket_waiting | bot_stopped
+  level: RiskLevel
+  label: string // короткая подпись: «падение оценок»
+  text: string
+  at: string | null // ISO
+}
+
+/** Новичок в зоне риска */
+export interface RiskItem {
+  employee_id: number
+  full_name: string
+  site: SiteCode
+  position: string
+  day: number
+  probation_days: number
+  stage: StageCode
+  level: RiskLevel
+  reasons: RiskReason[]
+  connected: boolean
+  synthetic: boolean
+  card: string // /api/employees/{id}
+  start_param: string // employee_{id}: карточка из бота
+}
+
+export interface FunnelStage {
+  stage: StageCode
+  label: string
+  count: number
+  risk: number // из них в зоне риска
+  risk_high: number
+}
+
+export interface MoodCounts {
+  positive: number
+  neutral: number
+  negative: number
+}
+
+/** Доли настроения; null — ответили меньше порога, цифры нет */
+export interface MoodShare {
+  positive: number | null
+  neutral: number | null
+  negative: number | null
+}
+
+export interface MoodWeek {
+  start: string // YYYY-MM-DD, понедельник
+  end: string
+  label: string // «13–19 окт»
+  respondents: number
+  shown: boolean // ответили не меньше порога
+  avg_score: number | null
+  mood: MoodCounts
+  mood_total: number
+  mood_share: MoodShare
+  current?: boolean // текущая неделя, ещё идёт
+}
+
+export interface MoodSite {
+  code: string // код площадки или merged — «Остальные площадки»
+  name: string
+  newbies: number
+  respondents: number
+  avg_score: number | null
+  mood: MoodCounts
+  mood_total: number
+  mood_share: MoodShare
+  low_data: boolean
+}
+
+export interface ClusterQuote {
+  text: string // обезличенная цитата: имена и телефоны замаскированы
+  site: SiteCode
+  site_name?: string
+  mood: 'positive' | 'neutral' | 'negative' | null
+  at: string
+}
+
+/** Тема ответов опросов: упоминания, динамика к прошлым 4 неделям, цитаты */
+export interface Cluster {
+  topic: string
+  label: string
+  count: number
+  people: number
+  negative: number
+  prev: number
+  delta: number
+  trend: 'up' | 'down' | 'flat' | 'new'
+  trend_text: string // «в 2 раза больше, чем месяц назад»
+  sites: { code: SiteCode; name?: string; count: number; prev: number; people: number }[]
+  quotes: ClusterQuote[]
+}
+
+export interface Analytics {
+  generated_at: string
+  site: SiteCode | null
+  weeks: number
+  window: { start: string; end: string; label: string }
+  threshold: number // срез — от стольких ответивших
+  kpi: {
+    newbies: number
+    newbies_week: number
+    respondents: number
+    avg_score: number | null
+    signals_open: number
+    signals_red_open: number
+    risks: number
+    risks_high: number
+  }
+  funnel: FunnelStage[]
+  mood: { sites: MoodSite[]; low_data: string[]; weeks: MoodWeek[] }
+  clusters: Cluster[]
+  risks: { total: number; high: number; medium: number; reasons: { code: string; label: string; count: number }[] }
+  sites: { code: SiteCode; name: string }[]
+  synthetic: boolean
+}

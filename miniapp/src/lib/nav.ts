@@ -12,8 +12,9 @@ export type Route =
   | { name: 'more' }
   | { name: 'manager' }
   | { name: 'manager-employee'; id: number }
+  | { name: 'analytics' }
 
-export type Tab = 'employees' | 'tickets' | 'kb' | 'more'
+export type Tab = 'employees' | 'tickets' | 'analytics' | 'kb' | 'more'
 
 export type Nav = {
   push: (r: Route) => void
@@ -39,4 +40,5 @@ export const ROUTE_TITLES: Record<Route['name'], string> = {
   more: 'Ещё',
   manager: 'Мои новички',
   'manager-employee': 'Новичок',
+  analytics: 'Аналитика',
 }

@@ -27,6 +27,7 @@ from sqlalchemy import delete, func, select
 from app.config import settings
 from app.db.models import Employee, QuestionLog
 from app.db.session import async_session, engine
+from seed.risks_seed import is_story
 
 GOLDEN = Path(__file__).resolve().parents[1] / "eval" / "golden.jsonl"
 WINDOW_DAYS = 42
@@ -131,10 +132,13 @@ async def seed(reset: bool = False) -> None:
     async with async_session() as s:
         emps = (await s.scalars(select(Employee).where(Employee.is_synthetic, Employee.status == "active")
                                 .order_by(Employee.id))).all()
+        # у историй риска (seed/risks_seed.py) вопросы свои: общая раскладка их не трогает
+        emps = [e for e in emps if not is_story(e)]
         if not emps:
             print("Нет синтетических новичков: сначала make seed")
             return
-        synth_ids = select(Employee.id).where(Employee.is_synthetic)
+        stories = [e.id for e in await s.scalars(select(Employee).where(Employee.is_synthetic)) if is_story(e)]
+        synth_ids = select(Employee.id).where(Employee.is_synthetic, Employee.id.not_in(stories))
         have = await s.scalar(select(func.count()).select_from(QuestionLog)
                               .where(QuestionLog.employee_id.in_(synth_ids)))
         if have and not reset:

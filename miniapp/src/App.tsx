@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { BookOpen, Lock, MessageSquare, MoreHorizontal, ShieldOff, Users } from 'lucide-react'
+import { BookOpen, ChartColumnIncreasing, Lock, MessageSquare, MoreHorizontal, ShieldOff, Users } from 'lucide-react'
 import { api, toApiError, type ApiError } from './api/client'
 import type { Role } from './api/types'
 import { ErrorState, SkeletonList, ToastProvider, useDelayed } from './components/ui'
@@ -16,13 +16,23 @@ import UploadDoc from './screens/UploadDoc'
 import ScenarioImport from './screens/ScenarioImport'
 import More from './screens/More'
 import { ManagerHome, ManagerEmployee } from './screens/Manager'
+import Analytics from './screens/Analytics'
 
-const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
-  { id: 'employees', label: 'Новички', Icon: Users },
-  { id: 'tickets', label: 'Обращения', Icon: MessageSquare },
-  { id: 'kb', label: 'База', Icon: BookOpen },
-  { id: 'more', label: 'Ещё', Icon: MoreHorizontal },
-]
+const TAB_INFO: Record<Tab, { label: string; Icon: typeof Users }> = {
+  analytics: { label: 'Аналитика', Icon: ChartColumnIncreasing },
+  employees: { label: 'Новички', Icon: Users },
+  tickets: { label: 'Обращения', Icon: MessageSquare },
+  kb: { label: 'База', Icon: BookOpen },
+  more: { label: 'Ещё', Icon: MoreHorizontal },
+}
+
+/** Руководителю HR аналитика — главный экран; HR — отдельная вкладка рядом с обращениями */
+const tabsFor = (role: Role): Tab[] =>
+  role === 'manager'
+    ? ['employees']
+    : role === 'head'
+      ? ['analytics', 'employees', 'tickets', 'kb', 'more']
+      : ['employees', 'tickets', 'analytics', 'kb', 'more']
 
 const HIDE_TABBAR: Route['name'][] = ['ticket', 'new-employee', 'upload-doc', 'scenario']
 
@@ -39,6 +49,7 @@ function renderRoute(r: Route) {
     case 'more': return <More />
     case 'manager': return <ManagerHome />
     case 'manager-employee': return <ManagerEmployee id={r.id} />
+    case 'analytics': return <Analytics />
   }
 }
 
@@ -123,13 +134,15 @@ function deepLink(isManager: boolean): { tab: Tab; route: Route } | null {
 
 function Shell({ role }: { role: Role }) {
   const isManager = role === 'manager'
+  const tabs = tabsFor(role)
   const [link] = useState(() => deepLink(isManager))
-  const [tab, setTab] = useState<Tab>(link?.tab ?? 'employees')
-  const [visited, setVisited] = useState<Tab[]>([link?.tab ?? 'employees'])
+  const [tab, setTab] = useState<Tab>(link?.tab ?? tabs[0])
+  const [visited, setVisited] = useState<Tab[]>([link?.tab ?? tabs[0]])
   const [stacks, setStacks] = useState<Record<Tab, Entry[]>>(() => {
     const s: Record<Tab, Entry[]> = {
       employees: [entry(isManager ? { name: 'manager' } : { name: 'employees' })],
       tickets: [entry({ name: 'tickets' })],
+      analytics: [entry({ name: 'analytics' })],
       kb: [entry({ name: 'kb' })],
       more: [entry({ name: 'more' })],
     }
@@ -170,7 +183,6 @@ function Shell({ role }: { role: Role }) {
     setTab(t)
   }
 
-  const tabs: Tab[] = isManager ? ['employees'] : TABS.map((t) => t.id)
   const showTabbar = !isManager && !HIDE_TABBAR.includes(top.name)
 
   return (
@@ -209,16 +221,19 @@ function Shell({ role }: { role: Role }) {
             exit={reduce ? { opacity: 0 } : { transform: 'translateY(100%)' }}
             transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
           >
-            <div className="tabbar-row" role="tablist">
-              {TABS.map(({ id, label, Icon }) => (
-                <button key={id} className="tab" role="tab" aria-selected={tab === id} onClick={() => switchTab(id)}>
-                  <span className="tab-icon">
-                    <Icon />
-                    {id === 'tickets' && badge > 0 && <span className="tab-badge num">{badge > 99 ? '99+' : badge}</span>}
-                  </span>
-                  {label}
-                </button>
-              ))}
+            <div className="tabbar-row" role="tablist" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+              {tabs.map((id) => {
+                const { label, Icon } = TAB_INFO[id]
+                return (
+                  <button key={id} className="tab" role="tab" aria-selected={tab === id} onClick={() => switchTab(id)}>
+                    <span className="tab-icon">
+                      <Icon />
+                      {id === 'tickets' && badge > 0 && <span className="tab-badge num">{badge > 99 ? '99+' : badge}</span>}
+                    </span>
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </motion.nav>
         )}

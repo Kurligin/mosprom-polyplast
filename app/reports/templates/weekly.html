@@ -116,6 +116,48 @@
 
   .empty { font-size: 26px; color: var(--text-secondary); line-height: 1.4; }
 
+  /* Зоны риска */
+  .risk-people { display: flex; align-items: center; gap: 22px; }
+  .risk-num { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: var(--danger); }
+  .risk-num.medium { color: var(--warning); }
+  .risk-num.calm { color: var(--success); }
+  .risk-lead { font-size: 29px; font-weight: 700; line-height: 1.2; }
+  .risk-why { font-size: 23px; color: var(--text-secondary); line-height: 1.3; margin-top: 4px; }
+  .risk-topics {
+    margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--separator);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .risk-topic { display: grid; grid-template-columns: 40px 1fr; column-gap: 16px; align-items: center; }
+  .trend {
+    width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center;
+    color: var(--danger); background: rgba(220, 38, 38, 0.10);
+  }
+  .trend.flat { color: var(--text-secondary); background: var(--separator); }
+  .trend.down { color: var(--success); background: rgba(22, 163, 74, 0.12); }
+  .rt-name { font-size: 28px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rt-name span { font-weight: 400; color: var(--text-secondary); }
+  .rt-meta { font-size: 23px; color: var(--text-secondary); line-height: 1.25; margin-top: 2px; }
+  .often { margin-top: 18px; font-size: 23px; color: var(--text-secondary); line-height: 1.3;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .often b { color: var(--text); font-weight: 700; }
+
+  /* С блоком «Зоны риска» всё плотнее: картинка остаётся 1080 × 1350 даже с 4 строками настроения */
+  .with-risk .page { padding: 48px 64px 36px; gap: 16px; }
+  .with-risk header { margin-bottom: 0; }
+  .with-risk h1 { font-size: 52px; margin-top: 4px; }
+  .with-risk .sub { font-size: 24px; margin-top: 6px; }
+  .with-risk .card { padding: 24px 32px; }
+  .with-risk .kpi .value { font-size: 60px; margin: 10px 0 8px; }
+  .with-risk .section-head { margin-bottom: 16px; }
+  .with-risk .rows { gap: 10px; }
+  .with-risk .row-top { margin-bottom: 2px; }
+  .with-risk .site { font-size: 28px; }
+  .with-risk .score { font-size: 30px; }
+  .with-risk .bar { height: 12px; }
+  .with-risk .share { font-size: 22px; }
+  .with-risk .risk-topics { margin-top: 16px; padding-top: 16px; gap: 12px; }
+  .with-risk .often { margin-top: 14px; }
+
   /* Подвал */
   .foot {
     margin-top: auto;
@@ -127,7 +169,8 @@
   .foot .brand { flex: none; font-weight: 700; }
 </style>
 </head>
-<body{% if r.mood_rows | length >= 3 %} class="dense"{% endif %}>
+{% set rz = r.risk_zone %}
+<body class="{% if r.mood_rows | length >= 3 %}dense{% endif %}{% if rz %} with-risk{% endif %}">
 {% set k = r.kpi %}
 <div class="page">
 
@@ -210,6 +253,53 @@
     {% endif %}
   </section>
 
+  {% if rz %}
+  {% set pz = rz.people %}
+  <section class="card">
+    <div class="section-head">
+      <h2>Зоны риска</h2>
+      <div class="legend">сейчас и за 4 недели</div>
+    </div>
+    <div class="risk-people">
+      {% if pz.high %}
+      <div class="risk-num num">{{ pz.high }}</div>
+      <div>
+        <div class="risk-lead">{{ pz.high | plural("новичок", "новичка", "новичков") }} в зоне высокого риска</div>
+        <div class="risk-why">{{ pz.reasons | join(", ") }}{% if pz.medium %} · ещё {{ pz.medium }} со средним риском{% endif %}</div>
+      </div>
+      {% elif pz.total %}
+      <div class="risk-num medium num">{{ pz.total }}</div>
+      <div>
+        <div class="risk-lead">{{ pz.total | plural("новичок", "новичка", "новичков") }} в зоне риска</div>
+        <div class="risk-why">{{ pz.reasons | join(", ") }}</div>
+      </div>
+      {% else %}
+      <div class="risk-num calm num">0</div>
+      <div><div class="risk-lead">Новичков в зоне риска нет</div></div>
+      {% endif %}
+    </div>
+    {% if rz.topics %}
+    <div class="risk-topics">
+      {% for t in rz.topics %}
+      <div class="risk-topic">
+        <div class="trend {{ 'down' if t.trend == 'down' else 'flat' if t.trend == 'flat' else 'up' }}">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            {% if t.trend == 'down' %}<path d="M7 7l10 10M17 9v8H9"/>{% elif t.trend == 'flat' %}<path d="M5 12h14"/>{% elif t.trend == 'new' %}<path d="M12 5v14M5 12h14"/>{% else %}<path d="M7 17 17 7M9 7h8v8"/>{% endif %}
+          </svg>
+        </div>
+        <div>
+          <div class="rt-name">{{ t.topic }}{% if t.site %} <span>· {{ t.site }}</span>{% endif %}</div>
+          <div class="rt-meta num">{{ t.count }} {{ t.count | plural("упоминание", "упоминания", "упоминаний") }}, {{ t.trend_text }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if r.topics %}
+    <div class="often">Чаще всего: {% for t in r.topics %}<b>{{ t.topic | lower }}</b> <span class="num">{{ t.count }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+    {% endif %}
+  </section>
+  {% else %}
   <section class="card">
     <div class="section-head">
       <h2>О чём говорят новички</h2>
@@ -231,6 +321,7 @@
     <p class="empty">Тем пока мало для сводки.</p>
     {% endif %}
   </section>
+  {% endif %}
 
   <footer class="foot">
     <div class="low">

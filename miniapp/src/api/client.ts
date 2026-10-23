@@ -1,9 +1,9 @@
 import { initDataHeader, isInMax } from '../lib/bridge'
 import { mock } from './mocks'
 import type {
-  Employee, EmployeeShort, GateName, KbDocument, Me, NewEmployeeInput, NewEmployeeResult, ReplyInput, ReportResult,
-  ScenarioReport, ShiftResult, ShiftTo, Site, StaffMember, StaffRole, Ticket, TicketShort, TicketStatus, Topic,
-  UploadDocumentInput,
+  Analytics, Employee, EmployeeShort, GateName, KbDocument, Me, NewEmployeeInput, NewEmployeeResult, ReplyInput,
+  ReportResult, RiskItem, ScenarioReport, ShiftResult, ShiftTo, Site, SiteCode, StaffMember, StaffRole, Ticket,
+  TicketShort, TicketStatus, Topic, UploadDocumentInput,
 } from './types'
 
 /*
@@ -280,6 +280,31 @@ function normReport(raw: ScenarioReport): ScenarioReport {
   return out
 }
 
+const arr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : [])
+
+function normAnalytics(raw: Analytics): Analytics {
+  const a = raw as Partial<Analytics>
+  const out: Analytics = {
+    ...(raw as Analytics),
+    funnel: arr(a.funnel),
+    clusters: arr(a.clusters).map((c) => ({ ...c, sites: arr(c.sites), quotes: arr(c.quotes) })),
+    mood: { sites: arr(a.mood?.sites), low_data: arr(a.mood?.low_data), weeks: arr(a.mood?.weeks) },
+    risks: { total: a.risks?.total ?? 0, high: a.risks?.high ?? 0, medium: a.risks?.medium ?? 0, reasons: arr(a.risks?.reasons) },
+    sites: arr(a.sites),
+    threshold: a.threshold ?? 5,
+  }
+  if (isDemoData(raw)) markDemo(out)
+  return out
+}
+
+function normRisks(list: RiskItem[]): RiskItem[] {
+  const out = arr(list).map((r) => ({ ...r, reasons: arr(r.reasons) }))
+  if (isDemoData(list)) markDemo(out)
+  return out
+}
+
+const siteQuery = (site?: SiteCode | null) => (site ? `?site=${encodeURIComponent(site)}` : '')
+
 /* ---------- Справочник площадок: один на всё приложение ---------- */
 
 let sitesCache: Promise<Site[]> | null = null
@@ -353,6 +378,10 @@ export const api = {
   },
 
   topics: () => get<Topic[]>('/topics', () => mock.topics()),
+  analytics: (site?: SiteCode | null) =>
+    get<Analytics>(`/analytics${siteQuery(site)}`, () => mock.analytics(site)).then(normAnalytics),
+  risks: (site?: SiteCode | null) =>
+    get<RiskItem[]>(`/analytics/risks${siteQuery(site)}`, () => mock.risks(site)).then(normRisks),
   shift: (to: ShiftTo, employeeId?: number, o?: Opts) =>
     post<ShiftResult>('/demo/shift', employeeId ? { to, employee_id: employeeId } : { to }, () => mock.shift(to, employeeId), o),
   report: (o?: Opts) => post<ReportResult>('/demo/report', {}, () => mock.report(), o),

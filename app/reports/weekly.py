@@ -16,6 +16,10 @@
 Настроение ответа — `SurveyAnswer.mood` (ИИ-разбор), если его нет — по оценке: 8–10 хорошо, 5–7 так себе, 1–4 плохо.
 Темы — `SurveyAnswer.topic` и `QuestionLog.topic`, без «другое». Из ответов опросов берём только текстовые
 и не позитивные: тема кнопки — это тема вопроса, иначе топ повторял бы набор вопросов опроса.
+
+Зоны риска (`risk_zone`, считает `app.analytics`): сколько новичков в зоне высокого риска и по каким причинам,
+и 1–2 темы опросов, которые растут к прошлым 4 неделям. Тема по площадке — только для площадки из среза
+(ответили 5 и больше), тема от одного человека не попадает. Имён и цитат нет и здесь.
 """
 
 from __future__ import annotations
@@ -299,9 +303,90 @@ def aggregate(raw: Raw, p: dict, *, threshold: int = THRESHOLD) -> dict:
     }
 
 
+# --- зоны риска -------------------------------------------------------------
+
+RISK_TOPICS = 2         # строк о темах в блоке «Зоны риска»
+RISK_TOPIC_MIN = 3      # тема с меньшим числом упоминаний в сводку не попадает
+SITE_SHARE = 0.6        # тема «на площадке», если там 60% упоминаний и больше
+MENTIONS = ("упоминание", "упоминания", "упоминаний")
+NEWBIES = ("новичок", "новичка", "новичков")
+
+
+def _top_reasons(items, level: str | None) -> list[str]:
+    """Самые частые причины: у высокого уровня — только причины высокого уровня."""
+    from app.analytics.rules import REASON_LABELS
+
+    order = list(REASON_LABELS)
+    c: Counter[str] = Counter()
+    for it in items:
+        c.update({r.code for r in it.reasons if level is None or r.level == level})
+    ranked = sorted(c.items(), key=lambda kv: (-kv[1], order.index(kv[0]) if kv[0] in order else 99))
+    return [REASON_LABELS.get(code, code) for code, _ in ranked[:2]]
+
+
+def risk_zone(report: dict, items: list, clusters: list[dict], *, threshold: int = THRESHOLD) -> dict:
+    """Блок «Зоны риска»: сколько новичков в зоне риска и почему, какие темы растут. Без имён и цитат.
+
+    items — `app.analytics.risks` (уровень и причины), clusters — `app.analytics.clusters` за то же окно.
+    Тема по площадке — только если площадка в срезе сводки (ответили `threshold` и больше) и там 60% упоминаний;
+    иначе — по всем площадкам. Нет общего среза (ответили меньше `threshold`) — тем нет.
+    Тема от одного человека в сводку не попадает: это уже не тема, а его история.
+    """
+    from app.analytics.clusters import trend, trend_text
+
+    high = [i for i in items if i.level == "high"]
+    medium = len(items) - len(high)
+    people = {"total": len(items), "high": len(high), "medium": medium,
+              "reasons": _top_reasons(high, "high") if high else _top_reasons(items, None)}
+    if high:
+        people["text"] = (f"{len(high)} {plural(len(high), NEWBIES)} в зоне высокого риска: "
+                          + ", ".join(people["reasons"]))
+    elif items:
+        people["text"] = f"{medium} {plural(medium, NEWBIES)} в зоне риска: " + ", ".join(people["reasons"])
+    else:
+        people["text"] = "Новичков в зоне риска нет"
+
+    shown = {s["code"]: s["name"] for s in report.get("sites", [])}
+    topics = []
+    if report.get("overall", {}).get("shown"):
+        for c in clusters:
+            if c["count"] < RISK_TOPIC_MIN:
+                continue
+            top = c["sites"][0] if c["sites"] else None
+            if top and top["code"] in shown and top["count"] >= SITE_SHARE * c["count"] and top["people"] >= 2:
+                site, count, prev = shown[top["code"]], top["count"], top["prev"]
+            elif c["people"] >= 2:
+                site, count, prev = None, c["count"], c["prev"]
+            else:
+                continue
+            topics.append({"topic": c["label"], "site": site, "count": count, "prev": prev,
+                           "trend": trend(count, prev), "trend_text": trend_text(count, prev, WINDOW_WEEKS)})
+        # сначала растущие и новые темы, внутри — где прибавилось больше
+        topics.sort(key=lambda t: (t["trend"] not in ("up", "new"), -(t["count"] - t["prev"]), -t["count"]))
+        topics = topics[:RISK_TOPICS]
+    for t in topics:
+        where = f" ({t['site']})" if t["site"] else ""
+        t["text"] = f"{t['topic']}{where}: {t['count']} {plural(t['count'], MENTIONS)}, {t['trend_text']}"
+    return {"people": people, "topics": topics, "threshold": threshold}
+
+
+async def _risk_zone(session, report: dict, p: dict, now: datetime | None) -> dict | None:
+    """Зоны риска для сводки. Модуль аналитики сломался — сводка уходит без блока."""
+    try:
+        from app.analytics import clusters, risks
+
+        items = await risks(session, now)
+        found = await clusters(session, WINDOW_WEEKS, now, until=p["to_dt"], quotes=0)
+    except Exception:
+        log.exception("Сводка: зоны риска не посчитались")
+        return None
+    return risk_zone(report, items, found, threshold=report["threshold"])
+
+
 async def build(session, now: datetime | None = None, *, week_end: date | None = None) -> dict:
     p = period(now, week_end=week_end)
     report = aggregate(await collect(session, p), p)
+    report["risk_zone"] = await _risk_zone(session, report, p, now)
     report["generated_at"] = (now or datetime.now(UTC)).isoformat()
     return report
 
@@ -317,6 +402,18 @@ def _num(x: float) -> str:
     return f"{x:.1f}".replace(".", ",")
 
 
+def risk_caption(zone: dict) -> str:
+    """Одна строка про риски: «В зоне высокого риска 7 новичков: красные сигналы, намерение уйти; ещё 11 со средним»."""
+    why = ", ".join(zone["reasons"])
+    if zone["high"]:
+        line = f"В зоне высокого риска {zone['high']} {plural(zone['high'], NEWBIES)}: {why}"
+        if zone["medium"]:
+            line += f"; ещё {zone['medium']} со средним"
+    else:
+        line = f"В зоне риска {zone['total']} {plural(zone['total'], NEWBIES)}: {why}"
+    return line + ". Подробно в Mini App, раздел «Аналитика»."
+
+
 def caption(report: dict, now: datetime | None = None) -> str:
     """Короткая подпись к картинке: главное числами, на случай если картинка не загрузится."""
     k = report["kpi"]
@@ -327,6 +424,9 @@ def caption(report: dict, now: datetime | None = None) -> str:
         parts.append(f"средняя оценка {_num(k['avg_score'])} из 10")
     parts.append(f"открытых сигналов: {k['signals_open']}")
     lines.append(", ".join(parts) + ".")
+    zone = (report.get("risk_zone") or {}).get("people")
+    if zone and zone["total"]:
+        lines.append(risk_caption(zone))
     if report.get("synthetic"):
         lines.append("Данные синтетические.")
     return "\n".join(lines)

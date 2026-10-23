@@ -1,8 +1,9 @@
 // Демо-данные. Все люди и обращения синтетические.
 import type {
-  Contact, Employee, EmployeeShort, GateName, KbDocument, Me, Meeting, Message, NewEmployeeInput, NewEmployeeResult,
-  ReplyInput, ReportResult, Role, ScenarioReport, ShiftResult, ShiftTo, Site, SiteCode, StaffMember, StaffRole, Step,
-  SurveyItem, Ticket, TicketShort, TicketStatus, Topic, UploadDocumentInput, WorkType,
+  Analytics, Cluster, Contact, Employee, EmployeeShort, GateName, KbDocument, Me, Meeting, Message, MoodWeek,
+  NewEmployeeInput, NewEmployeeResult, ReplyInput, ReportResult, RiskItem, RiskReason, Role, ScenarioReport,
+  ShiftResult, ShiftTo, Site, SiteCode, StaffMember, StaffRole, StageCode, Step, SurveyItem, Ticket, TicketShort,
+  TicketStatus, Topic, UploadDocumentInput, WorkType,
 } from './types'
 
 const sites: Site[] = [
@@ -327,6 +328,120 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).get('mocks') ===
   topics[0].count = 1284
 }
 
+/* ---------- Аналитика: демо-данные, все люди синтетические ---------- */
+
+const stageOf = (day: number, total: number): StageCode =>
+  day > total ? 'done' : day <= 0 ? 'pre' : day <= 7 ? 'week1' : day <= 30 ? 'month1' : day <= 60 ? 'month2' : 'month3'
+
+const reason = (code: string, level: RiskItem['level'], label: string, text: string, h: number | null = null): RiskReason =>
+  ({ code, level, label, text, at: h === null ? null : hoursAgo(h) })
+
+const RISKS: [id: number, level: RiskItem['level'], reasons: RiskReason[]][] = [
+  [4, 'high', [reason('score_drop', 'high', 'падение оценок', 'Оценка упала с 9 до 5', 20),
+    reason('intent', 'medium', 'намерение уйти', 'Сомневается, что останется после испытательного', 20)]],
+  [12, 'high', [reason('intent', 'high', 'намерение уйти', 'Думает об уходе: сообщение 3 дня назад', 72),
+    reason('meeting_overdue', 'medium', 'просрочены встречи', 'Встреча на 30-й день: просрочена на 5 рабочих дней'),
+    reason('ticket_waiting', 'medium', 'нет ответа HR', 'Нет ответа HR 2 дня', 50)]],
+  [1, 'high', [reason('red_flag', 'high', 'красные сигналы', 'Красный сигнал: безопасность, вчера', 26)]],
+  [5, 'medium', [reason('not_connected', 'medium', 'не подключились', 'Выход сегодня, а в боте ещё нет')]],
+  [9, 'medium', [reason('missed_surveys', 'medium', 'пропуск опросов', '2 опроса подряд без ответа'),
+    reason('silent', 'medium', 'молчат', 'Молчит 12 дней, нет ответа на «Два месяца»', 288)]],
+  [7, 'medium', [reason('yellow_flag', 'medium', 'жёлтые сигналы', 'Жёлтый сигнал: нагрузка', 40)]],
+  [13, 'medium', [reason('low_score', 'medium', 'низкие оценки', 'Оценка 5,1 из 10 в опросе «Чек через 2 недели»', 90)]],
+]
+
+function mockRisks(site?: SiteCode | null): RiskItem[] {
+  return RISKS.flatMap(([id, level, reasons]) => {
+    const e = employees.find((x) => x.id === id)
+    if (!e || (site && e.site !== site)) return []
+    return [{
+      employee_id: e.id, full_name: e.full_name, site: e.site, position: e.position, day: e.day,
+      probation_days: e.probation_days, stage: stageOf(e.day, e.probation_days), level, reasons,
+      connected: e.connected, synthetic: true, card: `/api/employees/${e.id}`, start_param: `employee_${e.id}`,
+    }]
+  })
+}
+
+const CLUSTERS: Cluster[] = [
+  { topic: 'доступы', label: 'Доступы', count: 9, people: 7, negative: 6, prev: 4, delta: 5, trend: 'up',
+    trend_text: 'в 2 раза больше, чем месяц назад',
+    sites: [{ code: 'GTP', count: 6, prev: 2, people: 5 }, { code: 'GrPP', count: 3, prev: 2, people: 2 }],
+    quotes: [
+      { text: 'Ноутбук выдали, а учётки нет. Айтишники говорят, заявку должен был подать руководитель', site: 'GTP', mood: 'negative', at: hoursAgo(30) },
+      { text: 'Пропуск сделали только к обеду, до этого ходил по журналу', site: 'GrPP', mood: 'negative', at: hoursAgo(80) },
+    ] },
+  { topic: 'понимание задач', label: 'Понимание задач', count: 7, people: 6, negative: 4, prev: 3, delta: 4, trend: 'up',
+    trend_text: 'в 2 раза больше, чем месяц назад', sites: [{ code: 'GTP', count: 4, prev: 1, people: 3 }, { code: 'Luzhniki', count: 3, prev: 2, people: 3 }],
+    quotes: [{ text: 'Каждый день ставят на новую линию, никто не объясняет почему', site: 'GTP', mood: 'negative', at: hoursAgo(50) }] },
+  { topic: 'наставник', label: 'Наставник', count: 4, people: 3, negative: 3, prev: 0, delta: 4, trend: 'new',
+    trend_text: 'новая тема', sites: [{ code: 'GrPP', count: 4, prev: 0, people: 3 }],
+    quotes: [{ text: 'Наставника неделю не видел, но это ничего, наверное', site: 'GrPP', mood: 'neutral', at: hoursAgo(120) }] },
+  { topic: 'нагрузка', label: 'Нагрузка', count: 5, people: 4, negative: 3, prev: 6, delta: -1, trend: 'flat',
+    trend_text: 'на 1 меньше, чем месяц назад', sites: [{ code: 'GTP', count: 3, prev: 4, people: 2 }, { code: 'GrPP', count: 2, prev: 2, people: 2 }],
+    quotes: [{ text: 'Две смены подряд третью неделю, потому что людей нет', site: 'GTP', mood: 'negative', at: hoursAgo(60) }] },
+  { topic: 'быт и транспорт', label: 'Быт и транспорт', count: 2, people: 2, negative: 1, prev: 5, delta: -3, trend: 'down',
+    trend_text: 'на 3 меньше, чем месяц назад', sites: [{ code: 'GTP', count: 2, prev: 5, people: 2 }], quotes: [] },
+]
+
+function mockWeeks(): MoodWeek[] {
+  const monday = addDays(today, -((today.getDay() + 6) % 7))
+  const shares: [number, number, number, number][] = [ // позитив, нейтр., негатив, ответили
+    [0, 0, 0, 3], [12, 4, 3, 6], [10, 5, 6, 7], [9, 4, 9, 8], [11, 5, 4, 9], [13, 3, 3, 7], [8, 6, 9, 8], [6, 2, 3, 5],
+  ]
+  return shares.map(([pos, neu, neg, people], i) => {
+    const start = addDays(monday, (i - 7) * 7)
+    const end = addDays(start, 6)
+    const total = pos + neu + neg
+    const shown = people >= 5
+    return {
+      start: iso(start), end: iso(end), label: `${start.getDate()}–${end.getDate()}`, respondents: people, shown,
+      avg_score: null, mood: { positive: pos, neutral: neu, negative: neg }, mood_total: shown ? total : 0,
+      mood_share: shown && total
+        ? { positive: pos / total, neutral: neu / total, negative: neg / total }
+        : { positive: null, neutral: null, negative: null },
+      current: i === 7,
+    }
+  })
+}
+
+function mockAnalytics(site?: SiteCode | null): Analytics {
+  const list = employees.filter((e) => !site || e.site === site)
+  const risks = mockRisks(site)
+  const stages: [StageCode, string][] = [['pre', 'До выхода'], ['week1', '1-я неделя'], ['month1', '1-й месяц'],
+    ['month2', '2-й месяц'], ['month3', '3-й месяц'], ['done', 'Завершили']]
+  const funnel = stages.map(([stage, label]) => {
+    const here = list.filter((e) => stageOf(e.day, e.probation_days) === stage)
+    const r = risks.filter((x) => x.stage === stage)
+    return { stage, label, count: here.length + (stage === 'done' ? 3 : 0), risk: r.length,
+             risk_high: r.filter((x) => x.level === 'high').length }
+  })
+  const reasons = new Map<string, { code: string; label: string; count: number }>()
+  risks.forEach((r) => r.reasons.forEach((x) => {
+    const c = reasons.get(x.code) ?? { code: x.code, label: x.label, count: 0 }
+    c.count += 1
+    reasons.set(x.code, c)
+  }))
+  const siteRows = sites.filter((s) => !site || s.code === site).map((s, i) => ({
+    code: s.code, name: s.name, newbies: list.filter((e) => e.site === s.code).length, respondents: 5 + i,
+    avg_score: [6.8, 7.9, 7.4][i] ?? null, mood: { positive: 14 - i * 3, neutral: 5, negative: 7 - i * 2 },
+    mood_total: 26 - i * 5, low_data: false,
+    mood_share: { positive: (14 - i * 3) / (26 - i * 5), neutral: 5 / (26 - i * 5), negative: (7 - i * 2) / (26 - i * 5) },
+  }))
+  return {
+    generated_at: new Date().toISOString(), site: site ?? null, weeks: 4,
+    window: { start: iso(addDays(today, -27)), end: iso(today), label: 'за 4 недели' }, threshold: 5,
+    kpi: { newbies: list.filter((e) => e.day <= e.probation_days).length, newbies_week: 2, respondents: 14, avg_score: 7.4,
+           signals_open: 5, signals_red_open: 1, risks: risks.length, risks_high: risks.filter((r) => r.level === 'high').length },
+    funnel,
+    mood: { sites: siteRows, low_data: [], weeks: mockWeeks() },
+    clusters: CLUSTERS.filter((c) => !site || c.sites.some((s) => s.code === site)),
+    risks: { total: risks.length, high: risks.filter((r) => r.level === 'high').length,
+             medium: risks.filter((r) => r.level === 'medium').length, reasons: [...reasons.values()].sort((a, b) => b.count - a.count) },
+    sites: sites.map((s) => ({ code: s.code, name: s.name })),
+    synthetic: true,
+  }
+}
+
 const notFound = (what: string) => {
   throw new Error(`${what} не найден в демо-данных`)
 }
@@ -499,6 +614,12 @@ export const mock = {
       day: e.day,
       message: target < 1 ? `${first}: ${1 - target} дн. до выхода` : `${first}: теперь день ${e.day}`,
     }
+  },
+  analytics(site?: SiteCode | null): Analytics {
+    return mockAnalytics(site)
+  },
+  risks(site?: SiteCode | null): RiskItem[] {
+    return mockRisks(site)
   },
   report(): ReportResult {
     return { ok: true, message: 'Сводка ушла руководителю HR в «МАКС»' }
