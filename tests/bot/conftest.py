@@ -49,7 +49,7 @@ class FakeRepo:
         base = {"id": len(self.employees) + 1, "full_name": "Анна Смирнова (синтетика)", "first_name": "Анна",
                     "site_code": "GrPP", "work_type": "office", "recruiter_id": 7, "address_form": None, "max_user_id": None,
                     "chat_id": None, "invite_code": "INV-anna1", "status": "waiting", "dialog_state": None,
-                    "dialog_data": {}, "pending_question_id": None}
+                    "dialog_data": {}, "pending_question_id": None, "is_test": False}
         base.update(kw)
         e = SimpleNamespace(**base)
         self.employees.append(e)

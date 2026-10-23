@@ -146,3 +146,21 @@ class Sender:
         except MaxApiError as e:
             log.warning("Не удалось ответить на callback: %s", e)
             return None
+
+    async def edit(self, mid: str, text: str, *, attachments: list[dict] | None = None, key: Any = None) -> bool:
+        """Изменить отправленное сообщение. False — не получилось (сообщение удалено, старое и т. п.)."""
+        try:
+            await self.call(key, self.api.edit_message, mid, text, attachments=attachments)
+            return True
+        except MaxApiError as e:
+            log.warning("Не удалось изменить сообщение %s: %s", mid, e)
+            return False
+
+    async def delete(self, mid: str, *, key: Any = None) -> bool:
+        try:
+            await self.call(key, self.api.delete_message, mid)
+            return True
+        except MaxApiError as e:
+            log.warning("Не удалось удалить сообщение %s: %s", mid, e)
+            return False
+

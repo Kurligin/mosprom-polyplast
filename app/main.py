@@ -17,8 +17,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(nam
 log = logging.getLogger("korsik")
 
 
+def _start_scheduler():
+    """Фоновые задачи модулей (app.jobs) в APScheduler. None — задач нет или они выключены."""
+    if not settings.jobs_enabled:
+        log.info("Фоновые задачи выключены (JOBS_ENABLED=false)")
+        return None
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    from app.jobs import registered
+
+    jobs = registered()
+    if not jobs:
+        return None
+    scheduler = AsyncIOScheduler(timezone=settings.tz_default)
+    for j in jobs:
+        trigger = IntervalTrigger(seconds=j.seconds) if j.seconds else CronTrigger(timezone=settings.tz_default,
+                                                                                   **j.cron)
+        scheduler.add_job(j.func, trigger, id=j.name, max_instances=1, coalesce=True, misfire_grace_time=60)
+    scheduler.start()
+    log.info("Планировщик: %s", ", ".join(j.name for j in jobs))
+    return scheduler
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.plugins import load_plugins
+
+    log.info("Модули: %s", ", ".join(load_plugins()) or "нет")
+    scheduler = _start_scheduler()
     bot_task: asyncio.Task | None = None
     if settings.bot_enabled and settings.max_bot_token:
         try:
@@ -33,6 +61,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     if bot_task:
         bot_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):

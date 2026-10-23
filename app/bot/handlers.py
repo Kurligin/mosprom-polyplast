@@ -1,4 +1,8 @@
-"""Обработчики событий «МАКС». Состояние диалога — в Employee.dialog_state / dialog_data, не в памяти."""
+"""Обработчики событий «МАКС». Состояние диалога — в Employee.dialog_state / dialog_data, не в памяти.
+
+Бот не флудит: знакомство — одно сообщение, которое меняется на месте, ответ на кнопку меняет то же сообщение.
+Модули (сценарий, опросы, база знаний, обращения, руководитель) подключаются через app.bot.hooks.
+"""
 
 from __future__ import annotations
 
@@ -6,29 +10,25 @@ import logging
 import re
 from dataclasses import dataclass
 
+from app.bot import hooks
 from app.bot import texts as T
+from app.bot.hooks import Callback
 from app.bot.keyboards import callback, keyboard, open_app
 
 log = logging.getLogger(__name__)
 
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
 
-# Состояния знакомства
-S_CONSENT = "onboard_consent"
-S_AI = "onboard_ai"
-S_FORM = "onboard_form"
-S_HR_QUESTION = "hr_question"
-ONBOARDING = (S_CONSENT, S_AI, S_FORM)
+# Состояния знакомства: «ты/вы» → согласие → ИИ-разбор
+S_FORM = "ob:form"
+S_CONSENT = "ob:consent"
+S_AI = "ob:ai"
+S_HR_QUESTION = "hr:question"
+ONBOARDING = (S_FORM, S_CONSENT, S_AI)
 
-# Подписи выбранных кнопок — для отметки после POST /answers
-CHOICE_LABELS = {
-    "consent:yes": "Согласен",
-    "ai:yes": "Да",
-    "ai:no": "Нет",
-    "form:ty": T.FORM_TY,
-    "form:vy": T.FORM_VY,
-    "hr:forward": T.FORWARD_HR,
-}
+# Старые имена состояний (до 23.10) → новые
+_LEGACY_STATES = {"onboard_form": S_FORM, "onboard_consent": S_CONSENT, "onboard_ai": S_AI,
+                  "hr_question": S_HR_QUESTION}
 
 
 @dataclass
@@ -38,29 +38,12 @@ class BotCtx:
     miniapp_url: str = ""
 
 
-# --- клавиатуры ---
-
-def kb_consent():
-    return keyboard([callback("Согласен", "consent:yes"), callback("Что это значит?", "consent:info")])
-
-
-def kb_consent_only():
-    return keyboard([callback("Согласен", "consent:yes")])
-
-
-def kb_ai():
-    return keyboard([callback("Да", "ai:yes"), callback("Нет", "ai:no")])
-
-
-def kb_form():
-    return keyboard([callback(T.FORM_TY, "form:ty"), callback(T.FORM_VY, "form:vy")])
-
-
-def kb_forward():
-    return keyboard([callback(T.FORWARD_HR, "hr:forward")])
-
-
 # --- вспомогательное ---
+
+def _state(emp) -> str | None:
+    st = emp.dialog_state
+    return _LEGACY_STATES.get(st, st)
+
 
 def _set_state(emp, state: str | None, **data) -> None:
     emp.dialog_state = state
@@ -69,7 +52,12 @@ def _set_state(emp, state: str | None, **data) -> None:
         emp.dialog_data = {**(emp.dialog_data or {}), **data}
 
 
-async def _say(ctx: BotCtx, repo, person, text: str, attachments=None, *, is_staff: bool = False, ticket_id=None):
+def _onboarded(emp) -> bool:
+    return bool((emp.dialog_data or {}).get("onboarded")) or emp.status in ("active", "finished")
+
+
+async def _say(ctx: BotCtx, repo, person, text: str, attachments=None, *, is_staff: bool = False,
+               ticket_id=None):
     if is_staff:
         return await ctx.sender.send(repo, text, chat_id=person.chat_id, user_id=person.max_user_id,
                                      attachments=attachments, staff=person, ticket_id=ticket_id)
@@ -77,28 +65,93 @@ async def _say(ctx: BotCtx, repo, person, text: str, attachments=None, *, is_sta
                                  attachments=attachments, employee=person, ticket_id=ticket_id)
 
 
-async def _notify_hr_group(ctx: BotCtx, repo, text: str) -> None:
+async def _notify_hr_group(ctx: BotCtx, repo, text: str, attachments=None) -> None:
     chat_id = await repo.get_setting("hr_group_chat_id")
     if chat_id:
         try:
-            await ctx.sender.send(repo, text, chat_id=int(chat_id))
+            await ctx.sender.send(repo, text, chat_id=int(chat_id), attachments=attachments)
         except Exception as e:  # noqa: BLE001 — уведомление не должно ломать диалог
             log.warning("Не удалось уведомить HR-группу: %s", e)
 
 
-async def _ask_current(ctx: BotCtx, repo, emp) -> None:
-    """Повторить вопрос текущего шага знакомства."""
-    if emp.dialog_state == S_CONSENT:
-        await _say(ctx, repo, emp, T.WELCOME_CONSENT.format(name=emp.first_name), kb_consent())
-    elif emp.dialog_state == S_AI:
-        await _say(ctx, repo, emp, T.ASK_AI, kb_ai())
-    elif emp.dialog_state == S_FORM:
-        await _say(ctx, repo, emp, T.ASK_FORM, kb_form())
+def _sync_test_name(emp, user: dict | None) -> None:
+    """Тестовому аккаунту берём имя из профиля «МАКС», а не из демо-карточки."""
+    if not getattr(emp, "is_test", False) or not user:
+        return
+    first = (user.get("first_name") or "").strip()
+    last = (user.get("last_name") or "").strip()
+    if not first:
+        first = (user.get("name") or "").strip().split(" ")[0]
+    if first:
+        emp.first_name = first
+        emp.full_name = f"{first} {last}".strip()
+
+
+# --- знакомство ---
+
+def onboarding_view(emp, *, info: bool = False) -> tuple[str, list[dict]]:
+    """Текст и кнопки текущего шага знакомства. Всё знакомство — одно сообщение."""
+    st = _state(emp)
+    if st == S_FORM:
+        return (T.WELCOME.format(name=emp.first_name) + "\n\n" + T.ASK_FORM,
+                keyboard([callback(T.FORM_TY, "ob:ty"), callback(T.FORM_VY, "ob:vy")]))
+    if st == S_CONSENT:
+        text = T.tv(emp, T.CONSENT)
+        if info:
+            return (text + "\n\n" + T.tv(emp, T.CONSENT_INFO),
+                    keyboard([callback(T.CONSENT_YES, "ob:consent")]))
+        return text, keyboard([callback(T.CONSENT_YES, "ob:consent"), callback(T.CONSENT_MORE, "ob:info")])
+    if st == S_AI:
+        return T.tv(emp, T.ASK_AI), keyboard([callback(T.AI_YES, "ob:ai_yes"), callback(T.AI_NO, "ob:ai_no")])
+    return onboarding_done_text(emp), []
+
+
+def onboarding_done_text(emp) -> str:
+    return "\n\n".join([T.tv(emp, T.NICE_TO_MEET).format(name=emp.first_name),
+                        T.tv(emp, T.INTRO), T.tv(emp, T.ASK_ANYTIME)])
+
+
+async def start_onboarding(ctx: BotCtx, repo, emp) -> None:
+    """Новое сообщение знакомства (первый раз или /start посреди знакомства)."""
+    if _state(emp) not in ONBOARDING:
+        _set_state(emp, S_FORM)
+    text, kb = onboarding_view(emp)
+    mids = await _say(ctx, repo, emp, text, kb)
+    if mids:
+        _set_state(emp, _state(emp), onboard_mid=mids[-1])
+
+
+async def _onboarding_callback(cb: Callback, emp) -> None:
+    ctx, repo, p, st = cb.ctx, cb.repo, cb.payload, _state(emp)
+    if p in ("ob:ty", "ob:vy") and st == S_FORM:
+        emp.address_form = "ty" if p == "ob:ty" else "vy"
+        _set_state(emp, S_CONSENT)
+        await cb.replace(*onboarding_view(emp), employee=emp)
+    elif p == "ob:info" and st == S_CONSENT:
+        await cb.replace(*onboarding_view(emp, info=True), employee=emp)
+    elif p == "ob:consent" and st == S_CONSENT:
+        await repo.add_consent(emp.id, "adaptation", True, T.CONSENT_TEXT_VERSION)
+        _set_state(emp, S_AI)
+        await cb.replace(*onboarding_view(emp), employee=emp)
+    elif p in ("ob:ai_yes", "ob:ai_no") and st == S_AI:
+        await repo.add_consent(emp.id, "ai_analysis", p == "ob:ai_yes", T.CONSENT_TEXT_VERSION)
+        emp.status = "active"
+        _set_state(emp, None, onboarded=True)
+        await cb.replace(onboarding_done_text(emp), employee=emp)
+        after = hooks.single("onboarded")
+        if after is not None:
+            await after(ctx, repo, emp)
+    elif st in ONBOARDING:
+        # кнопка из старого сообщения: показываем актуальный шаг в нём же
+        await cb.replace(*onboarding_view(emp), employee=emp)
+    else:
+        await cb.mark()
 
 
 # --- привязка ---
 
-async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int | None) -> bool:
+async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int | None,
+                       user: dict | None = None) -> bool:
     """Ищем код у новичков, затем у персонала. True — код найден."""
     emp = await repo.employee_by_invite(code)
     if emp is not None:
@@ -107,13 +160,13 @@ async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int 
             return True
         emp.max_user_id = user_id
         emp.chat_id = chat_id
-        if emp.status == "stopped" and emp.address_form:
-            emp.status = "active"
-        if emp.status in ("waiting", "stopped") or not emp.address_form:
-            _set_state(emp, S_CONSENT)
-            await _ask_current(ctx, repo, emp)
+        _sync_test_name(emp, user)
+        if not _onboarded(emp):
+            await start_onboarding(ctx, repo, emp)
         else:
-            await _say(ctx, repo, emp, T.tv(emp, T.STOPPED_WELCOME_BACK))
+            if emp.status == "stopped":
+                emp.status = "active"
+            await _say(ctx, repo, emp, T.tv(emp, T.WELCOME_BACK))
         return True
 
     staff = await repo.staff_by_bind(code)
@@ -137,66 +190,84 @@ async def greet_staff(ctx: BotCtx, repo, staff) -> None:
     await _say(ctx, repo, staff, text, atts, is_staff=True)
 
 
-# --- шаг сценария (позже — движок scenario/) ---
+# --- обращения к HR ---
 
-async def send_welcome_step(ctx: BotCtx, repo, emp) -> None:
-    """Заглушка движка сценария: первые сообщения шага «За 2-3 дня до выхода» (1.3, 1.4)."""
-    await _say(ctx, repo, emp, T.STEP_1_3.replace("Х", emp.first_name))
-    await _say(ctx, repo, emp, T.STEP_1_4)
-
-
-# --- маршрут свободного текста (позже — kb/) ---
-
-async def route_free_text(ctx: BotCtx, repo, emp, text: str) -> None:
-    """Точка расширения: вопрос новичка → база знаний. Пока — предложение передать HR."""
-    _set_state(emp, emp.dialog_state, last_question=text)
-    await _say(ctx, repo, emp, T.tv(emp, T.FREE_TEXT_STUB), kb_forward())
-
-
-async def create_hr_ticket(ctx: BotCtx, repo, emp, text: str, source: str) -> None:
+async def create_hr_ticket(ctx: BotCtx, repo, emp, text: str, source: str, **kw):
+    """Создать обращение и уведомить HR. Сообщение новичку пишет вызывающий код."""
+    factory = hooks.single("create_ticket")
+    if factory is not None:
+        return await factory(ctx, repo, emp, text, source=source, **kw)
     ticket = await repo.create_ticket(employee_id=emp.id, source=source, text=text,
-                                      assignee_id=getattr(emp, "recruiter_id", None))
-    await _say(ctx, repo, emp, T.tv(emp, T.HR_DONE), ticket_id=ticket.id)
+                                      assignee_id=getattr(emp, "recruiter_id", None),
+                                      category=kw.get("category"), is_personal=kw.get("is_personal", False))
     await _notify_hr_group(ctx, repo, T.HR_GROUP_TICKET.format(
         id=ticket.id, name=emp.full_name, site=emp.site_code, text=text))
+    return ticket
+
+
+async def _hr_callback(cb: Callback, emp) -> None:
+    if cb.payload == "hr:forward":
+        question = (emp.dialog_data or {}).get("last_question")
+        if question:
+            _set_state(emp, None, last_question=None)
+            await create_hr_ticket(cb.ctx, cb.repo, emp, question, source="unknown")
+            # «Передать вопрос HR?» превращается в «Передал HR» в том же сообщении
+            await cb.replace(T.tv(emp, T.HR_DONE), employee=emp)
+        else:
+            _set_state(emp, S_HR_QUESTION)
+            await cb.replace(T.tv(emp, T.HR_ASK), employee=emp)
+    else:
+        await cb.mark()
+
+
+# --- маршрут свободного текста ---
+
+async def route_free_text(ctx: BotCtx, repo, emp, text: str) -> None:
+    """Вопрос новичка → база знаний (через hooks). Пока модуля нет — предложить передать HR."""
+    handler = hooks.single("free_text")
+    if handler is not None:
+        await handler(ctx, repo, emp, text)
+        return
+    _set_state(emp, emp.dialog_state, last_question=text)
+    await _say(ctx, repo, emp, T.tv(emp, T.FREE_TEXT_STUB), keyboard([callback(T.FORWARD_HR, "hr:forward")]))
 
 
 # --- события ---
 
 async def on_bot_started(ctx: BotCtx, repo, upd: dict) -> None:
-    user_id = (upd.get("user") or {}).get("user_id")
+    user = upd.get("user") or {}
     chat_id = upd.get("chat_id")
     payload = (upd.get("payload") or "").strip()
-    await handle_start(ctx, repo, user_id, chat_id, payload)
+    await handle_start(ctx, repo, user.get("user_id"), chat_id, payload, user)
 
 
-async def handle_start(ctx: BotCtx, repo, user_id: int, chat_id: int | None, code: str) -> None:
+async def handle_start(ctx: BotCtx, repo, user_id: int, chat_id: int | None, code: str,
+                       user: dict | None = None) -> None:
     if code and CODE_RE.match(code):
-        if await bind_by_code(ctx, repo, code, user_id, chat_id):
+        if await bind_by_code(ctx, repo, code, user_id, chat_id, user):
             return
         # неизвестный код, но пользователь уже привязан — просто продолжаем
-        if not await _resume_bound(ctx, repo, user_id, chat_id):
+        if not await _resume_bound(ctx, repo, user_id, chat_id, user):
             await ctx.sender.send(repo, T.CODE_NOT_FOUND, chat_id=chat_id, user_id=user_id)
         return
-    if not await _resume_bound(ctx, repo, user_id, chat_id):
+    if not await _resume_bound(ctx, repo, user_id, chat_id, user):
         await ctx.sender.send(repo, T.ASK_CODE, chat_id=chat_id, user_id=user_id)
 
 
-async def _resume_bound(ctx: BotCtx, repo, user_id: int, chat_id: int | None) -> bool:
-    """/start от уже привязанного пользователя: напомнить текущий шаг."""
+async def _resume_bound(ctx: BotCtx, repo, user_id: int, chat_id: int | None, user: dict | None = None) -> bool:
+    """/start от уже привязанного пользователя."""
     emp = await repo.employee_by_user(user_id)
     if emp is not None:
         if chat_id:
             emp.chat_id = chat_id
-        if emp.status == "stopped":
-            emp.status = "active" if emp.address_form else "waiting"
-        if emp.dialog_state in ONBOARDING:
-            await _ask_current(ctx, repo, emp)
-        elif not emp.address_form:
-            _set_state(emp, S_CONSENT)
-            await _ask_current(ctx, repo, emp)
+        _sync_test_name(emp, user)
+        if not _onboarded(emp):
+            await start_onboarding(ctx, repo, emp)
+        elif emp.status == "stopped":
+            emp.status = "active"
+            await _say(ctx, repo, emp, T.tv(emp, T.WELCOME_BACK))
         else:
-            await _say(ctx, repo, emp, T.tv(emp, T.STOPPED_WELCOME_BACK))
+            await _say(ctx, repo, emp, T.tv(emp, T.HELLO_AGAIN))
         return True
     staff = await repo.staff_by_user(user_id)
     if staff is not None:
@@ -228,16 +299,16 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
                                chat_id=chat_id, direction="in", text=text, mid=mid)
 
     cmd, _, arg = text.partition(" ")
-    cmd = cmd.lower().split("@")[0]
+    cmd = cmd.lower().split("@")[0] if cmd.startswith("/") else ""
 
     if cmd == "/start":
-        await handle_start(ctx, repo, user_id, chat_id, arg.strip())
+        await handle_start(ctx, repo, user_id, chat_id, arg.strip(), sender)
         return
 
     if emp is None and staff is None:
         # запасной вход: код текстом
         if text and CODE_RE.match(text):
-            if await bind_by_code(ctx, repo, text, user_id, chat_id):
+            if await bind_by_code(ctx, repo, text, user_id, chat_id, sender):
                 return
             await ctx.sender.send(repo, T.CODE_NOT_FOUND, chat_id=chat_id, user_id=user_id)
             return
@@ -245,94 +316,109 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
         return
 
     if staff is not None:
-        await greet_staff(ctx, repo, staff)
+        if chat_id and not staff.chat_id:
+            staff.chat_id = chat_id
+        handler = hooks.single("staff_text")
+        if handler is not None:
+            await handler(ctx, repo, staff, text, body)
+        else:
+            await greet_staff(ctx, repo, staff)
         return
 
     if chat_id and not emp.chat_id:
         emp.chat_id = chat_id
 
-    if emp.dialog_state in ONBOARDING:
-        await _say(ctx, repo, emp, T.PRESS_BUTTON)
-        await _ask_current(ctx, repo, emp)
+    if _state(emp) in ONBOARDING:
+        await _say(ctx, repo, emp, T.tv(emp, T.PRESS_BUTTON))
         return
 
+    # команды
     if cmd == "/hr":
         _set_state(emp, S_HR_QUESTION)
         await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK))
         return
-    if cmd == "/food":
-        await _say(ctx, repo, emp, T.tv(emp, T.FOOD_STUB))
-        return
+    if cmd:
+        handler = hooks.command_handler(cmd.lstrip("/"))
+        if handler is not None:
+            await handler(ctx, repo, emp, arg.strip())
+            return
+        if cmd == "/food":
+            await _say(ctx, repo, emp, T.tv(emp, T.FOOD_STUB))
+            return
 
-    if emp.dialog_state == S_HR_QUESTION:
+    # ждём текст по состоянию диалога
+    if _state(emp) == S_HR_QUESTION:
         if not text:
             await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK))
             return
         _set_state(emp, None)
-        await create_hr_ticket(ctx, repo, emp, text, source="hr_command")
+        ticket = await create_hr_ticket(ctx, repo, emp, text, source="hr_command")
+        await _say(ctx, repo, emp, T.tv(emp, T.HR_DONE), ticket_id=getattr(ticket, "id", None))
         return
+    handler = hooks.state_handler(_state(emp))
+    if handler is not None:
+        await handler(ctx, repo, emp, text, body)
+        return
+
+    # ответ в открытое обращение и прочие перехваты до базы знаний
+    for pre in hooks.pre_routes():
+        if await pre(ctx, repo, emp, text, body):
+            return
 
     if not text:
         return
     await route_free_text(ctx, repo, emp, text)
 
 
+def _button_label(body: dict, payload: str) -> str | None:
+    """Подпись нажатой кнопки — из клавиатуры исходного сообщения."""
+    for att in body.get("attachments") or []:
+        if att.get("type") != "inline_keyboard":
+            continue
+        for row in (att.get("payload") or {}).get("buttons") or []:
+            for btn in row:
+                if btn.get("payload") == payload:
+                    return btn.get("text")
+    return None
+
+
 async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
-    cb = upd.get("callback") or {}
-    callback_id = cb.get("callback_id")
-    payload = cb.get("payload") or ""
-    user_id = (cb.get("user") or {}).get("user_id")
+    cbd = upd.get("callback") or {}
     msg = upd.get("message") or {}
-    orig_text = (msg.get("body") or {}).get("text") or ""
-    chat_id = (msg.get("recipient") or {}).get("chat_id")
+    body = msg.get("body") or {}
+    payload = cbd.get("payload") or ""
+    cb = Callback(ctx=ctx, repo=repo, callback_id=cbd.get("callback_id"), payload=payload,
+                  label=_button_label(body, payload), orig_text=body.get("text") or "", mid=body.get("mid"),
+                  chat_id=(msg.get("recipient") or {}).get("chat_id"),
+                  user_id=(cbd.get("user") or {}).get("user_id"))
+    try:
+        emp = await repo.employee_by_user(cb.user_id)
+        staff = None if emp else await repo.staff_by_user(cb.user_id)
+        if emp is None and staff is None:
+            await cb.toast(T.NOT_BOUND)
+            return
+        cb.is_staff = staff is not None
+        if emp is not None and cb.chat_id and not emp.chat_id:
+            emp.chat_id = cb.chat_id
+        await repo.add_message(employee_id=getattr(emp, "id", None), staff_id=getattr(staff, "id", None),
+                               chat_id=cb.chat_id, direction="in", text=f"[кнопка] {cb.label or payload}", mid=None)
 
-    # закрываем нажатие: сообщение заменяется отметкой выбора, клавиатура убирается
-    label = CHOICE_LABELS.get(payload)
-    if callback_id:
-        if label:
-            new_text = f"{orig_text}\n\n✅ {label}" if orig_text else f"✅ {label}"
-            await ctx.sender.answer(callback_id, message={"text": new_text, "attachments": [],
-                                                          "format": "markdown"}, key=chat_id)
-        elif payload == "consent:info":
-            await ctx.sender.answer(callback_id, message={"text": orig_text, "attachments": [],
-                                                          "format": "markdown"}, key=chat_id)
+        prefix = payload.split(":", 1)[0]
+        if prefix == "ob" and emp is not None:
+            await _onboarding_callback(cb, emp)
+        elif prefix == "hr" and emp is not None:
+            await _hr_callback(cb, emp)
         else:
-            await ctx.sender.answer(callback_id, notification="Принято", key=chat_id)
-
-    emp = await repo.employee_by_user(user_id)
-    if emp is None:
-        return
-    if chat_id and not emp.chat_id:
-        emp.chat_id = chat_id
-    await repo.add_message(employee_id=emp.id, staff_id=None, chat_id=chat_id or emp.chat_id,
-                           direction="in", text=f"[кнопка] {label or payload}", mid=None)
-
-    if payload == "consent:info" and emp.dialog_state == S_CONSENT:
-        await _say(ctx, repo, emp, T.CONSENT_INFO, kb_consent_only())
-    elif payload == "consent:yes" and emp.dialog_state == S_CONSENT:
-        await repo.add_consent(emp.id, "adaptation", True, T.CONSENT_TEXT_VERSION)
-        _set_state(emp, S_AI)
-        await _ask_current(ctx, repo, emp)
-    elif payload in ("ai:yes", "ai:no") and emp.dialog_state == S_AI:
-        await repo.add_consent(emp.id, "ai_analysis", payload == "ai:yes", T.CONSENT_TEXT_VERSION)
-        _set_state(emp, S_FORM)
-        await _ask_current(ctx, repo, emp)
-    elif payload in ("form:ty", "form:vy") and emp.dialog_state == S_FORM:
-        emp.address_form = "ty" if payload == "form:ty" else "vy"
-        emp.status = "active"
-        _set_state(emp, None)
-        await send_welcome_step(ctx, repo, emp)
-    elif payload == "hr:forward":
-        question = (emp.dialog_data or {}).get("last_question")
-        if question:
-            _set_state(emp, None, last_question=None)
-            await create_hr_ticket(ctx, repo, emp, question, source="unknown")
-        else:
-            _set_state(emp, S_HR_QUESTION)
-            await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK))
-    elif emp.dialog_state in ONBOARDING:
-        # старая кнопка не из текущего шага — повторим актуальный вопрос
-        await _ask_current(ctx, repo, emp)
+            handler = hooks.callback_handler(prefix)
+            if handler is not None:
+                await handler(cb, emp or staff)
+    finally:
+        # нажатие нужно закрыть всегда, иначе у пользователя крутится загрузка
+        if not cb.answered:
+            if cb.label:
+                await cb.mark()
+            else:
+                await cb.toast("Принято")
 
 
 async def on_bot_added(ctx: BotCtx, repo, upd: dict) -> None:

@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     # Выключить long polling бота (например, у второго разработчика)
     bot_enabled: bool = True
+    # Фоновые задачи (тик сценария, напоминания, сводка)
+    jobs_enabled: bool = True
+    # Mini App вне «МАКС» (браузер, разработка): пускать без initData как HR. В проде — false
+    dev_allow_no_init_data: bool = False
+
+    # База знаний
+    embedding_model: str = "BAAI/bge-m3"
 
 
 settings = Settings()

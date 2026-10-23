@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from app.bot import runtime
 from app.bot.api import UPDATE_TYPES, MaxApi
 from app.bot.handlers import BotCtx, handle_update
 from app.bot.sender import Sender
@@ -90,6 +91,7 @@ async def run_bot() -> None:
     api = MaxApi(settings.max_bot_token, settings.max_api_base_url, settings.ca_bundle_file)
     sender = Sender(api)
     ctx = BotCtx(sender=sender, bot_name=settings.max_bot_name, miniapp_url=settings.miniapp_url)
+    runtime.set_ctx(ctx)  # планировщик и API отправляют сообщения через тот же контекст
     try:
         await _startup(api)
         marker = await _load_marker()
@@ -120,4 +122,5 @@ async def run_bot() -> None:
         log.info("Бот остановлен")
         raise
     finally:
+        runtime.set_ctx(None)
         await api.close()

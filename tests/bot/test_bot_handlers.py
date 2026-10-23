@@ -3,7 +3,7 @@
 import pytest
 
 from app.bot import texts as T
-from app.bot.handlers import S_CONSENT, handle_update
+from app.bot.handlers import S_CONSENT, S_FORM, handle_update
 from tests.bot.conftest import ev_cb, ev_started, ev_text
 
 pytestmark = pytest.mark.asyncio
@@ -19,33 +19,50 @@ async def test_unknown_code(ctx, repo, api):
     assert api.sent[-1]["text"] == T.CODE_NOT_FOUND
 
 
-async def test_full_onboarding(ctx, repo, api):
+def _answer_buttons(answer) -> list[str]:
+    atts = answer["message"]["attachments"] or []
+    return [b["payload"] for a in atts for row in a["payload"]["buttons"] for b in row]
+
+
+async def test_full_onboarding_is_one_message(ctx, repo, api):
     emp = repo.add_employee()
     await handle_update(ctx, repo, ev_started(payload="INV-anna1"))
     assert emp.max_user_id == 100 and emp.chat_id == 500
-    assert emp.dialog_state == S_CONSENT
-    assert "Анна" in api.sent[-1]["text"]
-    assert api.buttons() == ["consent:yes", "consent:info"]
+    assert emp.dialog_state == S_FORM
+    assert "Анна" in api.sent[-1]["text"] and T.ASK_FORM in api.sent[-1]["text"]
+    assert api.buttons() == ["ob:ty", "ob:vy"]
+    sent_before = len(api.sent)
 
-    await handle_update(ctx, repo, ev_cb("consent:info"))
-    assert api.sent[-1]["text"] == T.CONSENT_INFO
-    assert api.buttons() == ["consent:yes"]
+    await handle_update(ctx, repo, ev_cb("ob:ty"))
+    assert emp.address_form == "ty" and emp.dialog_state == S_CONSENT
+    assert api.answers[-1]["message"]["text"] == T.CONSENT[0]
+    assert _answer_buttons(api.answers[-1]) == ["ob:consent", "ob:info"]
 
-    await handle_update(ctx, repo, ev_cb("consent:yes"))
-    assert api.answers[-1]["message"]["attachments"] == []
-    assert "✅ Согласен" in api.answers[-1]["message"]["text"]
+    await handle_update(ctx, repo, ev_cb("ob:info"))
+    assert T.CONSENT_INFO[0] in api.answers[-1]["message"]["text"]
+    assert _answer_buttons(api.answers[-1]) == ["ob:consent"]
+
+    await handle_update(ctx, repo, ev_cb("ob:consent"))
     assert [c.purpose for c in repo.consents] == ["adaptation"]
-    assert api.buttons() == ["ai:yes", "ai:no"]
+    assert _answer_buttons(api.answers[-1]) == ["ob:ai_yes", "ob:ai_no"]
 
-    await handle_update(ctx, repo, ev_cb("ai:no"))
+    await handle_update(ctx, repo, ev_cb("ob:ai_no"))
     assert repo.consents[-1].purpose == "ai_analysis" and repo.consents[-1].given is False
-    assert api.sent[-1]["text"] == T.ASK_FORM
+    assert emp.status == "active" and emp.dialog_state is None and emp.dialog_data["onboarded"]
+    final = api.answers[-1]["message"]
+    assert final["text"].startswith("Очень приятно с тобой познакомиться, Анна!")
+    assert final["attachments"] == []
+    # всё знакомство после первого сообщения — правка на месте, новых сообщений нет
+    assert len(api.sent) == sent_before
 
-    await handle_update(ctx, repo, ev_cb("form:ty"))
-    assert emp.address_form == "ty" and emp.status == "active" and emp.dialog_state is None
-    assert any(m["text"] == "Очень приятно с тобой познакомиться, Анна!" for m in api.sent)
-    # все исходящие записаны в messages
-    assert sum(1 for m in repo.messages if m.direction == "out") == len(api.sent)
+
+async def test_test_account_takes_name_from_profile(ctx, repo, api):
+    emp = repo.add_employee(is_test=True, first_name="Тест", full_name="Тестовый Новичок")
+    upd = ev_started(payload="INV-anna1")
+    upd["user"].update({"first_name": "Иван", "last_name": "Петров"})
+    await handle_update(ctx, repo, upd)
+    assert emp.first_name == "Иван" and emp.full_name == "Иван Петров"
+    assert "Привет, Иван!" in api.sent[-1]["text"]
 
 
 async def test_text_code_fallback(ctx, repo, api):
@@ -53,14 +70,19 @@ async def test_text_code_fallback(ctx, repo, api):
     await handle_update(ctx, repo, ev_text("привет"))
     assert api.sent[-1]["text"] == T.ASK_CODE
     await handle_update(ctx, repo, ev_text("INV-anna1"))
-    assert emp.max_user_id == 100 and emp.dialog_state == S_CONSENT
+    assert emp.max_user_id == 100 and emp.dialog_state == S_FORM
 
 
-async def test_text_during_onboarding_repeats_question(ctx, repo, api):
+async def test_text_during_onboarding_points_to_buttons(ctx, repo, api):
     repo.add_employee(max_user_id=100, chat_id=500, dialog_state=S_CONSENT)
     await handle_update(ctx, repo, ev_text("а что дальше?"))
-    assert api.sent[-2]["text"] == T.PRESS_BUTTON
-    assert api.buttons() == ["consent:yes", "consent:info"]
+    assert api.sent[-1]["text"] == T.PRESS_BUTTON[1]
+
+
+async def test_unknown_button_is_closed(ctx, repo, api):
+    repo.add_employee(max_user_id=100, chat_id=500, status="active", address_form="ty")
+    await handle_update(ctx, repo, ev_cb("zz:1"))
+    assert api.answers[-1]["notification"] == "Принято"
 
 
 async def test_staff_binding_with_panel(ctx, repo, api):
@@ -68,7 +90,7 @@ async def test_staff_binding_with_panel(ctx, repo, api):
     staff = repo.add_staff()
     await handle_update(ctx, repo, ev_started(payload="STF-olga1"))
     assert staff.max_user_id == 100
-    assert "Вы подключены как HR" in api.sent[-1]["text"]
+    assert "вы подключены как HR" in api.sent[-1]["text"]
     btn = api.sent[-1]["attachments"][0]["payload"]["buttons"][0][0]
     assert btn == {"type": "open_app", "text": "Открыть панель", "web_app": "korsik_test_bot"}
 
@@ -82,8 +104,8 @@ async def test_hr_command_creates_ticket_and_notifies_group(ctx, repo, api):
     t = repo.tickets[-1]
     assert t.source == "hr_command" and t.status == "new" and t.employee_id == emp.id
     assert t.text == "Когда выдадут пропуск?"
-    assert api.sent[-2]["text"] == T.HR_DONE[0]
-    assert api.sent[-1]["chat_id"] == -900
+    assert api.sent[-2]["chat_id"] == -900
+    assert api.sent[-1]["text"] == T.HR_DONE[0]
     assert emp.dialog_state is None
 
 
@@ -100,6 +122,8 @@ async def test_free_text_then_forward(ctx, repo, api):
     await handle_update(ctx, repo, ev_cb("hr:forward"))
     assert repo.tickets[-1].source == "unknown"
     assert repo.tickets[-1].text == "Где взять спецодежду?"
+    # «Передать HR?» превратилось в «Передал HR» в том же сообщении
+    assert api.answers[-1]["message"]["text"] == T.HR_DONE[0]
 
 
 async def test_bot_added_saves_group(ctx, repo, api):

@@ -149,3 +149,39 @@ class MaxApi:
         if notification:
             body["notification"] = notification
         return await self._request("POST", "/answers", params={"callback_id": callback_id}, json=body)
+
+    async def edit_message(self, mid: str, text: str, *, attachments: list[dict] | None = None,
+                           fmt: str | None = "markdown") -> dict:
+        """PUT /messages: изменить отправленное сообщение. attachments=None — вложения не трогать, [] — убрать."""
+        body: dict[str, Any] = {"text": text}
+        if attachments is not None:
+            body["attachments"] = attachments
+        if fmt:
+            body["format"] = fmt
+        return await self._request("PUT", "/messages", params={"message_id": mid}, json=body)
+
+    async def delete_message(self, mid: str) -> dict:
+        return await self._request("DELETE", "/messages", params={"message_id": mid})
+
+    async def upload(self, kind: str, filename: str, data: bytes, content_type: str) -> dict:
+        """POST /uploads?type=image|file|video|audio → url для загрузки → загрузка файла.
+
+        Возвращает payload вложения: для image — ответ сервера загрузки (photos/token),
+        для file/video/audio — {"token": ...} из первого шага.
+        """
+        info = await self._request("POST", "/uploads", params={"type": kind})
+        url = info.get("url")
+        if not url:
+            raise MaxApiError(500, "upload.no_url", str(info)[:200])
+        resp = await self._client.post(url, files={"data": (filename, data, content_type)},
+                                       timeout=httpx.Timeout(60.0))
+        if resp.status_code >= 400:
+            raise MaxApiError(resp.status_code, "upload.failed", resp.text[:300])
+        try:
+            uploaded = resp.json()
+        except ValueError:
+            uploaded = {}
+        if kind == "image":
+            return uploaded
+        return {"token": info.get("token") or uploaded.get("token")}
+
