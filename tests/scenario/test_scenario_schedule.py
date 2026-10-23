@@ -14,8 +14,8 @@ XLSX = Path("data/raw/korsik_scenario.xlsx")
 
 def emp(site, work_type="production", **kw):
     # выход в пн 2 ноября 2026 (4 ноября — праздник), ИС — 3 месяца
-    base = dict(start_date=date(2026, 11, 2), probation_end=date(2027, 2, 1), site_code=site,
-                work_type=work_type, tz="Europe/Moscow")
+    base = {"start_date": date(2026, 11, 2), "probation_end": date(2027, 2, 1), "site_code": site,
+                "work_type": work_type, "tz": "Europe/Moscow"}
     base.update(kw)
     return EmployeeCtx(**base)
 
@@ -25,18 +25,18 @@ def S(n, rule, **kw):
 
 
 STEPS = [
-    S(1, dict(kind="before_start", days_before=3)),
-    S(2, dict(kind="workday", n=1, time="10:00")),
-    S(3, dict(kind="workday", n=1, time="11:00"), site_tags=["GTP"]),
-    S(4, dict(kind="workday", n=1, time="11:00"), site_tags=["Luzhniki"]),
-    S(5, dict(kind="workday", n=1, time="18:00"), office_only=True),
-    S(6, dict(kind="workday", n=3, time="17:30")),
-    S(7, dict(kind="calendar_offset", days=10), site_tags=["GrPP", "Luzhniki"]),
-    S(8, dict(kind="month_start", month=3, time="09:00")),
-    S(9, dict(kind="calendar_offset", months=2, weeks=2)),
-    S(10, dict(kind="probation_end", time="09:00")),
-    S(11, dict(kind="event", event="answer", after_step=2, answer="Да"), site_tags=["GTP"]),
-    S(12, dict(kind="workday", n=2, time="10:00"), gate="recruiter_go"),
+    S(1, {"kind": "before_start", "days_before": 3}),
+    S(2, {"kind": "workday", "n": 1, "time": "10:00"}),
+    S(3, {"kind": "workday", "n": 1, "time": "11:00"}, site_tags=["GTP"]),
+    S(4, {"kind": "workday", "n": 1, "time": "11:00"}, site_tags=["Luzhniki"]),
+    S(5, {"kind": "workday", "n": 1, "time": "18:00"}, office_only=True),
+    S(6, {"kind": "workday", "n": 3, "time": "17:30"}),
+    S(7, {"kind": "calendar_offset", "days": 10}, site_tags=["GrPP", "Luzhniki"]),
+    S(8, {"kind": "month_start", "month": 3, "time": "09:00"}),
+    S(9, {"kind": "calendar_offset", "months": 2, "weeks": 2}),
+    S(10, {"kind": "probation_end", "time": "09:00"}),
+    S(11, {"kind": "event", "event": "answer", "after_step": 2, "answer": "Да"}, site_tags=["GTP"]),
+    S(12, {"kind": "workday", "n": 2, "time": "10:00"}, gate="recruiter_go"),
 ]
 
 

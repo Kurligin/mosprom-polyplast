@@ -59,10 +59,10 @@ def _attachment(raw: str | None) -> str | None:
     """«Изображение 4» → img_04.png, «Изображение Открытка №1» → card_01.png, «ФОТО» → events_photos.jpg."""
     if not raw:
         return None
-    m = re.search(r"открытка\s*№?\s*(\d+)", raw, re.I)
+    m = re.search(r"открытка\s*№?\s*(\d+)", raw, re.IGNORECASE)
     if m:
         return f"card_{int(m.group(1)):02d}.png"
-    m = re.search(r"изображени\w*\s*(\d+)", raw, re.I)
+    m = re.search(r"изображени\w*\s*(\d+)", raw, re.IGNORECASE)
     if m:
         return f"img_{int(m.group(1)):02d}.png"
     if raw.strip().lower() == "фото":
@@ -85,10 +85,10 @@ def _split_text(text: str) -> tuple[str, list[str]]:
 def _is_survey(layout: str | None, text: str) -> bool:
     if layout and re.search(r"\bопрос", layout.lower()):
         return True
-    if re.match(r"\s*(вопрос\s*\d|ответы:)", text, re.I):
+    if re.match(r"\s*(вопрос\s*\d|ответы:)", text, re.IGNORECASE):
         return True
-    questions = re.findall(r"^\s*\d+[.)]\s+.+\?", text, re.M)
-    scales = re.search(r"\(да/нет\)|шкала|\(1\s*-", text, re.I)
+    questions = re.findall(r"^\s*\d+[.)]\s+.+\?", text, re.MULTILINE)
+    scales = re.search(r"\(да/нет\)|шкала|\(1\s*-", text, re.IGNORECASE)
     return len(questions) >= 2 or bool(scales and questions)
 
 
@@ -120,7 +120,7 @@ def _branch_replies(tail: str, opts: list[str]) -> list[tuple[str | None, bool]]
         lines = [ln for ln in para.strip().splitlines() if ln.strip() and not ln.strip().startswith("+")]
         if not lines:
             continue
-        m = re.match(r"\s*Если\s+(.+?):\s*(.*)", lines[0], re.I)
+        m = re.match(r"\s*Если\s+(.+?):\s*(.*)", lines[0], re.IGNORECASE)
         if m:
             body = [m.group(2)] if m.group(2).strip() else []
             branches.append((m.group(1).strip().lower(), body + lines[1:]))

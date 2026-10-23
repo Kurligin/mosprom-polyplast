@@ -31,7 +31,11 @@
 - `engine.tick()` — задача `scenario_tick` раз в минуту:
   - наступившие шаги → `deliveries` (ключ идемпотентности) → отправка;
   - шаг-опрос → `app.surveys.engine.start_survey`.
-- **Знакомство в боте покрывает шаги 1.1–1.4.** Движок их не отправляет и помечает доставленными.
+- **Знакомство в боте покрывает шаги «0» (описание и приветствие) и 1.1–1.4.** Движок их не отправляет и помечает доставленными.
+- Шаг-опрос определяет модуль опросов: `survey_for_step(номер строки)`. Шаги 20/21 (доступы) и 36 тоже уходят в опросы.
+- Дополнительно: `engine.gates(emp)`, `engine.step_title(row, emp)`, `time_travel(..., to="now")`, `upcoming_steps(..., now=None)`, `uploads.send(...)`, `store.warm_uploads(session)`.
+- Ключ шага: `<момент>|<площадки>|<порядковый номер>`, например `wd1@1200|GTP|1`. Пометки доставки («знакомство в боте», «устарел», «перемотка», «письмо») пишутся в `Delivery.error`.
+- В состоянии `sc:intro` вопрос со знаком «?» уходит в базу знаний, состояние сохраняется.
 - `engine.adaptation_day(emp, now=None) -> int` — 1 = день выхода, ≤ 0 = до выхода. `engine.probation_days(emp) -> int`.
 - `engine.upcoming_steps(session, emp, limit=5) -> list[{"at": iso, "title": str}]`.
 - `engine.time_travel(session, emp, to: str) -> {"employee_id", "day", "message"}`, где `to` ∈ `-2 | 1 | 3 | 14 | 60 | end`.

@@ -1,7 +1,7 @@
 # Команды разработки: всё выполняется внутри Docker Compose
 DC := docker compose
 
-.PHONY: up down logs migrate seed shell test psql links import kb eval eval-flags tunnel
+.PHONY: up down logs migrate seed shell test psql links import kb eval eval-flags tunnel local-llm
 
 up:
 	$(DC) up -d --build
@@ -33,7 +33,7 @@ psql:
 
 # Сценарий из xlsx (data/raw/, не в git) → таблица scenario_steps
 import:
-	$(DC) exec app python -m app.scenario.store data/raw/korsik_scenario.xlsx
+	$(DC) exec app python -m app.scenario.store data/raw/korsik_scenario.xlsx --upload
 
 # Документы из docs/ и справочные статьи сценария → база знаний (с эмбеддингами)
 kb:
@@ -51,4 +51,11 @@ eval-flags:
 tunnel:
 	$(DC) --profile tunnel up -d tunnel
 	@sleep 6; $(DC) logs tunnel 2>&1 | grep -o 'https://[a-z0-9]*\.lhr\.life' | tail -1
+
+# Локальная LLM (закрытый контур): Ollama + открытая модель. Затем в .env:
+# LLM_PROVIDER=openai, LLM_BASE_URL=http://ollama:11434/v1, LLM_MODEL=$(LOCAL_MODEL)
+LOCAL_MODEL ?= qwen2.5:3b
+local-llm:
+	$(DC) --profile local-llm up -d ollama
+	$(DC) exec ollama ollama pull $(LOCAL_MODEL)
 

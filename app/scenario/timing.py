@@ -10,8 +10,8 @@ ORDINALS = {
     "шест": 6, "седьм": 7, "восьм": 8, "девят": 9, "десят": 10,
 }
 
-_TIME_RE = re.compile(r"(?:\bв\s*)?\b(\d{1,2})[:.](\d{2})\b", re.I)
-_OFFICE_RE = re.compile(r"для\s+(?:сотрудников\s+офиса|офисных)", re.I)
+_TIME_RE = re.compile(r"(?:\bв\s*)?\b(\d{1,2})[:.](\d{2})\b", re.IGNORECASE)
+_OFFICE_RE = re.compile(r"для\s+(?:сотрудников\s+офиса|офисных)", re.IGNORECASE)
 
 
 def _norm(s: str) -> str:

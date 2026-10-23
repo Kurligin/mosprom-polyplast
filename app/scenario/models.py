@@ -78,9 +78,7 @@ class StepSpec(BaseModel):
         """Шаг для площадки и типа работы новичка."""
         if self.site_tags and site_code not in self.site_tags:
             return False
-        if self.office_only and work_type != "office":
-            return False
-        return True
+        return not (self.office_only and work_type != "office")
 
 
 class EmployeeCtx(BaseModel):
