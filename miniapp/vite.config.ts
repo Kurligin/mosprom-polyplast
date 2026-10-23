@@ -19,7 +19,7 @@ const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
 }
 
-/** Запрос пришёл не с этой машины и не из локальной сети, а через HTTPS-туннель (адрес *.lhr.life и т. п.) */
+/** Запрос пришёл не с этой машины и не из локальной сети, а по внешнему адресу */
 function viaTunnel(hostHeader: string | undefined) {
   const host = (hostHeader ?? '').replace(/:\d+$/, '').toLowerCase()
   if (!host || host === 'localhost' || host === 'miniapp' || host.endsWith('.local')) return false

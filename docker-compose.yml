@@ -48,16 +48,6 @@ services:
     depends_on:
       - app
 
-  # HTTPS-туннель к Mini App (make tunnel): «МАКС» открывает Mini App только по HTTPS.
-  # localhost.run по SSH: Cloudflare-туннели из нашей сети блокируются. Адрес меняется при переподключении.
-  tunnel:
-    image: alpine:3.20
-    command: sh -c "apk add -q --no-cache openssh-client && ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 80:miniapp:5173 nokey@localhost.run"
-    restart: unless-stopped
-    depends_on:
-      - miniapp
-    profiles: ["tunnel"]
-
 volumes:
   pgdata:
   miniapp_node_modules:
