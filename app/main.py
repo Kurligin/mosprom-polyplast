@@ -67,6 +67,10 @@ async def lifespan(app: FastAPI):
         bot_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await bot_task
+    with contextlib.suppress(Exception):
+        from app.reports import render
+
+        await render.close()  # браузер Playwright для картинки сводки
     await engine.dispose()
 
 
