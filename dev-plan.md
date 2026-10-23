@@ -9,14 +9,14 @@
 | Слой | Что используем |
 |---|---|
 | Язык и бэкенд | Python 3.12, FastAPI, asyncio, Pydantic v2, SQLAlchemy 2 (async) + Alembic |
-| Бот «МАКС» | `maxapi` (Python-SDK в стиле aiogram), long polling; состояние диалога — в Postgres |
+| Бот «МАКС» | свой тонкий клиент на `httpx` по OpenAPI-схеме (`github.com/max-messenger/api-schema`), long polling; состояние диалога и маркер `/updates` — в Postgres |
 | Планировщик | APScheduler (AsyncIOScheduler), тик раз в минуту; производственный календарь РФ на 2026 год (JSON) |
 | База данных | PostgreSQL 16 + pgvector (HNSW, cosine) + полнотекстовый поиск (`russian`, GIN) |
 | Эмбеддинги | `BAAI/bge-m3` на CPU (sentence-transformers, CPU-сборка torch), размерность 1024 |
 | LLM | GigaChat API (Python-SDK `gigachat`, сертификат НУЦ Минцифры в образе) |
 | Разбор документов | Docling (PDF и PPTX → структура с номерами страниц и слайдов) |
 | Импорт сценария | openpyxl |
-| Mini App | React + Vite + TypeScript, UI-кит MAX UI, MAX Bridge (`window.WebApp`), `motion` (анимации), Lucide (иконки) |
+| Mini App | React + Vite + TypeScript, свои компоненты на токенах (MAX UI требует другую версию React), MAX Bridge (`window.WebApp`), `motion` (анимации), Lucide (иконки) |
 | Картинка отчёта | HTML-шаблон (Jinja2) → PNG через Playwright (Chromium + шрифты с кириллицей) |
 | Запуск | Docker Compose (локально — Docker Desktop, arm64; сервер — VPS), Caddy (HTTPS) |
 | Качество | pytest, ruff, скрипт оценки на эталоне |
@@ -75,11 +75,11 @@
 ## 4. Модули
 
 ### 4.1. Бот и интеграция с «МАКС» (`bot/`)
-- Long polling через `maxapi` запускается задачей в `lifespan` FastAPI; при старте снимается webhook-подписка (`DELETE /subscriptions`).
+- Long polling запускается задачей в `lifespan` FastAPI; при старте снимаются webhook-подписки (`GET /subscriptions` → `DELETE /subscriptions?url=…`).
 - Обработчики: `bot_started`, `message_created`, `message_callback`, `bot_stopped`, `bot_added` (HR-группа).
 - **Привязка:** ссылка `max.ru/<бот>?start=<код>` (код случайный, `[A-Za-z0-9_-]`, без персональных данных) → `bot_started.payload` → привязка `max_user_id` и `chat_id` к карточке новичка или сотрудника (HR, руководитель, глава подбора). Запасной вход — ввод кода текстом. Формат ссылки проверяем на тестовом боте в первый день.
 - **Первое сообщение:** согласие на сопровождение и отдельно — на ИИ-анализ ответов; выбор «ты/вы».
-- **Меню команд** через `PATCH /me`: `/start`, `/hr`, `/food`. Inline-кнопки — `callback`, `link`, `open_app`.
+- **Меню команд** через `PATCH /me/commands`: `/start`, `/hr`, `/food`. Inline-кнопки — `callback`, `link`, `open_app`.
 - **Маршрут свободного текста** по `dialog_state`: ждём ответ опроса → `surveys/`; ждём текст для обращения → `tickets/`; ответ в течение 30 минут после сообщения HR → в этот тикет; иначе → вопрос в `kb/`.
 - Каждый `message_callback` закрывается `POST /answers` (сообщение заменяется отметкой выбора).
 - **Очередь отправки:** не больше 2 сообщений/с в диалог и 30 запросов/с на бота; 429 → повтор с паузой; 403 `chat.denied` → статус «остановил бота» без повторов; текст длиннее 3500 символов делится на части.
