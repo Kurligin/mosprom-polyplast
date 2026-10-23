@@ -72,7 +72,7 @@
 
 ## Обращения — `app/tickets`
 
-- `service.create_ticket(ctx, repo, emp, text, *, source, category=None, is_personal=False) -> Ticket`. Регистрируется через `hooks.on_create_ticket`. Обращение уходит закреплённому рекрутеру, в HR-группу — уведомление с кнопкой «Открыть в Mini App»; `Ticket.group_mid` хранит id уведомления.
+- `service.create_ticket(ctx, repo, emp, text, *, source, category=None, is_personal=False, level=None) -> Ticket` (`level="red"` — красный флаг). Регистрируется через `hooks.on_create_ticket`. Обращение уходит закреплённому рекрутеру, в HR-группу — уведомление с кнопкой «Открыть в Mini App»; `Ticket.group_mid` хранит id уведомления.
 - `service.reply(session, ticket, staff, text, *, add_to_kb=False, kb_site=None) -> Ticket`:
   - отправляет ответ новичку с подписью «Имя (HR)»;
   - первый ответ ставит статус `in_progress`;
