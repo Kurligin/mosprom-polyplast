@@ -133,6 +133,8 @@ export interface NewEmployeeResult {
   employee: EmployeeShort
   invite_link: string // https://max.ru/<bot>?start=<code>
   code: string
+  /** выход назначен на выходной или праздник: текст для HR, показываем на листе с QR */
+  warning?: string | null
 }
 
 export type TicketStatus = 'open' | 'in_progress' | 'closed'

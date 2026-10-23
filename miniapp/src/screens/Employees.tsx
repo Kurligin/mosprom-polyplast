@@ -64,12 +64,14 @@ export default function Employees() {
         </button>
       }
     >
-      {(data?.length ?? 0) > 0 && (
+      {/* пока идёт скелетон, поиск уже на месте: список не сдвигается, когда данные придут */}
+      {((data?.length ?? 0) > 0 || (showSkeleton && !data)) && (
         <label className="search">
           <Search size={17} />
           <input
             type="search"
             placeholder="Имя или должность"
+            disabled={!data}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             enterKeyHint="search"
@@ -107,7 +109,7 @@ export default function Employees() {
           transition={{ duration: 0.25, delay: gi * 0.03, ease: [0.23, 1, 0.32, 1] }}
         >
           <div className="section-header">
-            <span>{name(g.code)}</span>
+            <h2>{name(g.code)}</h2>
             <span className="num">{g.items.length}</span>
           </div>
           <div className="group">

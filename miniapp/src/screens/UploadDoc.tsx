@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AlertTriangle, Check, CheckCircle2, FileText, Lock } from 'lucide-react'
 import { api, toApiError, isDemoData } from '../api/client'
 import type { KbDocument, SiteCode } from '../api/types'
-import { Cell, FilePick, Progress, Screen, Section, Switch, plural, useAsync } from '../components/ui'
+import { Cell, FilePick, Progress, Screen, Section, Switch, fmtNum, plural, useAsync } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
 import { useSites } from '../lib/sites'
@@ -80,7 +80,7 @@ export default function UploadDoc() {
       <Screen title="Документ" back={{ label: nav.backLabel, onClick: nav.pop }} noTabbar demo={phase.demo} revealTitleAt={44}>
         <div className="result">
           <CheckCircle2 className="result-icon success" />
-          <h2>Готово: {n} {plural(n, ['фрагмент', 'фрагмента', 'фрагментов'])}</h2>
+          <h1>Готово: {fmtNum(n)} {plural(n, ['фрагмент', 'фрагмента', 'фрагментов'])}</h1>
           <p>«{phase.doc.title}» в базе. Бот уже отвечает по нему{phase.doc.trade_secret ? ', а в облачную нейросеть документ не уходит' : ''}.</p>
         </div>
         <div className="stack-actions">
@@ -112,7 +112,7 @@ export default function UploadDoc() {
             <input
               value={title}
               onChange={(e) => { setTitle(e.target.value); setTitleTouched(true) }}
-              placeholder="Правила внутреннего трудового распорядка"
+              placeholder="Например, правила внутреннего распорядка"
               disabled={sending}
               enterKeyHint="done"
             />

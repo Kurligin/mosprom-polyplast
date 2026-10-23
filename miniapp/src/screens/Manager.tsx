@@ -14,7 +14,7 @@ import { IntroSection, PlanSection, ProbationHeader } from './EmployeeCard'
  * Пора встретиться: дата встречи уже наступила у новичка. Сравниваем даты, а не номер встречи с днём адаптации:
  * встреча «3-го дня» — на 3-й рабочий день, а день адаптации календарный.
  */
-const meetingDue = (e: EmployeeShort) => !!e.next_meeting && e.next_meeting.date <= employeeToday(e)
+const meetingDue = (e: EmployeeShort) => !!e.next_meeting?.date && e.next_meeting.date <= employeeToday(e)
 
 export function ManagerHome() {
   const nav = useNav()
@@ -60,7 +60,9 @@ export function ManagerHome() {
                       <div className="chips">
                         <span className={`chip ${overdue ? 'warning' : 'primary'}`}>
                           <CalendarClock />
-                          {overdue ? 'пора встретиться' : e.next_meeting.title.toLowerCase()} · {fmtDate(e.next_meeting.date)}
+                          {/* название встречи может обрезаться, дата — никогда */}
+                          <span className="clamp-1">{overdue ? 'пора встретиться' : (e.next_meeting.title || 'встреча').toLowerCase()}</span>
+                          {e.next_meeting.date && <span className="num" style={{ flex: 'none' }}>· {fmtDate(e.next_meeting.date)}</span>}
                         </span>
                       </div>
                     )}
@@ -72,7 +74,8 @@ export function ManagerHome() {
           <div className="section-footer">Ответы опросов и обращения новичков видит только HR.</div>
         </section>
       )}
-      {roleParam === 'manager' && (
+      {/* после списка: иначе кнопка мелькает наверху и прыгает вниз, когда новички загрузятся */}
+      {roleParam === 'manager' && (data || error) && (
         <div className="stack-actions">
           <button
             className="btn plain small"
@@ -132,7 +135,9 @@ export function ManagerEmployee({ id }: { id: number }) {
                   )
                 }
                 title={m.title}
-                meta={`${fmtDate(m.date)}${m.done ? ' · проведена' : m.id === next?.id && m.date <= employeeToday(e) ? ' · пора встретиться' : ''}`}
+                meta={[fmtDate(m.date), m.done ? 'проведена' : m.id === next?.id && m.date && m.date <= employeeToday(e) ? 'пора встретиться' : null]
+                  .filter(Boolean)
+                  .join(' · ') || undefined}
               />
             ))}
           </Section>

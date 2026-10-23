@@ -5,8 +5,8 @@ import type { SiteCode, Ticket } from '../api/types'
 import { Chip, ErrorState, Screen, SkeletonList, Switch, fmtDate, fmtTime, useAsync, useToast } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
-import { useSites } from '../lib/sites'
-import { CategoryIcon } from './Tickets'
+import { shortSiteName, useSites } from '../lib/sites'
+import { CategoryIcon, ticketWho } from './Tickets'
 
 const STATUS_LABEL = { open: 'Открыто', in_progress: 'В работе', closed: 'Закрыто' } as const
 
@@ -29,6 +29,17 @@ export default function TicketView({ id }: { id: number }) {
   const [kbSite, setKbSite] = useState<SiteCode | 'all'>('all')
   const [busy, setBusy] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
+  // высота поля ответа меняется (переключатель базы, растущий текст): лента не уходит под него
+  const composerRef = useRef<HTMLDivElement>(null)
+  const [composerH, setComposerH] = useState(0)
+  const hasComposer = !!t && t.status !== 'closed'
+  useEffect(() => {
+    const el = composerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setComposerH(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [hasComposer])
 
   useEffect(() => {
     if (t) setKbSite(t.site)
@@ -72,7 +83,7 @@ export default function TicketView({ id }: { id: number }) {
   }
 
   const composer = t && t.status !== 'closed' && (
-    <div className="composer">
+    <div className="composer" ref={composerRef}>
       <div className="composer-inner">
         <div className="composer-actions">
           {t.status === 'open' && (
@@ -86,21 +97,22 @@ export default function TicketView({ id }: { id: number }) {
         </div>
         {/* личный вопрос в базу не добавляется: переключатель не показываем */}
         {!t.is_personal && <div className="composer-kb">
-          <BookOpen size={18} color="var(--text-secondary)" />
-          <label>{toKb ? 'Ответ в базу для' : 'Добавить ответ в базу'}</label>
+          <BookOpen size={18} aria-hidden />
+          <label htmlFor="reply-to-kb"><span>{toKb ? 'В базу для' : 'Добавить ответ в базу'}</span></label>
           {toKb && (
             <select aria-label="Площадка для ответа" value={kbSite} onChange={(e) => setKbSite(e.target.value as SiteCode | 'all')}>
               <option value="all">Все площадки</option>
               {sites.map((s) => (
-                <option key={s.code} value={s.code}>{s.name}</option>
+                <option key={s.code} value={s.code}>{shortSiteName(s.code, s.name)}</option>
               ))}
             </select>
           )}
-          <Switch checked={toKb} onChange={setToKb} label="Добавить ответ в базу" />
+          <Switch id="reply-to-kb" checked={toKb} onChange={setToKb} label="Добавить ответ в базу" />
         </div>}
         <div className="composer-input">
           <textarea
             rows={1}
+            aria-label="Ответ новичку"
             placeholder="Ответ новичку"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -123,26 +135,27 @@ export default function TicketView({ id }: { id: number }) {
   let lastDay = ''
   return (
     <Screen
-      title={t?.category_label ?? 'Обращение'}
+      title={t?.category_label || 'Обращение'}
       back={{ label: nav.backLabel, onClick: nav.pop }}
       noTabbar
       demo={demo}
       bottom={composer}
-      bottomPad={t && t.status !== 'closed' ? 200 : 24}
+      bottomPad={hasComposer ? Math.max(composerH, 172) + 16 : 24}
     >
       {showSkeleton && <SkeletonList rows={2} />}
       {error && <ErrorState error={error} onRetry={reload} title={error.status === 404 ? 'Обращение не найдено' : undefined} />}
       {t && (
         <>
           <div className="ticket-info">
-            <div className={`ticket-cat${t.red_flag ? ' danger' : ''}`} style={{ fontSize: 17 }}>
-              <CategoryIcon t={t} />
-              {t.category_label}
-              <span style={{ flex: 1 }} />
+            <div className="ticket-info-head">
+              <h1 className={`ticket-cat${t.red_flag ? ' danger' : ''}`} style={{ fontSize: 17 }}>
+                <CategoryIcon t={t} />
+                <span>{t.category_label || 'Обращение'}</span>
+              </h1>
               <Chip tone={t.status === 'open' ? 'warning' : t.status === 'in_progress' ? 'primary' : 'success'}>{STATUS_LABEL[t.status]}</Chip>
             </div>
             <div className="ticket-info-row num">
-              {t.employee_name} · {siteName(t.site)} · день {t.day}
+              {ticketWho(t, siteName(t.site))}
               {t.assignee && <> · отвечает {t.assignee}</>}
             </div>
             {t.red_flag && (
@@ -156,8 +169,9 @@ export default function TicketView({ id }: { id: number }) {
           <div className="chat">
             {t.messages.map((m) => {
               const d = fmtDate(m.created_at)
-              const showDay = d !== lastDay
-              lastDay = d
+              // у сообщения без даты разделитель дня не рисуем
+              const showDay = !!d && d !== lastDay
+              if (d) lastDay = d
               const mine = m.author === 'hr'
               return (
                 <div key={m.id} style={{ display: 'contents' }}>

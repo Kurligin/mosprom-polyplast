@@ -111,7 +111,7 @@ export default function NewEmployee() {
       <p className="lead">После сохранения появится ссылка и QR-код для оффера.</p>
 
       <section className="section">
-        <div className="section-header">Сотрудник</div>
+        <h2 className="section-header">Сотрудник</h2>
         <div className="group">
           <label className="field">
             <span className="field-label">Фамилия и имя</span>
@@ -119,7 +119,7 @@ export default function NewEmployee() {
               value={form.full_name}
               onChange={(e) => set('full_name', e.target.value)}
               onBlur={() => form.full_name && setTouched(true)}
-              placeholder="Иванов Иван"
+              placeholder="Например, Иванов Иван"
               autoComplete="off"
               autoCapitalize="words"
               enterKeyHint="next"
@@ -132,7 +132,7 @@ export default function NewEmployee() {
             <input
               value={form.position}
               onChange={(e) => set('position', e.target.value)}
-              placeholder="Оператор экструдера"
+              placeholder="Например, оператор экструдера"
               enterKeyHint="done"
             />
           </label>
@@ -140,7 +140,7 @@ export default function NewEmployee() {
       </section>
 
       <section className="section">
-        <div className="section-header">Где работает</div>
+        <h2 className="section-header">Где работает</h2>
         <div className="group">
           <div className="field">
             <span className="field-label">Площадка</span>
@@ -178,7 +178,7 @@ export default function NewEmployee() {
       </section>
 
       <section className="section">
-        <div className="section-header">Сроки</div>
+        <h2 className="section-header">Сроки</h2>
         <div className="group">
           <label className="field">
             <span className="field-label">Первый рабочий день</span>
@@ -196,7 +196,7 @@ export default function NewEmployee() {
       </section>
 
       <section className="section">
-        <div className="section-header">Кто ведёт</div>
+        <h2 className="section-header">Кто ведёт</h2>
         <div className="group">
           {staffSelect('Руководитель', form.manager_id, (v) => set('manager_id', v), managers)}
           {staffSelect('Рекрутер', form.recruiter_id, (v) => set('recruiter_id', v), recruiters)}
@@ -216,6 +216,7 @@ export default function NewEmployee() {
         link={result?.invite_link ?? null}
         name={result?.employee.full_name ?? ''}
         site={siteName(result?.employee.site)}
+        warning={result?.warning}
       />
     </Screen>
   )

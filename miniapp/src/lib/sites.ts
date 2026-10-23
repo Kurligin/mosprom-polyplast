@@ -2,6 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { isDemoData, loadSites } from '../api/client'
 import type { Site, SiteCode } from '../api/types'
 
+/** Короткое имя площадки для тесных мест: «Офис «Лужники»» → «Лужники», «… (GrPP)» → «GrPP», длинное без скобок → код */
+export function shortSiteName(code: string, name: string | null | undefined) {
+  const n = name ?? code
+  const quoted = /«([^»]+)»/.exec(n)?.[1]
+  if (quoted) return quoted
+  const paren = /\(([^)]+)\)/.exec(n)?.[1]
+  if (paren) return paren
+  return n.length <= 10 ? n : code
+}
+
 const listeners = new Set<() => void>()
 
 /** Перечитать площадки везде, где открыт справочник (после добавления новой) */

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AlertTriangle, Check, FileSpreadsheet, MapPinPlus } from 'lucide-react'
 import { api, isDemoData, toApiError } from '../api/client'
 import type { ScenarioReport, SiteCode } from '../api/types'
-import { Cell, Chip, FilePick, Progress, Screen, Section, plural, useToast } from '../components/ui'
+import { Cell, Chip, FilePick, Progress, Screen, Section, StatNum, fmtNum, plural, useToast } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
 import { refreshSites, useSites } from '../lib/sites'
@@ -22,7 +22,7 @@ const TIMEZONES: [string, string][] = [
   ['Asia/Kamchatka', 'Камчатка, UTC+12'],
 ]
 
-const steps = (n: number) => `${n} ${plural(n, ['шаг', 'шага', 'шагов'])}`
+const steps = (n: number) => `${fmtNum(n)} ${plural(n, ['шаг', 'шага', 'шагов'])}`
 
 /** Новая площадка из xlsx: HR подтверждает название и часовой пояс */
 function NewSiteForm({ code, demo }: { code: SiteCode; demo: boolean }) {
@@ -116,9 +116,9 @@ export default function ScenarioImport() {
         <p className="lead">{file?.name}</p>
 
         <div className="stats">
-          <div className="stat"><b className="num">{r.steps}</b><span>{plural(r.steps, ['шаг', 'шага', 'шагов'])}</span></div>
-          <div className="stat"><b className="num">{r.surveys}</b><span>{plural(r.surveys, ['опрос', 'опроса', 'опросов'])}</span></div>
-          <div className="stat"><b className="num">{r.attachments}</b><span>{plural(r.attachments, ['вложение', 'вложения', 'вложений'])}</span></div>
+          <div className="stat"><StatNum value={r.steps} /><span>{plural(r.steps, ['шаг', 'шага', 'шагов'])}</span></div>
+          <div className="stat"><StatNum value={r.surveys} /><span>{plural(r.surveys, ['опрос', 'опроса', 'опросов'])}</span></div>
+          <div className="stat"><StatNum value={r.attachments} /><span>{plural(r.attachments, ['вложение', 'вложения', 'вложений'])}</span></div>
         </div>
 
         {bySite.length > 0 && (
@@ -127,13 +127,11 @@ export default function ScenarioImport() {
               <Cell
                 key={code}
                 title={siteName(code)}
-                value={
-                  <span className="cell-value-row">
-                    {r.new_sites.includes(code) && <Chip tone="primary">новая</Chip>}
-                    <span className="num">{steps(n)}</span>
-                  </span>
-                }
-              />
+                value={<span className="num">{steps(n)}</span>}
+              >
+                {/* метка под названием: справа место только под число шагов */}
+                {r.new_sites.includes(code) && <div className="chips"><Chip tone="primary">новая</Chip></div>}
+              </Cell>
             ))}
           </Section>
         )}

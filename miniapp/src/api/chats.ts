@@ -1,5 +1,6 @@
 import { initDataHeader, isInMax } from '../lib/bridge'
 import { ApiError, FORCE_MOCKS, roleParam } from './client'
+import { MOCK_MODE } from './mocks'
 import type { SiteCode, WorkType } from './types'
 
 /*
@@ -144,6 +145,25 @@ let demoChats: TeamChat[] | null = null
 function demoList(): TeamChat[] {
   if (!demoChats) {
     const base = { link: null, sites: [], work_type: null, for_intro: false, is_hr_group: false, active: true, added: 0, links_sent: 0, created_at: null }
+    // стресс-режимы разработки (?mocks=worst | empty | many), см. mocks.ts
+    if (MOCK_MODE === 'empty') return (demoChats = [])
+    if (MOCK_MODE === 'many') {
+      return (demoChats = Array.from({ length: 300 }, (_, i): TeamChat => ({
+        ...base, id: -5000 - i, title: `Чат смены ${i + 1}`, audience: (['none', 'all', 'sites'] as const)[i % 3],
+        sites: i % 3 === 2 ? ['GTP'] : [], is_hr_group: i === 0, active: i % 17 !== 0, members_count: 10 + i, added: i % 9,
+        link: i % 4 ? `https://max.ru/join/chat-${i}` : null,
+      })))
+    }
+    if (MOCK_MODE === 'worst') {
+      return (demoChats = [
+        { ...base, id: -900, title: 'HR ПОЛИПЛАСТИК: адаптация, обращения новичков и красные флаги (только для HR, без руководителей) 🔒', audience: 'none', is_hr_group: true, members_count: null },
+        { ...base, id: -910, title: 'Команда производства GTP: экструзия, грануляция и упаковка 🏭 (смены А, Б, В)', audience: 'sites', sites: ['GTP', 'Luzhniki', 'GrPP', 'KZN-2', 'Kazan_Zeleny_Dol_promploshchadka_2'], work_type: 'production', for_intro: true, members_count: 12480, added: 1284, links_sent: 312 },
+        { ...base, id: -920, title: 'polyplastic_gtp_extrusion_line3_night_shift_2026', audience: 'all', link: 'https://max.ru/join/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', members_count: 1, added: 1, links_sent: 0 },
+        { ...base, id: -930, title: '🍲', audience: 'sites', sites: [], members_count: 0 },
+        { ...base, id: -940, title: 'Ю', audience: 'none', members_count: null },
+        { ...base, id: -950, title: 'Старый чат участка экструзии, из которого Корсика удалили в прошлом году', audience: 'sites', sites: ['GrPP'], active: false, members_count: 52 },
+      ])
+    }
     demoChats = [
       { ...base, id: -900, title: 'HR ПОЛИПЛАСТИК (демо)', audience: 'none', is_hr_group: true, members_count: 6 },
       { ...base, id: -910, title: 'Общий чат ПОЛИПЛАСТИК (демо)', audience: 'all', link: 'https://max.ru/join/demo-general', members_count: 240, added: 14, links_sent: 2 },

@@ -25,7 +25,7 @@ export function ProbationHeader({ e, hideSignals }: { e: Employee; hideSignals?:
     <>
       <div className="hero">
         <Avatar name={e.full_name} large />
-        <h2>{e.full_name}</h2>
+        <h1>{e.full_name}</h1>
         <p className="hero-meta">
           {e.position && <span>{e.position}</span>}
           <span className="hero-work">
@@ -268,6 +268,7 @@ export default function EmployeeCard({ id }: { id: number }) {
             {upcoming.map((s, i) => (
               <Cell
                 key={`${s.title}-${i}`}
+                className="top"
                 inset={50}
                 left={<span className={`step-dot ${s.status === 'current' ? 'now' : ''}`} />}
                 title={s.title}
@@ -305,7 +306,7 @@ export default function EmployeeCard({ id }: { id: number }) {
                 onClick={() => nav.push({ name: 'ticket', id: t.id })}
                 left={t.red_flag ? <ShieldAlert size={20} color="var(--danger)" /> : <MessageSquare size={20} color="var(--primary)" />}
                 inset={50}
-                title={<span style={t.red_flag ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{t.category_label}</span>}
+                title={<span style={t.red_flag ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{t.category_label || 'Обращение'}</span>}
                 meta={<span className="clamp-1" style={{ display: 'block' }}>{t.preview}</span>}
                 value={<span className="cell-meta">{t.status === 'closed' ? 'закрыто' : fmtAgo(t.created_at)}</span>}
                 chevron
@@ -315,9 +316,13 @@ export default function EmployeeCard({ id }: { id: number }) {
 
           <Section header="Контакты">
             {contacts.length === 0 && <Cell title="Руководитель и рекрутер не указаны" />}
+            {contacts.length > 0 && !e.manager && (
+              <Cell title="Руководитель не назначен" meta="Корсику некому напоминать о встречах с новичком" />
+            )}
             {contacts.map((c) => (
               <Cell
                 key={`${c.role}-${c.id}`}
+                className="top"
                 left={<Avatar name={c.name} />}
                 inset={68}
                 title={c.name}
@@ -348,9 +353,10 @@ function ChatsSection({ e }: { e: Employee }) {
       {chats.map((c) => (
         <Cell
           key={c.chat_id}
+          className="top"
           left={<MessagesSquare size={20} color={c.status === 'added' ? 'var(--success)' : c.status === 'failed' ? 'var(--danger)' : 'var(--primary)'} />}
           inset={50}
-          title={<span className="clamp-1">{c.title}</span>}
+          title={<span className="clamp-2">{c.title}</span>}
           meta={[EMPLOYEE_CHAT_STATUS[c.status], c.reason, c.intro && c.status !== 'intro' ? 'опубликовали представление' : null].filter(Boolean).join(' · ')}
           value={c.at ? <span className="cell-meta">{fmtDate(c.at)}</span> : undefined}
         />

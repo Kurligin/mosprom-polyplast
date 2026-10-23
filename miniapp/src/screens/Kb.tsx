@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { BookOpen, Check, FileSpreadsheet, FileText, FileUp, Lock, MessageSquareText, Pencil, Presentation, Upload } from 'lucide-react'
 import { api, toApiError } from '../api/client'
 import type { KbDocument } from '../api/types'
-import { Cell, Chip, Empty, ErrorState, Screen, Section, Segmented, SkeletonList, plural, useAsync, useToast } from '../components/ui'
+import { Cell, Chip, Empty, ErrorState, Screen, Section, Segmented, SkeletonList, fmtNum, plural, useAsync, useToast } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
-import { useSites } from '../lib/sites'
+import { shortSiteName, useSites } from '../lib/sites'
 
 const KIND_ICON = { pdf: FileText, pptx: Presentation, xlsx: FileSpreadsheet, md: FileText, answer: MessageSquareText }
 const KIND_LABEL = { pdf: 'PDF', pptx: 'PPTX', xlsx: 'Сценарий', md: 'Текст', answer: 'Ответ HR' }
 
-const fmtDay = (d: string) => {
+const fmtDay = (d: string | null | undefined) => {
+  if (!d) return ''
   const t = new Date(d.length === 10 ? `${d}T00:00:00` : d)
   return Number.isNaN(t.getTime()) ? '' : t.toLocaleDateString('ru-RU')
 }
@@ -25,7 +26,7 @@ function DocRow({ d, onConfirm, busy }: { d: KbDocument; onConfirm: () => void; 
       <div className="cell-body">
         <div className="cell-title doc-title">{d.title}</div>
         <div className="cell-meta num">
-          {[KIND_LABEL[d.kind] ?? d.kind.toUpperCase(), fmtDay(d.version_date), `${d.fragments}\u00A0${plural(d.fragments, ['фрагмент', 'фрагмента', 'фрагментов'])}`]
+          {[KIND_LABEL[d.kind] ?? d.kind.toUpperCase(), fmtDay(d.version_date), `${fmtNum(d.fragments)}\u00A0${plural(d.fragments, ['фрагмент', 'фрагмента', 'фрагментов'])}`]
             .filter(Boolean)
             .join(' · ')}
         </div>
@@ -33,7 +34,7 @@ function DocRow({ d, onConfirm, busy }: { d: KbDocument; onConfirm: () => void; 
           <div className="chips">
             {d.status === 'draft' && <Chip tone="warning">Черновик</Chip>}
             {d.trade_secret && <Chip tone="danger" icon={<Lock />}>КТ</Chip>}
-            {sites.map((c) => <Chip key={c}>{name(c)}</Chip>)}
+            {sites.map((c) => <Chip key={c}>{shortSiteName(c, name(c))}</Chip>)}
           </div>
         )}
         {d.status === 'draft' && (
@@ -54,7 +55,9 @@ function AnswerRow({ d, onConfirm, busy }: { d: KbDocument; onConfirm: (text?: s
   const draft = d.status === 'draft'
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(d.text ?? '')
-  const meta = `${d.sites && d.sites.length > 1 ? d.sites.map(name).join(', ') : name(d.site)}${fmtDay(d.version_date) ? ` · ${fmtDay(d.version_date)}` : ''}`
+  const short = (c: string) => shortSiteName(c, name(c))
+  const where = d.sites && d.sites.length > 1 ? d.sites.map(short).join(', ') : d.site ? short(d.site) : name(null)
+  const meta = [where, fmtDay(d.version_date)].filter(Boolean).join(' · ')
   return (
     <div className="cell answer-cell" style={{ ['--sep-inset' as string]: '16px', alignItems: 'flex-start' }}>
       <div className="cell-body">
@@ -166,8 +169,8 @@ export default function Kb() {
           ) : (
             <section className="section">
               <div className="section-header">
-                <span>По ним отвечает бот</span>
-                <span className="num">{total} {plural(total, ['фрагмент', 'фрагмента', 'фрагментов'])}</span>
+                <h2>По ним отвечает бот</h2>
+                <span className="num">{fmtNum(total)} {plural(total, ['фрагмент', 'фрагмента', 'фрагментов'])}</span>
               </div>
               <div className="group">
                 {docs.map((d) => (
@@ -209,7 +212,7 @@ export default function Kb() {
         ) : (
           <section className="section">
             <div className="section-header">
-              <span>{drafts ? `Ждут подтверждения: ${drafts} из ${answers.length}` : 'Все ответы работают'}</span>
+              <h2>{drafts ? `Ждут подтверждения: ${drafts} из ${answers.length}` : 'Все ответы работают'}</h2>
             </div>
             <div className="group">
               {answers.map((d) => (

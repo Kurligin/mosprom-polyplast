@@ -5,13 +5,20 @@ import type { TicketShort, TicketStatus } from '../api/types'
 import { Empty, ErrorState, Screen, Segmented, SkeletonList, fmtAgo, fmtDue, useAsync } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
-import { useSites } from '../lib/sites'
+import { shortSiteName, useSites } from '../lib/sites'
 
 export function CategoryIcon({ t }: { t: TicketShort }) {
   if (t.red_flag) return <ShieldAlert />
   if (t.category === 'unknown') return <CircleHelp />
   if (t.category === 'contact_request') return <PhoneCall />
   return <MessageSquare />
+}
+
+/** «Петров Илья · GTP · день 3»: пустые части пропускаем, чтобы не было висячих точек */
+export function ticketWho(t: Pick<TicketShort, 'employee_name' | 'day'>, site: string) {
+  return [t.employee_name?.trim() || 'Новичок', site, typeof t.day === 'number' ? (t.day < 1 ? 'до\u00A0выхода' : `день\u00A0${t.day}`) : null]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function TicketRow({ t, onClick }: { t: TicketShort; onClick: () => void }) {
@@ -23,7 +30,7 @@ function TicketRow({ t, onClick }: { t: TicketShort; onClick: () => void }) {
         <div className="ticket-head">
           <span className={`ticket-cat${t.red_flag ? ' danger' : ''}`}>
             <CategoryIcon t={t} />
-            <span className="clamp-1">{t.category_label}</span>
+            <span className="clamp-2">{t.category_label || 'Обращение'}</span>
             {t.red_flag && <span className="chip danger">Красный флаг</span>}
           </span>
           {due ? (
@@ -36,9 +43,7 @@ function TicketRow({ t, onClick }: { t: TicketShort; onClick: () => void }) {
           )}
         </div>
         {t.preview && <div className="ticket-quote clamp-2">«{t.preview}»</div>}
-        <div className="cell-meta num clamp-2">
-          {t.employee_name} · {name(t.site)} · день {t.day}
-        </div>
+        <div className="cell-meta num clamp-2">{ticketWho(t, shortSiteName(t.site, name(t.site)))}</div>
       </div>
     </button>
   )

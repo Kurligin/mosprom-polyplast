@@ -1,4 +1,4 @@
-import { Copy, Share } from 'lucide-react'
+import { CalendarClock, Copy, Share } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { copyText, share } from '../lib/bridge'
 import { Sheet, useToast } from './ui'
@@ -11,21 +11,29 @@ type Props = {
   site: string
   title?: string
   text?: string
+  /** выход назначен на нерабочий день: текст от сервера (POST /api/employees → warning) */
+  warning?: string | null
 }
 
 /** Лист со ссылкой и QR-кодом для оффера */
-export default function InviteSheet({ open, onClose, link, name, site, title = 'Ссылка готова', text }: Props) {
+export default function InviteSheet({ open, onClose, link, name, site, title = 'Ссылка готова', text, warning }: Props) {
   const toast = useToast()
   return (
     <Sheet open={open} onClose={onClose} label="Ссылка для новичка">
       {link && (
         <>
-          <h3>{title}</h3>
+          <h2>{title}</h2>
           <p>
-            {name} · {site}
+            {[name, site].filter(Boolean).join(' · ')}
             <br />
             {text ?? 'Добавьте QR-код или ссылку в оффер. По ней новичок откроет Корсика в «МАКС».'}
           </p>
+          {warning && (
+            <div className="sheet-warning" role="status">
+              <CalendarClock aria-hidden />
+              <span>{warning}</span>
+            </div>
+          )}
           <div className="qr-box">
             <QRCodeSVG value={link} size={168} level="M" fgColor="#111827" bgColor="#FFFFFF" title={`QR-код: ${link}`} />
           </div>

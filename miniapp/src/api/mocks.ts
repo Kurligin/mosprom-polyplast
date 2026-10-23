@@ -6,6 +6,21 @@ import type {
   TicketStatus, Topic, UploadDocumentInput, WorkType,
 } from './types'
 
+/**
+ * Стресс-тест интерфейса (скилл break-ui), только в разработке:
+ *  - ?mocks=worst — худший реалистичный случай: длинные ФИО и названия, имя из одной буквы, e-mail без пробелов,
+ *    огромные числа, эмодзи, пропущенные поля и пустые даты;
+ *  - ?mocks=empty — ни одного новичка, обращения, документа, чата;
+ *  - ?mocks=many — по 300 элементов в каждом списке.
+ */
+export type MockMode = 'worst' | 'empty' | 'many'
+const readMockMode = (): MockMode | null => {
+  const m = new URLSearchParams(location.search).get('mocks')
+  return m === 'worst' || m === 'empty' || m === 'many' ? m : null
+}
+// в продакшене здесь константа null: сборщик выбрасывает стресс-данные из бандла
+export const MOCK_MODE: MockMode | null = import.meta.env.DEV ? readMockMode() : null
+
 const sites: Site[] = [
   { code: 'GTP', name: 'GTP', tz: 'Europe/Moscow' },
   { code: 'Luzhniki', name: 'Luzhniki', tz: 'Europe/Moscow' },
@@ -120,7 +135,7 @@ function surveysFor(id: number, day: number, pending: number): SurveyItem[] {
 const newCode = () => Math.random().toString(36).slice(2, 10).toUpperCase()
 const inviteLink = (code: string) => `https://max.ru/korsik_bot?start=${code}`
 
-const employees: Employee[] = SEED.map(([full_name, position, site, work_type, day, probation_days, flags], i) => {
+function buildEmployee([full_name, position, site, work_type, day, probation_days, flags]: Seed, i: number): Employee {
   const id = i + 1
   const start = addDays(today, -(day - 1))
   const meetings = meetingsFor(id, start, day, probation_days)
@@ -164,7 +179,9 @@ const employees: Employee[] = SEED.map(([full_name, position, site, work_type, d
     tickets: [],
     meetings,
   }
-})
+}
+
+const employees: Employee[] = SEED.map(buildEmployee)
 
 let ticketSeq = 1
 let messageSeq = 1
@@ -291,43 +308,6 @@ const topics: Topic[] = [
   { topic: 'Питание и столовая', count: 9, peak_days: 'дни 1–5' },
 ]
 
-/*
- * Худший реалистичный случай (скилл break-ui): только в dev, адрес ?mocks=worst.
- * Длинные ФИО с отчеством и двойной фамилией, двухбуквенное имя, длинные названия площадки и документа,
- * все чипы сразу, срок больше испытательного, ровно 1 фрагмент, битая ссылка на фото, нет руководителя.
- */
-if (import.meta.env.DEV && new URLSearchParams(location.search).get('mocks') === 'worst') {
-  sites[2].name = 'Группа ПОЛИПЛАСТИК, площадка Наро-Фоминск (GrPP)'
-  const [a, b, c, d] = employees
-  a.full_name = 'Константинопольская-Римская Александра Владиславовна'
-  a.position = 'Ведущий инженер-технолог по переработке полимерных материалов'
-  a.pending_surveys = 3
-  a.connected = false
-  a.intro = {
-    text: 'Всем привет! '.concat('Я отвечаю за качество гранулята и люблю длинные сообщения. '.repeat(8)),
-    photo_url: 'https://example.invalid/photo-that-does-not-exist.jpg',
-    at: new Date().toISOString(),
-  }
-  a.manager = null
-  a.invite_link = 'https://max.ru/korsik_polyplastic_adaptation_bot?start=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'
-  b.full_name = 'Ли Ю'
-  b.position = ''
-  c.day = 95
-  c.probation_days = 90
-  d.day = -14
-  d.current_step = null
-  tickets[0].category_label = 'Намерение уйти после испытательного срока'
-  tickets[0].employee_name = a.full_name
-  tickets[0].messages[1].text = 'Здравствуйте! '.concat('У нас на участке постоянно меняют график, и я не понимаю, кому писать. '.repeat(5))
-  tickets[0].preview = tickets[0].messages[1].text
-  documents[0].title = 'Положение о порядке предоставления ежегодных оплачиваемых отпусков работникам ООО «Группа ПОЛИПЛАСТИК» и дочерних обществ, редакция 2026'
-  documents[1].fragments = 1
-  documents[6].title = 'Можно ли получить вторую пару спецобуви, если первая промокла, а смена начинается завтра в семь утра?'
-  documents[6].text = 'Да. '.concat('Вторую пару выдают на складе СИЗ у проходной №2 с 8:00 до 16:00, возьмите пропуск. '.repeat(4))
-  topics[0].topic = 'Пропуск, проход через турникеты и парковка для сотрудников'
-  topics[0].count = 1284
-}
-
 /* ---------- Аналитика: демо-данные, все люди синтетические ---------- */
 
 const stageOf = (day: number, total: number): StageCode =>
@@ -426,7 +406,7 @@ function mockAnalytics(site?: SiteCode | null): Analytics {
     mood_total: 26 - i * 5, low_data: false,
     mood_share: { positive: (14 - i * 3) / (26 - i * 5), neutral: 5 / (26 - i * 5), negative: (7 - i * 2) / (26 - i * 5) },
   }))
-  return {
+  const out: Analytics = {
     generated_at: new Date().toISOString(), site: site ?? null, weeks: 4,
     window: { start: iso(addDays(today, -27)), end: iso(today), label: 'за 4 недели' }, threshold: 5,
     kpi: { newbies: list.filter((e) => e.day <= e.probation_days).length, newbies_week: 2, respondents: 14, avg_score: 7.4,
@@ -441,7 +421,228 @@ function mockAnalytics(site?: SiteCode | null): Analytics {
     sites: sites.map((s) => ({ code: s.code, name: s.name })),
     synthetic: true,
   }
+  if (MOCK_MODE === 'empty') {
+    // так отвечает сервер, когда новичков ещё нет: этапы и недели есть, цифр нет
+    out.funnel.forEach((f) => Object.assign(f, { count: 0, risk: 0, risk_high: 0 }))
+    out.kpi = { newbies: 0, newbies_week: 0, respondents: 0, avg_score: null, signals_open: 0, signals_red_open: 0, risks: 0, risks_high: 0 }
+    out.mood = {
+      sites: [], low_data: [],
+      weeks: out.mood.weeks.map((w) => ({ ...w, respondents: 0, shown: false, mood: { positive: 0, neutral: 0, negative: 0 },
+        mood_total: 0, mood_share: { positive: null, neutral: null, negative: null } })),
+    }
+    out.clusters = []
+    out.clusters_low_data = true
+  }
+  if (MOCK_MODE === 'worst') {
+    out.kpi.newbies = 12480
+    out.risks = { ...out.risks, high: 1284, medium: 312 }
+    out.funnel.forEach((f, i) => Object.assign(f, { count: [0, 4812, 12480, 1, 307, 98765][i] ?? f.count }))
+    out.funnel[1].risk = 1284
+    // неделя без даты начала: бэкенд может прислать null
+    ;(out.mood.weeks[0] as { start: string | null }).start = null
+    if (out.mood.sites[2]) {
+      Object.assign(out.mood.sites[2], { respondents: 1, newbies: 1284, avg_score: null, low_data: true, mood_total: 0,
+        mood: { positive: 0, neutral: 0, negative: 0 }, mood_share: { positive: null, neutral: null, negative: null } })
+    }
+    out.mood.low_data = [sites[2]?.name ?? 'GrPP', 'Казань, площадка «Зелёный Дол»']
+  }
+  return out
 }
+
+/* ---------- Стресс-режимы: ?mocks=worst | empty | many ---------- */
+
+const SURNAMES = ['Иванов', 'Смирнов', 'Кузнецов', 'Попов', 'Васильев', 'Соколов', 'Михайлов', 'Новиков', 'Морозов', 'Семёнов',
+  'Козлов', 'Степанов', 'Николаев', 'Орлов', 'Андреев', 'Макаров', 'Захаров', 'Зайцев', 'Борисов', 'Яковлев']
+const MALE = ['Александр', 'Дмитрий', 'Максим', 'Сергей', 'Андрей', 'Алексей', 'Артём', 'Илья', 'Кирилл', 'Михаил']
+const FEMALE = ['Анна', 'Мария', 'Елена', 'Дарья', 'Алина', 'Ирина', 'Екатерина', 'Ольга', 'Наталья', 'Татьяна']
+
+function applyWorst() {
+  sites[1].name = 'Офис «Лужники Сити»'
+  sites[2].name = 'Группа ПОЛИПЛАСТИК, площадка Наро-Фоминск (GrPP)'
+  sites.push({ code: 'KZN-2', name: 'Казань, площадка «Зелёный Дол»', tz: 'Europe/Moscow' })
+  RECRUITERS.push({ id: 203, name: '🌸 Ксения Лебедева', role: 'Рекрутер', phone: null })
+  MANAGERS.push({ id: 104, name: 'Шарипова-Константинова Гульнара Рашидовна', role: 'Руководитель направления', phone: null })
+
+  const [a, b, c, d, e, f, g, h, k] = employees
+  // 1. Длинное ФИО с двойной фамилией, длинная должность, все пропуски сразу
+  Object.assign(a, {
+    full_name: 'Константинопольская-Римская Александра Владиславовна',
+    position: 'Ведущий инженер-технолог по переработке полимерных материалов и контролю качества гранулята',
+    pending_surveys: 3,
+    connected: false,
+    manager: null,
+    recruiter: {
+      id: 204, name: 'Шарипова-Константинова Гульнара Рашидовна',
+      role: 'Ведущий специалист по подбору персонала производственных площадок, e-mail g.sharipova-konstantinova@polyplastic-group-holding.example.com',
+      phone: null,
+    },
+    invite_link: 'https://max.ru/korsik_polyplastic_adaptation_bot?start=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789',
+    intro: {
+      text: 'Всем привет! 👋 '.concat('Я отвечаю за качество гранулята и люблю длинные сообщения. '.repeat(6), 'Пишите: aleksandra.konstantinopolskaya-rimskaya@polyplastic-group-holding.example.com 🙌'),
+      photo_url: 'https://example.invalid/photo-that-does-not-exist.jpg',
+      at: null,
+    },
+    chats: [
+      { chat_id: -1001, title: 'Команда производства GTP: экструзия, грануляция и упаковка 🏭 (смены А, Б, В)', status: 'added', at: hoursAgo(30), reason: null, link: null, intro: true },
+      { chat_id: -1002, title: 'polyplastic_gtp_extrusion_line3_night_shift_2026', status: 'link', at: null, reason: 'не пустили настройки приватности: новичок запретил добавлять себя в группы', link: 'https://max.ru/join/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', intro: false },
+      { chat_id: -1003, title: '🍲', status: 'failed', at: hoursAgo(2), reason: null, link: null, intro: false },
+      { chat_id: -1004, title: 'Курилка', status: 'pending', at: null, reason: null, link: null, intro: false },
+    ],
+  })
+  a.steps = [
+    { day: 1, title: 'Знакомство с Корсиком', date: null, status: 'done' },
+    { day: null, title: 'Вводный инструктаж по охране труда, пожарной и промышленной безопасности на участке экструзии и грануляции', date: null, status: 'current' },
+    { title: 'Без дня и даты', status: 'upcoming' },
+  ]
+  a.surveys = [
+    { id: 901, title: 'Первые дни', day: 3, status: 'done', score: null },
+    { id: 902, title: 'Опрос «Две недели»: как вам наставник, рабочее место и график смен', day: 14, status: 'missed', score: null },
+    { id: 903, title: 'Месяц', day: 30, status: 'done', score: 10 },
+  ]
+  // 2. Имя из двух букв, пустая должность
+  Object.assign(b, { full_name: 'Ли Ю', position: '' })
+  // 3. Срок давно закончился
+  Object.assign(c, { day: 95, probation_days: 90 })
+  // 4. До выхода две недели, шага нет
+  Object.assign(d, { day: -14, current_step: null })
+  // 5. Имя из одной буквы, без встречи
+  Object.assign(e, { full_name: 'Ю', next_meeting: null })
+  // 6. Все сигналы сразу, огромные счётчики, первый день не пришёл
+  Object.assign(f, {
+    red_flag: true, open_tickets: 12, pending_surveys: 3, stopped: true, first_day: null,
+    recruiter: RECRUITERS[2],
+    next_meeting: { id: 990, day: 85, title: 'Итоговая встреча по испытательному сроку с руководителем и HR', date: null, done: false },
+  })
+  // 7. Должность без пробелов
+  Object.assign(g, { position: 'Специалист-по-закупкам-полимерного-сырья/ПЭНД/ПЭВД/ПП/ПВХ/АБС/ПЭТ' })
+  // 8. Эмодзи и почта в должности не встречаются, а вот в имени из профиля «МАКС» бывают
+  Object.assign(h, { full_name: '🌸 Ксения Лебедева' })
+  // 9. Шестимесячный срок, последний день
+  Object.assign(k, { day: 179, probation_days: 180 })
+
+  // обращения: имена из новых ФИО, длинные тексты, эмодзи, почта, пропуски
+  for (const t of tickets) t.employee_name = employees.find((x) => x.id === t.employee_id)?.full_name ?? t.employee_name
+  const [t0, t1, t2, t3, t4] = tickets
+  t0.category_label = 'Намерение уйти после испытательного срока'
+  t0.messages[1].text = 'Здравствуйте! '.concat('У нас на участке постоянно меняют график, и я не понимаю, кому писать. '.repeat(5))
+  t0.preview = t0.messages[1].text
+  t1.messages[2].text = 'Спасибо!! 🙏🙏🙏 А кому писать заявление и за сколько дней? 😅'
+  t1.messages[1].source = 'Правила внутреннего трудового распорядка П 3.11-07, раздел 6 «Время отдыха», п. 6.9.2, стр. 18–19, приложение № 3'
+  t1.due_at = null
+  t2.category_label = ''
+  t2.employee_name = ''
+  t3.messages[2].text = 'Роман, добрый день! Пришлите скан заявления на hr-adaptation-requests@polyplastic-group-holding.example.com, и я позвоню вам завтра до 12:00 📞'
+  t3.messages[2].author_name = 'Константинопольская-Римская Александра (HR)'
+  t3.assignee = 'Константинопольская-Римская А. В.'
+  t4.messages[0].created_at = ''
+  t4.day = 1284
+  recount()
+  // счётчики после пересчёта: огромные значения у одного новичка
+  Object.assign(f, { red_flag: true, open_tickets: 12 })
+
+  documents[0].title = 'Положение о порядке предоставления ежегодных оплачиваемых отпусков работникам ООО «Группа ПОЛИПЛАСТИК» и дочерних обществ, редакция 2026'
+  documents[0].fragments = 18432
+  documents[1].fragments = 1
+  documents[2].title = 'Prikaz_No_412-k_ot_15.03.2026_o_vvedenii_Polozheniya_o_kommercheskoy_tayne_final_v12.pdf'
+  documents[2].version_date = ''
+  documents[2].sites = ['GTP', 'Luzhniki', 'GrPP', 'KZN-2']
+  documents[2].trade_secret = true
+  documents[6].title = 'Можно ли получить вторую пару спецобуви, если первая промокла, а смена начинается завтра в семь утра?'
+  documents[6].text = 'Да 👍 '.concat('Вторую пару выдают на складе СИЗ у проходной №2 с 8:00 до 16:00, возьмите пропуск. '.repeat(4), 'Вопросы: siz-sklad-prohodnaya-2@polyplastic-group-holding.example.com')
+  documents[7].sites = ['GTP', 'Luzhniki', 'GrPP', 'KZN-2']
+
+  topics[0].topic = 'Пропуск, проход через турникеты и парковка для сотрудников'
+  topics[0].count = 1284
+  topics[1].topic = 'Столовая 🍲'
+  topics[1].peak_days = ''
+  topics[2].topic = 'Спецодежда/СИЗ/обувь/перчатки/каски/очки/беруши'
+  topics[2].count = 98765
+
+  CLUSTERS[0].label = 'Доступы к корпоративным системам, учётные записи и пропуск на территорию'
+  CLUSTERS[0].trend_text = 'в 12 раз больше, чем месяц назад, особенно на производственных площадках'
+  CLUSTERS[0].count = 12480
+  CLUSTERS[0].people = 1284
+  CLUSTERS[0].sites = [
+    { code: 'GTP', count: 6480, prev: 200, people: 640 },
+    { code: 'GrPP', count: 3000, prev: 100, people: 300 },
+    { code: 'KZN-2', count: 2000, prev: 0, people: 200 },
+    { code: 'other', name: 'Другие площадки', count: 1000, prev: 2, people: 144 },
+  ]
+  CLUSTERS[0].quotes.unshift({
+    text: 'Третий день без учётки 😤 '.concat('Айтишники говорят, что заявку должен подать руководитель, а руководитель говорит, что это делает HR. '.repeat(3)),
+    mood: 'negative', at: hoursAgo(5),
+  })
+  CLUSTERS[1].quotes = [{ text: 'Ссылка на инструкцию не открывается: https://portal.polyplastic-group-holding.example.com/docs/onboarding/instructions/line3?tab=safety&lang=ru', mood: 'neutral', at: hoursAgo(9) }]
+
+  RISKS.push([5, 'high', [
+    reason('red_flag', 'high', 'красные сигналы', 'Красный сигнал: травля, сообщение ночью, HR ещё не ответил', 3),
+    reason('intent', 'high', 'намерение уйти', 'Думает об уходе: «если ничего не изменится, напишу заявление в пятницу» 😞', 10),
+    reason('meeting_overdue', 'medium', 'просрочены встречи', 'Встреча на 3-й день: просрочена на 12 рабочих дней'),
+    reason('meeting_overdue', 'medium', 'просрочены встречи', 'Встреча на 30-й день: просрочена на 2 рабочих дня'),
+    reason('ticket_waiting', 'medium', 'нет ответа HR', 'Нет ответа HR 4 дня'),
+    reason('bot_stopped', 'medium', 'отключил бота', 'Отключил бота'),
+  ]])
+}
+
+function applyEmpty() {
+  employees.length = 0
+  tickets.length = 0
+  documents.length = 0
+  topics.length = 0
+  CLUSTERS.length = 0
+  RISKS.length = 0
+  MANAGERS.length = 0
+  RECRUITERS.length = 0
+}
+
+function applyMany() {
+  const N = 300
+  for (let i = 0; i < 9; i++) sites.push({ code: `S${i + 4}`, name: `Площадка ${['Казань', 'Тула', 'Пермь', 'Самара', 'Уфа', 'Омск', 'Тверь', 'Курск', 'Сочи'][i]}`, tz: 'Europe/Moscow' })
+  for (let i = employees.length; i < N; i++) {
+    const female = i % 2 === 1
+    const name = `${SURNAMES[i % SURNAMES.length]}${female ? 'а' : ''} ${(female ? FEMALE : MALE)[(i * 7) % 10]}`
+    const [, position, , work] = SEED[i % SEED.length]
+    const site = sites[i % sites.length].code
+    employees.push(buildEmployee([name, position, site, work, ((i * 37) % 120) - 10, 90, { pending_surveys: i % 5 === 0 ? 1 : 0, go: i % 3 === 0, connected: i % 7 !== 0 }], i))
+  }
+  const cats: [Ticket['category'], string, boolean][] = [
+    ['question', 'Отпуск', false], ['unknown', 'Не знаю → HR', false], ['safety', 'Охрана труда', true], ['contact_request', 'Просьба связаться', false], ['question', 'Зарплата', false],
+  ]
+  for (let i = tickets.length; i < N; i++) {
+    const e = employees[(i * 13) % employees.length]
+    const [cat, label, red] = cats[i % cats.length]
+    const status: TicketStatus = i % 10 < 7 ? 'open' : i % 10 < 9 ? 'in_progress' : 'closed'
+    tickets.push(makeTicket(e.id, cat, label, red, status, i * 0.7 + 1, status === 'closed' ? null : (i % 4) * 6 - 4, [
+      msg('employee', e.full_name, `Вопрос №${i + 1}: где оформить пропуск для автомобиля?`, i * 0.7 + 1),
+      msg('bot', 'Корсик', 'Не нашёл ответа в документах. Передал вопрос HR, ответ придёт сюда.', i * 0.7 + 1),
+    ]))
+  }
+  recount()
+  for (let i = documents.length; i < N; i++) {
+    const answer = i % 3 === 0
+    documents.push({
+      id: 1000 + i, title: answer ? `Ответ HR №${i}: как получить справку 2-НДФЛ` : `Памятка №${i}: порядок работы на участке ${i % 12 + 1}`,
+      kind: answer ? 'answer' : i % 2 ? 'pdf' : 'pptx', trade_secret: i % 11 === 0, status: i % 4 === 0 ? 'draft' : 'confirmed',
+      version_date: iso(addDays(today, -i)), fragments: i, site: i % 5 === 0 ? sites[i % sites.length].code : null,
+      text: answer ? 'Справку выдаёт бухгалтерия за 3 рабочих дня, заявка через портал.' : null,
+    })
+  }
+  for (let i = topics.length; i < N; i++) topics.push({ topic: `Тема ${i + 1}`, count: Math.max(1, 300 - i), peak_days: `дни ${i % 30 + 1}–${i % 30 + 5}` })
+  for (let i = CLUSTERS.length; i < 30; i++) {
+    CLUSTERS.push({ topic: `тема-${i}`, label: `Тема ${i + 1}`, count: 30 - i, people: 6, negative: 2, prev: 3, delta: 1, trend: 'flat',
+      trend_text: 'столько же, сколько месяц назад', sites: [], quotes: [], quotes_reason: 'few' })
+  }
+  RISKS.length = 0
+  for (let i = 0; i < N; i++) {
+    const e = employees[i]
+    RISKS.push([e.id, i % 3 === 0 ? 'high' : 'medium', [reason('silent', i % 3 === 0 ? 'high' : 'medium', 'молчат', `Молчит ${i % 20 + 2} дней`, 24 * (i % 20 + 2))]])
+  }
+  for (let i = MANAGERS.length; i < N; i++) MANAGERS.push({ id: 1000 + i, name: `${SURNAMES[i % 20]} ${MALE[i % 10]}`, role: 'Руководитель', phone: null })
+}
+
+if (MOCK_MODE === 'worst') applyWorst()
+if (MOCK_MODE === 'empty') applyEmpty()
+if (MOCK_MODE === 'many') applyMany()
 
 const notFound = (what: string) => {
   throw new Error(`${what} не найден в демо-данных`)
@@ -453,14 +654,15 @@ export const mock = {
     return role === 'manager' ? { role, name: 'Соколов Андрей' } : { role, name: 'Лебедева Ксения' }
   },
   employees(managerOnly = false): EmployeeShort[] {
-    return employees.filter((e) => !managerOnly || e.manager?.id === MANAGERS[0].id).map(shortEmployee)
+    const mine = MANAGERS[0]
+    return employees.filter((e) => !managerOnly || (!!mine && e.manager?.id === mine.id)).map(shortEmployee)
   },
   employee(id: number): Employee {
     const e = employees.find((x) => x.id === id) ?? notFound('Новичок')
     return structuredClone(e)
   },
   createEmployee(input: NewEmployeeInput): NewEmployeeResult {
-    const id = Math.max(...employees.map((e) => e.id)) + 1
+    const id = Math.max(0, ...employees.map((e) => e.id)) + 1
     const start = new Date(input.start_date)
     const day = Math.round((today.getTime() - firstWorkday(start).getTime()) / 86400_000) + 1
     const manager = MANAGERS.find((m) => m.id === input.manager_id) ?? null
@@ -497,7 +699,12 @@ export const mock = {
       meetings,
     }
     employees.push(e)
-    return { employee: shortEmployee(e), code, invite_link: inviteLink(code) }
+    const moved = e.first_day !== e.start_date
+    const warning = MOCK_MODE === 'worst'
+      ? `${input.start_date.split('-').reverse().join('.')} нерабочий день. Первым рабочим днём новичка будет ${e.first_day.split('-').reverse().join('.')}: от него Корсик считает шаги, опросы и встречи с руководителем. Если новичок всё же выходит в выходной, поменяйте дату выхода.`
+      : moved ? `${input.start_date.split('-').reverse().join('.')} нерабочий день. Первым рабочим днём новичка будет ${e.first_day.split('-').reverse().join('.')}` : null
+    const link = MOCK_MODE === 'worst' ? 'https://max.ru/korsik_polyplastic_adaptation_bot?start=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789' : inviteLink(code)
+    return { employee: shortEmployee(e), code, invite_link: link, warning }
   },
   openGate(id: number, gate: GateName): Employee {
     const e = employees.find((x) => x.id === id) ?? notFound('Новичок')
@@ -588,6 +795,19 @@ export const mock = {
     return { ...d }
   },
   importScenario(): ScenarioReport {
+    if (MOCK_MODE === 'worst') {
+      return {
+        steps: 12480, surveys: 0, attachments: 1,
+        by_site: { GTP: 4812, Luzhniki: 1, 'Kazan_Zeleny_Dol_promploshchadka_2': 7667 },
+        new_sites: ['Kazan_Zeleny_Dol_promploshchadka_2'],
+        warnings: [
+          'Строка 23: нет времени отправки, шаг уйдёт в 10:00',
+          'Строка 41: картинка «Изображение_9_shema_proezda_na_territoriyu_GTP_final.png» не найдена, в сообщении будет пометка «макет»',
+          'Лист «Сценарий_Казань_Зелёный_Дол»: столбец «Площадка» пустой в 312 строках, шаги уйдут всем площадкам',
+        ],
+      }
+    }
+    if (MOCK_MODE === 'empty') return { steps: 0, by_site: {}, surveys: 0, attachments: 0, new_sites: [], warnings: [] }
     return {
       steps: 74,
       by_site: { GTP: 31, Luzhniki: 24, GrPP: 27, Kazan: 19 },
@@ -605,7 +825,7 @@ export const mock = {
     return topics.map((t) => ({ ...t }))
   },
   shift(to: ShiftTo, employeeId?: number): ShiftResult {
-    const e = employees.find((x) => x.id === employeeId) ?? employees[0]
+    const e = employees.find((x) => x.id === employeeId) ?? employees[0] ?? notFound('Тестовый новичок')
     if (to === 'now') return { employee_id: e.id, day: e.day, message: 'Время вернули к сегодняшнему дню' }
     const target = to === 'end' ? e.probation_days : Number(to)
     e.day = target
@@ -623,6 +843,7 @@ export const mock = {
     return mockRisks(site)
   },
   report(): ReportResult {
+    if (MOCK_MODE === 'worst') return { ok: false, message: 'Сводку не отправили: руководитель HR ещё не подключился к Корсику в «МАКС». Попросите его открыть ссылку https://max.ru/korsik_polyplastic_adaptation_bot?start=head' }
     return { ok: true, message: 'Сводка ушла руководителю HR в «МАКС»' }
   },
   meetingDone(employeeId: number, meetingId: number): Employee {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { BarChart3, FileBarChart, FlaskConical, MessagesSquare, RotateCcw, UserCog } from 'lucide-react'
+import { BarChart3, ChevronDown, FileBarChart, FlaskConical, MessagesSquare, RotateCcw, UserCog } from 'lucide-react'
 import { api, demoEnabled, toApiError } from '../api/client'
 import type { ShiftTo } from '../api/types'
 import { useNav } from '../lib/nav'
@@ -15,12 +15,18 @@ const SHIFTS: { value: ShiftTo; label: string }[] = [
   { value: 'end', label: 'конец' },
 ]
 
-function TopicsSkeleton() {
+const TOPICS_PREVIEW = 6
+
+/**
+ * Та же сетка и высота строк, что у настоящего списка (6 тем). Место занято сразу, полосы видны после 300 мс:
+ * секции ниже не прыгают, когда темы придут
+ */
+function TopicsSkeleton({ invisible }: { invisible?: boolean }) {
   return (
-    <div className="bars" aria-hidden>
-      {[70, 55, 40, 30].map((w) => (
+    <div className="bars" aria-hidden style={invisible ? { visibility: 'hidden' } : undefined}>
+      {[70, 58, 46, 38, 30, 24].map((w) => (
         <div className="bar-row" key={w}>
-          <div className="skeleton" style={{ width: `${w}%`, height: 14 }} />
+          <div className="skeleton" style={{ width: `${w}%`, height: 14, margin: '4px 0' }} />
           <span />
           <div className="bar-track"><div className="skeleton" style={{ width: `${w}%`, height: '100%' }} /></div>
         </div>
@@ -44,8 +50,11 @@ export default function More() {
   const [shift, setShift] = useState<ShiftTo | null>(null)
   const [shifting, setShifting] = useState(false)
   const [busy, setBusy] = useState(false)
-  const list = topics.data ?? []
-  const max = Math.max(1, ...list.map((t) => t.count))
+  const [allTopics, setAllTopics] = useState(false)
+  const all = topics.data ?? []
+  const list = allTopics ? all : all.slice(0, TOPICS_PREVIEW)
+  const hiddenTopics = all.length - list.length
+  const max = Math.max(1, ...all.map((t) => t.count))
 
   const fail = (e: unknown) => {
     const err = toApiError(e)
@@ -88,11 +97,11 @@ export default function More() {
     <Screen title="Ещё" large demo={topics.demo || people.demo}>
       <section className="section">
         <div className="section-header">
-          <span>О чём спрашивают чаще</span>
+          <h2>О чём спрашивают чаще</h2>
           <span>за 4 недели</span>
         </div>
         <div className="group">
-          {topics.showSkeleton && <TopicsSkeleton />}
+          {!topics.data && !topics.error && <TopicsSkeleton invisible={!topics.showSkeleton} />}
           {topics.error && <ErrorState error={topics.error} onRetry={topics.reload} />}
           {topics.data && list.length === 0 && (
             <Empty icon={<BarChart3 />} title="Вопросов пока мало" text="Темы появятся, когда новички начнут спрашивать бота." />
@@ -100,7 +109,7 @@ export default function More() {
           {list.length > 0 && (
             <div className="bars">
               {list.map((t, i) => (
-                <div className="bar-row" key={t.topic}>
+                <div className="bar-row" key={`${t.topic}-${i}`}>
                   <span className="bar-label">
                     {t.topic} {t.peak_days && <span className="bar-days">· {t.peak_days}</span>}
                   </span>
@@ -117,6 +126,12 @@ export default function More() {
               ))}
             </div>
           )}
+          {hiddenTopics > 0 && (
+            <button className="cell more-row" onClick={() => setAllTopics(true)}>
+              <span className="cell-title">Показать все темы, ещё {hiddenTopics}</span>
+              <ChevronDown className="chev" />
+            </button>
+          )}
         </div>
         <div className="section-footer">По этим темам видно, что добавить в базу и в сценарий первых дней.</div>
       </section>
@@ -132,7 +147,7 @@ export default function More() {
       ) : (
         <>
         <section className="section">
-          <div className="section-header">Демо: машина времени</div>
+          <h2 className="section-header">Демо: машина времени</h2>
           <div className="group">
             <label className="field">
               <span className="field-label">Кого перематываем</span>

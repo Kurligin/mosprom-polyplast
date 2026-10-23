@@ -3,21 +3,15 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowDownRight, ArrowUpRight, ChartColumnIncreasing, ChevronDown, ChevronRight, Minus, Plus, ShieldCheck } from 'lucide-react'
 import { api, type ApiError } from '../api/client'
 import type { Analytics as AnalyticsData, Cluster, FunnelStage, MoodSite, MoodWeek, RiskItem, SiteCode } from '../api/types'
-import { Avatar, Empty, ErrorState, Screen, Segmented, SkeletonList, plural, useAsync } from '../components/ui'
+import { Avatar, Empty, ErrorState, Screen, Segmented, SkeletonList, StatNum, fmtNum, plural, useAsync } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
+import { shortSiteName } from '../lib/sites'
 
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? '' : `${Math.round(x * 100)}%`)
 const num1 = (x: number) => x.toFixed(1).replace('.', ',')
 
-/** Короткое имя площадки для сегмента: «Офис «Лужники»» → «Лужники», «… (GrPP)» → «GrPP» */
-function shortSite(code: string, name: string) {
-  const quoted = /«([^»]+)»/.exec(name)?.[1]
-  if (quoted) return quoted
-  const paren = /\(([^)]+)\)/.exec(name)?.[1]
-  if (paren) return paren
-  return name.length <= 10 ? name : code
-}
+const shortSite = shortSiteName
 
 const STAGE_HINT: Partial<Record<FunnelStage['stage'], string>> = { done: 'за 3 месяца' }
 const MEDIUM_PREVIEW = 3
@@ -30,10 +24,12 @@ export default function Analytics() {
   const sites = data?.sites ?? []
   const demo = summary.demo || risks.demo
   const siteName = (code: string) => shortSite(code, sites.find((x) => x.code === code)?.name ?? code)
+  // сегмент, пока короткие названия помещаются в строку на узком телефоне; иначе обычный список
+  const asSegment = sites.length > 1 && sites.length <= 4 && sites.reduce((n, s) => n + shortSite(s.code, s.name).length, 3) <= 26
 
   return (
     <Screen title="Аналитика" large demo={demo}>
-      {sites.length > 1 && sites.length <= 4 && (
+      {asSegment && (
         <div className="an-filter">
           <Segmented
             ariaLabel="Площадка"
@@ -43,7 +39,7 @@ export default function Analytics() {
           />
         </div>
       )}
-      {sites.length > 4 && (
+      {sites.length > 1 && !asSegment && (
         <section className="section">
           <div className="group">
             <label className="field">
@@ -82,14 +78,16 @@ export default function Analytics() {
   )
 }
 
+/** Повторяет сетку экрана: фильтр площадок, три плитки той же высоты, список */
 function AnalyticsSkeleton() {
   return (
     <div aria-hidden>
+      <div className="an-filter"><div className="skeleton" style={{ height: 36, borderRadius: 9 }} /></div>
       <div className="stats">
         {[0, 1, 2].map((i) => (
           <div className="stat" key={i}>
-            <div className="skeleton" style={{ width: 36, height: 26 }} />
-            <div className="skeleton" style={{ width: '80%', height: 12, marginTop: 6 }} />
+            <div className="skeleton" style={{ width: 36, height: 24, margin: '2px 0' }} />
+            <div className="skeleton" style={{ width: '80%', height: 13, margin: '2px 0 3px' }} />
           </div>
         ))}
       </div>
@@ -103,15 +101,15 @@ function Stats({ data }: { data: AnalyticsData }) {
   return (
     <div className="stats">
       <div className="stat">
-        <b className="num">{kpi.newbies}</b>
+        <StatNum value={kpi.newbies} />
         <span>в адаптации</span>
       </div>
       <div className="stat">
-        <b className={`num${risks.high ? ' tone-danger' : ''}`}>{risks.high}</b>
+        <StatNum value={risks.high} className={risks.high ? 'tone-danger' : ''} />
         <span>высокий риск</span>
       </div>
       <div className="stat">
-        <b className={`num${risks.medium ? ' tone-warning' : ''}`}>{risks.medium}</b>
+        <StatNum value={risks.medium} className={risks.medium ? 'tone-warning' : ''} />
         <span>средний риск</span>
       </div>
     </div>
@@ -133,9 +131,9 @@ function RiskSection({ items, loading, error, onRetry, siteName }: {
     <RiskRow key={r.employee_id} r={r} site={siteName(r.site)} onClick={() => nav.push({ name: 'employee', id: r.employee_id })} />
   )
 
-  if (loading) return <SkeletonList rows={3} />
   if (error) return <section className="section"><div className="group"><ErrorState error={error} onRetry={onRetry} /></div></section>
-  if (!items) return null
+  // список риска грузится отдельно от сводки: место под него занято сразу, этапы ниже не прыгают
+  if (!items) return <SkeletonList rows={3} invisible={!loading} />
   if (items.length === 0) {
     return (
       <section className="section">
@@ -154,7 +152,7 @@ function RiskSection({ items, loading, error, onRetry, siteName }: {
       {high.length > 0 && (
         <section className="section">
           <div className="section-header">
-            <span className="risk-head high">Высокий риск</span>
+            <h2 className="risk-head high">Высокий риск</h2>
             <span className="num">{high.length}</span>
           </div>
           <div className="group">{high.map(row)}</div>
@@ -164,7 +162,7 @@ function RiskSection({ items, loading, error, onRetry, siteName }: {
       {medium.length > 0 && (
         <section className="section">
           <div className="section-header">
-            <span className="risk-head medium">Средний риск</span>
+            <h2 className="risk-head medium">Средний риск</h2>
             <span className="num">{medium.length}</span>
           </div>
           <div className="group">
@@ -206,8 +204,8 @@ function RiskRow({ r, site, onClick }: { r: RiskItem; site: string; onClick: () 
           {r.position ? ` · ${r.position}` : ''}
         </div>
         <ul className="reasons">
-          {reasons.map((x) => (
-            <li key={x.code} className={x.level}>{x.text}</li>
+          {reasons.map((x, i) => (
+            <li key={`${x.code}-${i}`} className={x.level}>{x.text}</li>
           ))}
           {rest > 0 && <li className="more">и ещё {rest}</li>}
         </ul>
@@ -226,7 +224,7 @@ function FunnelSection({ funnel }: { funnel: FunnelStage[] }) {
   return (
     <section className="section">
       <div className="section-header">
-        <span>Этапы адаптации</span>
+        <h2>Этапы адаптации</h2>
         <span>сейчас</span>
       </div>
       <div className="group">
@@ -237,10 +235,10 @@ function FunnelSection({ funnel }: { funnel: FunnelStage[] }) {
                 {f.label}
                 {STAGE_HINT[f.stage] && <span className="bar-days"> · {STAGE_HINT[f.stage]}</span>}
                 {f.risk > 0 && (
-                  <span className={`stage-risk ${f.risk_high ? 'high' : 'medium'}`}> · в зоне риска {f.risk}</span>
+                  <span className={`stage-risk ${f.risk_high ? 'high' : 'medium'}`}> · в зоне риска {fmtNum(f.risk)}</span>
                 )}
               </span>
-              <span className="bar-count">{f.count}</span>
+              <span className="bar-count">{fmtNum(f.count)}</span>
               <div className="bar-track">
                 <motion.div
                   className={`bar-fill${f.stage === 'done' ? ' muted' : ''}`}
@@ -260,8 +258,8 @@ function FunnelSection({ funnel }: { funnel: FunnelStage[] }) {
 /* ---------- Настроение ---------- */
 
 function weekLabel(w: MoodWeek) {
-  const [, m, d] = w.start.split('-')
-  return `${Number(d)}.${m}`
+  const [, m, d] = (w.start ?? '').split('-')
+  return m && d ? `${Number(d)}.${m}` : w.label || ''
 }
 
 function MoodSection({ weeks, sites, lowData, threshold }: { weeks: MoodWeek[]; sites: MoodSite[]; lowData: string[]; threshold: number }) {
@@ -271,7 +269,7 @@ function MoodSection({ weeks, sites, lowData, threshold }: { weeks: MoodWeek[]; 
   return (
     <section className="section">
       <div className="section-header">
-        <span>Настроение по неделям</span>
+        <h2>Настроение по неделям</h2>
         <span>доля позитива</span>
       </div>
       <div className="group">
@@ -280,7 +278,7 @@ function MoodSection({ weeks, sites, lowData, threshold }: { weeks: MoodWeek[]; 
             const s = w.mood_share
             const has = w.shown && w.mood_total > 0
             return (
-              <div className={`mood-col${w.current ? ' current' : ''}`} key={w.start}>
+              <div className={`mood-col${w.current ? ' current' : ''}`} key={`${w.start}-${i}`}>
                 <span className="mood-pct num">{has ? pct(s.positive) : ''}</span>
                 <div className={`mood-stack${has ? '' : ' blank'}`}>
                   {has && (
@@ -306,7 +304,7 @@ function MoodSection({ weeks, sites, lowData, threshold }: { weeks: MoodWeek[]; 
           <span><i className="neu" />нейтрально</span>
           <span><i className="neg" />негатив</span>
         </div>
-        {sites.map((s) => <MoodSiteRow key={s.code} s={s} />)}
+        {sites.map((s, i) => <MoodSiteRow key={`${s.code}-${i}`} s={s} />)}
       </div>
       <div className="section-footer">
         {anyShown ? '' : 'Пока мало ответов. '}
@@ -323,11 +321,11 @@ function MoodSiteRow({ s }: { s: MoodSite }) {
     <div className="cell mood-site">
       <div className="cell-body">
         <div className="mood-site-top">
-          <span className="cell-title strong clamp-1">{s.name}</span>
+          <span className="cell-title strong clamp-1" title={s.name}>{s.name.length > 24 ? shortSite(s.code, s.name) : s.name}</span>
           <span className="mood-site-pct num">{pct(share.positive)}</span>
         </div>
         <div className="cell-meta num">
-          {s.respondents} из {s.newbies} {plural(s.respondents, ['ответил', 'ответили', 'ответили'])}
+          {fmtNum(s.respondents)} из {fmtNum(s.newbies)} {plural(s.respondents, ['ответил', 'ответили', 'ответили'])}
           {s.avg_score !== null ? ` · оценка ${num1(s.avg_score)}` : ''}
           {s.low_data ? ' · мало данных' : ''}
         </div>
@@ -357,7 +355,7 @@ function ClusterSection({ clusters, lowData, threshold, siteName }: {
   return (
     <section className="section">
       <div className="section-header">
-        <span>О чём пишут в опросах</span>
+        <h2>О чём пишут в опросах</h2>
         <span>за 4 недели</span>
       </div>
       <div className="group">
@@ -367,9 +365,9 @@ function ClusterSection({ clusters, lowData, threshold, siteName }: {
         ) : (
           <Empty icon={<ChartColumnIncreasing />} title="Тем пока мало" text="Темы появятся, когда новички напишут о трудностях в опросах." />
         ))}
-        {list.map((c) => (
+        {list.map((c, i) => (
           <ClusterRow
-            key={c.topic}
+            key={`${c.topic}-${i}`}
             c={c}
             siteName={siteName}
             open={open === c.topic}
@@ -402,7 +400,7 @@ function ClusterRow({ c, open, onToggle, siteName, threshold }: {
   const Icon = TREND_ICON[c.trend] ?? Minus
   const tone = c.trend === 'up' || c.trend === 'new' ? 'danger' : c.trend === 'down' ? 'success' : ''
   const where = c.sites.filter((s) => s.count > 0)
-    .map((s) => `${s.code === 'other' ? (s.name ?? 'Другие площадки') : siteName(s.code)} ${s.count}`).join(' · ')
+    .map((s) => `${s.code === 'other' ? (s.name ?? 'Другие площадки') : siteName(s.code)} ${fmtNum(s.count)}`).join(' · ')
   const quotes = open ? c.quotes : c.quotes.slice(0, 1)
   return (
     <button className="cell cluster-cell" aria-expanded={open} onClick={() => { haptic.select(); onToggle() }}>
@@ -410,11 +408,11 @@ function ClusterRow({ c, open, onToggle, siteName, threshold }: {
         <div className="cluster-top">
           <span className="cell-title strong">{c.label}</span>
           <span className="cluster-count num">
-            {c.count} <small>{plural(c.count, ['упоминание', 'упоминания', 'упоминаний'])}</small>
+            {fmtNum(c.count)} <small>{plural(c.count, ['упоминание', 'упоминания', 'упоминаний'])}</small>
           </span>
         </div>
         <div className="chips">
-          <span className={`chip ${tone}`}><Icon />{c.trend_text}</span>
+          {c.trend_text && <span className={`chip wrap ${tone}`}><Icon /><span className="chip-text">{c.trend_text}</span></span>}
         </div>
         {quotes.map((q, i) => (
           <blockquote key={i} className={`quote${open ? '' : ' clamp-2'}`}>{q.text}</blockquote>
@@ -429,8 +427,8 @@ function ClusterRow({ c, open, onToggle, siteName, threshold }: {
               transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
             >
               <div className="cell-meta num">
-                {c.people} {plural(c.people, ['новичок', 'новичка', 'новичков'])}{where ? ` · ${where}` : ''}
-                {c.prev > 0 ? ` · месяц назад ${c.prev}` : ''}
+                {fmtNum(c.people)} {plural(c.people, ['новичок', 'новичка', 'новичков'])}{where ? ` · ${where}` : ''}
+                {c.prev > 0 ? ` · месяц назад ${fmtNum(c.prev)}` : ''}
               </div>
               {c.quotes.length === 0 && (
                 <div className="cell-meta">{NO_QUOTES[c.quotes_reason ?? '']?.(threshold) ?? 'Цитат нет.'}</div>

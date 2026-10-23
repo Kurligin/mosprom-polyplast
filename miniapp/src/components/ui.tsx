@@ -111,7 +111,7 @@ export function Screen({ title, large, back, right, children, noTabbar, bottom, 
         style={bottomPad ? { paddingBottom: `calc(${bottomPad}px + var(--safe-bottom))` } : undefined}
       >
         <header className="navbar" data-bg={solid || bg} data-title={solid || titleShown}>
-          <div className="navbar-row">
+          <div className="navbar-row" data-back={!!back && !hasNativeBack()}>
             <div className="navbar-left">
               {back && !hasNativeBack() && (
                 <button className="nav-btn back" onClick={() => { haptic.tap(); back.onClick() }} aria-label={`Назад: ${back.label || 'назад'}`}>
@@ -159,7 +159,7 @@ export function Section({ header, footer, children, aside }: { header?: ReactNod
     <section className="section">
       {header && (
         <div className="section-header">
-          <span>{header}</span>
+          <h2>{header}</h2>
           {aside && <span>{aside}</span>}
         </div>
       )}
@@ -213,10 +213,12 @@ export function Cell({ title, sub, meta, value, left, onClick, chevron, children
 }
 
 export function Chip({ tone, icon, children }: { tone?: 'warning' | 'danger' | 'primary' | 'success'; icon?: ReactNode; children: ReactNode }) {
+  // длинная метка (название площадки) не шире строки: обрезается многоточием, целиком — во всплывающей подсказке
+  const full = typeof children === 'string' ? children : undefined
   return (
-    <span className={`chip ${tone ?? ''}`}>
+    <span className={`chip ${tone ?? ''}`} title={full && full.length > 24 ? full : undefined}>
       {icon}
-      {children}
+      <span className="chip-text">{children}</span>
     </span>
   )
 }
@@ -237,13 +239,23 @@ export function Progress({ value, thick, tone, label }: { value: number; thick?:
   )
 }
 
-export function initials(name: string) {
-  const [a, b] = name.trim().split(/\s+/)
-  return ((a?.[0] ?? '') + (b?.[0] ?? '')).toUpperCase() || '?'
+type SegmenterCtor = new (l: string, o: { granularity: 'grapheme' }) => { segment: (s: string) => Iterable<{ segment: string }> }
+/** Символы, как их видит человек: эмодзи и буква с ударением — один символ */
+const graphemes = (s: string): string[] => {
+  const Seg = (Intl as unknown as { Segmenter?: SegmenterCtor }).Segmenter
+  return Seg ? Array.from(new Seg('ru', { granularity: 'grapheme' }).segment(s), (x) => x.segment) : Array.from(s)
+}
+
+/** Две буквы для аватара: первые буквы двух первых слов, где есть буквы. Эмодзи и знаки пропускаем */
+export function initials(name: string | null | undefined) {
+  const words = (name ?? '').trim().split(/\s+/).filter((w) => /\p{L}/u.test(w))
+  const first = (w: string | undefined) => (w ? graphemes(w).find((g) => /\p{L}/u.test(g)) ?? '' : '')
+  return (first(words[0]) + first(words[1])).toUpperCase() || '?'
 }
 
 export function Avatar({ name, large, src }: { name: string; large?: boolean; src?: string | null }) {
-  if (src) return <img className={`avatar${large ? ' lg' : ''}`} src={src} alt="" />
+  const [failed, setFailed] = useState(false)
+  if (src && !failed) return <img className={`avatar${large ? ' lg' : ''}`} src={src} alt="" onError={() => setFailed(true)} />
   return <div className={`avatar${large ? ' lg' : ''}`} aria-hidden>{initials(name)}</div>
 }
 
@@ -280,10 +292,11 @@ export function Segmented<T extends string>({
   )
 }
 
-export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+export function Switch({ checked, onChange, label, disabled, id }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean; id?: string }) {
   return (
     <span className="switch">
       <input
+        id={id}
         type="checkbox"
         role="switch"
         aria-label={label}
@@ -301,7 +314,7 @@ export function Empty({ icon, title, text, action }: { icon: ReactNode; title: s
   return (
     <div className="empty">
       {icon}
-      <h3>{title}</h3>
+      <h2>{title}</h2>
       {text && <p>{text}</p>}
       {action}
     </div>
@@ -320,7 +333,7 @@ export function ErrorState({ error, onRetry, title }: { error: ApiError; onRetry
   return (
     <div className="empty" role="alert">
       <Icon />
-      <h3>{title ?? ERROR_TITLE[error.status] ?? 'Не получилось загрузить'}</h3>
+      <h2>{title ?? ERROR_TITLE[error.status] ?? 'Не получилось загрузить'}</h2>
       <p>{error.message}</p>
       <button className="btn secondary small fit" onClick={() => { haptic.tap(); onRetry() }}>
         <RotateCw size={17} /> Повторить
@@ -329,9 +342,13 @@ export function ErrorState({ error, onRetry, title }: { error: ApiError; onRetry
   )
 }
 
-export function SkeletonList({ rows = 4 }: { rows?: number }) {
+/**
+ * Скелетон списка. invisible — место под список уже занято, но серые полосы ещё не видны:
+ * быстрый ответ не мигает скелетоном, а медленный не сдвигает то, что ниже
+ */
+export function SkeletonList({ rows = 4, invisible }: { rows?: number; invisible?: boolean }) {
   return (
-    <section className="section" aria-hidden>
+    <section className="section" aria-hidden style={invisible ? { visibility: 'hidden' } : undefined}>
       <div className="group">
         {Array.from({ length: rows }).map((_, i) => (
           <div className="cell" key={i}>
@@ -372,6 +389,19 @@ export function fmtSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} МБ`
 }
 
+/** Длинное имя файла обрезаем посередине: конец с версией и расширением остаётся виден */
+function FileName({ name }: { name: string }) {
+  const g = graphemes(name)
+  const tail = g.length > 24 ? g.slice(-12).join('') : ''
+  const head = tail ? g.slice(0, -12).join('') : name
+  return (
+    <div className="cell-title file-name" title={name}>
+      <span className="file-name-head">{head}</span>
+      {tail && <span className="file-name-tail">{tail}</span>}
+    </div>
+  )
+}
+
 /** Ячейка «Выбрать файл». Нативный input прячется под ячейкой, чтобы работал и в WebView «МАКС» */
 export function FilePick({
   accept, file, onPick, label, hint, disabled,
@@ -380,7 +410,7 @@ export function FilePick({
     <label className={`cell file-pick${disabled ? ' disabled' : ''}`}>
       <span className="cell-icon" style={{ background: 'var(--primary)' }}><Paperclip /></span>
       <div className="cell-body">
-        <div className="cell-title clamp-1">{file ? file.name : label}</div>
+        {file ? <FileName name={file.name} /> : <div className="cell-title clamp-1">{label}</div>}
         <div className="cell-meta">{file ? fmtSize(file.size) : hint}</div>
       </div>
       <span className="cell-value file-pick-action">{file ? 'Заменить' : 'Выбрать'}</span>
@@ -471,8 +501,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     if (kind === 'warning') haptic.warning()
     setToast({ id: Date.now(), kind, text })
     window.clearTimeout(timer.current)
-    // ошибки и длинные тексты висят дольше: их надо успеть прочитать
-    timer.current = window.setTimeout(() => setToast(null), kind === 'error' || text.length > 60 ? 4200 : 2600)
+    // время на чтение растёт с длиной текста: ошибки и длинные объяснения надо успеть прочитать
+    const ms = Math.min(9000, Math.max(kind === 'error' ? 4200 : 2600, 1200 + text.length * 45))
+    timer.current = window.setTimeout(() => setToast(null), ms)
   }, [])
   const Icon = toast?.kind === 'success' ? CheckCircle2 : toast?.kind === 'error' || toast?.kind === 'warning' ? AlertTriangle : Info
   return (
@@ -512,11 +543,11 @@ export function fmtDate(isoDate: string | null | undefined) {
   const d = parse(isoDate)
   return d ? `${d.getDate()}\u00A0${MONTHS[d.getMonth()]}` : '' // неразрывный пробел: «21 окт» не рвётся
 }
-export function fmtTime(isoDate: string) {
+export function fmtTime(isoDate: string | null | undefined) {
   const d = parse(isoDate)
   return d ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''
 }
-export function fmtAgo(isoDate: string) {
+export function fmtAgo(isoDate: string | null | undefined) {
   const d = parse(isoDate)
   if (!d) return ''
   const diff = (Date.now() - d.getTime()) / 60000
@@ -525,7 +556,7 @@ export function fmtAgo(isoDate: string) {
   if (diff < 60 * 24) return `${Math.round(diff / 60)} ч назад`
   return fmtDate(isoDate)
 }
-export function fmtDue(isoDate: string) {
+export function fmtDue(isoDate: string | null | undefined) {
   const d = parse(isoDate)
   if (!d) return { text: '', overdue: false }
   const diffH = (d.getTime() - Date.now()) / 3600000
@@ -533,6 +564,16 @@ export function fmtDue(isoDate: string) {
   if (diffH < 1) return { text: `меньше часа`, overdue: true }
   return { text: `осталось ${Math.round(diffH)} ч`, overdue: false }
 }
+/** 12 480: разряды через неразрывный пробел */
+export const fmtNum = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('ru-RU') : '0')
+
+/** Крупная цифра в плитке: длинное число уменьшается под ширину плитки, а не вылезает за неё */
+export function StatNum({ value, className = '' }: { value: number | null | undefined; className?: string }) {
+  const text = fmtNum(value)
+  const style = text.length > 3 ? { fontSize: `min(24px, ${Math.floor(165 / text.length)}cqi)` } : undefined
+  return <b className={`num ${className}`} style={style}>{text}</b>
+}
+
 /** 1 фрагмент, 2 фрагмента, 5 фрагментов */
 export function plural(n: number, forms: [string, string, string]) {
   const a = Math.abs(n) % 100
@@ -546,8 +587,10 @@ export function plural(n: number, forms: [string, string, string]) {
  * «Сегодня» новичка, YYYY-MM-DD: первый рабочий день + (день адаптации − 1).
  * Учитывает и выход в выходной, и машину времени в демо: бэкенд считает day с ней.
  */
-export function employeeToday(e: { first_day: string; day: number }) {
+export function employeeToday(e: { first_day: string | null; day: number }) {
   const d = new Date(`${e.first_day}T00:00:00Z`)
+  // даты нет или она битая: считаем от сегодняшнего дня, чтобы экран не падал
+  if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10)
   d.setUTCDate(d.getUTCDate() + e.day - 1)
   return d.toISOString().slice(0, 10)
 }

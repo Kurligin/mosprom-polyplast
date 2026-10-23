@@ -3,10 +3,10 @@ import { Check, Link2, Megaphone, MessagesSquare, ShieldCheck, Unplug } from 'lu
 import { toApiError } from '../api/client'
 import { applyPatch, audienceText, chatsApi, type ChatAudience, type TeamChat, type TeamChatPatch } from '../api/chats'
 import type { SiteCode, WorkType } from '../api/types'
-import { Cell, Chip, Empty, ErrorState, Screen, Section, Segmented, Sheet, SkeletonList, Switch, plural, useAsync, useToast } from '../components/ui'
+import { Cell, Chip, Empty, ErrorState, Screen, Section, Segmented, Sheet, SkeletonList, Switch, fmtNum, plural, useAsync, useToast } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
-import { useSites } from '../lib/sites'
+import { shortSiteName, useSites } from '../lib/sites'
 
 const AUDIENCES: { value: ChatAudience; label: string }[] = [
   { value: 'none', label: 'Никому' },
@@ -25,8 +25,8 @@ const members = (n: number | null) => (n === null ? null : `${n.toLocaleString('
 /** «35 участников · добавил 5 · 2 по ссылке» */
 function stats(c: TeamChat) {
   const parts = [members(c.members_count)]
-  if (c.added) parts.push(`добавил ${c.added} ${plural(c.added, ['новичка', 'новичков', 'новичков'])}`)
-  if (c.links_sent) parts.push(`${c.links_sent}\u00A0по\u00A0ссылке`)
+  if (c.added) parts.push(`добавил ${fmtNum(c.added)} ${plural(c.added, ['новичка', 'новичков', 'новичков'])}`)
+  if (c.links_sent) parts.push(`${fmtNum(c.links_sent)}\u00A0по\u00A0ссылке`)
   return parts.filter(Boolean).join(' · ')
 }
 
@@ -38,6 +38,8 @@ export default function Chats() {
   const nav = useNav()
   const toast = useToast()
   const { sites, name: siteName } = useSites()
+  // в списке площадки короткими именами, полные — в листе настроек чата
+  const shortName = (code: SiteCode) => shortSiteName(code, siteName(code))
   const { data, setData, error, reload, showSkeleton } = useAsync(() => chatsApi.list(), [])
   const [openId, setOpenId] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -105,6 +107,7 @@ export default function Chats() {
           >
             {hr ? (
               <Cell
+                className="top"
                 left={<ChatIcon color="var(--success)"><ShieldCheck /></ChatIcon>}
                 title={hr.title}
                 meta={hr.active ? members(hr.members_count) : 'Бота удалили из группы: обращения никуда не приходят'}
@@ -129,9 +132,10 @@ export default function Chats() {
               team.map((c) => (
                 <Cell
                   key={c.id}
+                  className="top"
                   left={<ChatIcon color={c.audience === 'none' ? 'var(--text-secondary)' : 'var(--primary)'}><MessagesSquare /></ChatIcon>}
-                  title={<span className="clamp-1">{c.title}</span>}
-                  sub={audienceText(c, siteName)}
+                  title={<span className="clamp-2">{c.title}</span>}
+                  sub={<span className="clamp-2">{audienceText(c, shortName)}</span>}
                   meta={stats(c) || undefined}
                   chevron
                   onClick={() => setOpenId(c.id)}
@@ -154,9 +158,10 @@ export default function Chats() {
               {gone.map((c) => (
                 <Cell
                   key={c.id}
+                  className="top"
                   left={<ChatIcon color="var(--text-secondary)"><Unplug /></ChatIcon>}
-                  title={<span className="clamp-1">{c.title}</span>}
-                  meta={audienceText(c, siteName)}
+                  title={<span className="clamp-2">{c.title}</span>}
+                  meta={<span className="clamp-2">{audienceText(c, shortName)}</span>}
                   inset={64}
                 />
               ))}
@@ -204,11 +209,11 @@ function ChatSheet({ chat, sites, siteName, busy, onSave, onClose }: SheetProps)
     <Sheet open={!!chat} onClose={onClose} label="Настройки чата">
       {chat && (
         <>
-          <h3 className="clamp-1">{chat.title}</h3>
+          <h2>{chat.title}</h2>
           <p>{stats(chat) || 'Корсик в чате'}</p>
 
           <section className="section">
-            <div className="section-header">Кому нужен чат</div>
+            <h3 className="section-header">Кому нужен чат</h3>
             <div className="group">
               <div className="field">
                 <Segmented
@@ -226,14 +231,14 @@ function ChatSheet({ chat, sites, siteName, busy, onSave, onClose }: SheetProps)
                 : chat.audience === 'all'
                   ? 'Новичка любой площадки бот добавит сюда в его первый рабочий день.'
                   : chat.sites.length
-                    ? `Новичков ${chat.sites.length === 1 ? 'площадки' : 'площадок'} ${chat.sites.map(siteName).join(', ')} бот добавит сюда в первый рабочий день.`
+                    ? `Новичков ${chat.sites.length === 1 ? 'площадки' : 'площадок'} ${chat.sites.map((c) => shortSiteName(c, siteName(c))).join(', ')} бот добавит сюда в первый рабочий день.`
                     : 'Выберите площадки ниже.'}
             </div>
           </section>
 
           {chat.audience === 'sites' && (
             <section className="section">
-              <div className="section-header">Площадки</div>
+              <h3 className="section-header">Площадки</h3>
               <div className="group">
                 {siteCodes.map((code) => (
                   <Cell
@@ -251,7 +256,7 @@ function ChatSheet({ chat, sites, siteName, busy, onSave, onClose }: SheetProps)
 
           {chat.audience !== 'none' && (
             <section className="section">
-              <div className="section-header">Кто из новичков</div>
+              <h3 className="section-header">Кто из новичков</h3>
               <div className="group">
                 <div className="field">
                   <Segmented

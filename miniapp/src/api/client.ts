@@ -1,5 +1,5 @@
 import { initDataHeader, isInMax } from '../lib/bridge'
-import { mock } from './mocks'
+import { MOCK_MODE, mock } from './mocks'
 import type {
   Analytics, Employee, EmployeeShort, GateName, KbDocument, Me, NewEmployeeInput, NewEmployeeResult, ReplyInput,
   ReportResult, RiskItem, ScenarioReport, ShiftResult, ShiftTo, Site, SiteCode, StaffMember, StaffRole, Ticket,
@@ -29,9 +29,8 @@ export const viewAsManager = roleParam === 'manager'
 export let demoEnabled: boolean | null = null
 const withView = (path: string) => (viewAsManager ? `${path}${path.includes('?') ? '&' : '?'}view=manager` : path)
 
-/** Демо принудительно: VITE_USE_MOCKS=1 при сборке или ?mocks=1 в адресе */
-export const FORCE_MOCKS =
-  import.meta.env.VITE_USE_MOCKS === '1' || params.get('mocks') === '1' || (import.meta.env.DEV && params.get('mocks') === 'worst')
+/** Демо принудительно: VITE_USE_MOCKS=1 при сборке, ?mocks=1 в адресе или стресс-режим разработки (?mocks=worst | empty | many) */
+export const FORCE_MOCKS = import.meta.env.VITE_USE_MOCKS === '1' || params.get('mocks') === '1' || MOCK_MODE !== null
 
 /** Ошибка для человека: текст из `detail` или понятная замена */
 export class ApiError extends Error {
@@ -204,6 +203,7 @@ function normEmployee<T extends EmployeeShort>(raw: T): T {
   const e = raw as T & Partial<Employee> & Raw
   const out = {
     ...e,
+    full_name: (typeof e.full_name === 'string' && e.full_name.trim()) || 'Без имени',
     position: e.position ?? '',
     first_day: e.first_day ?? e.start_date,
     current_step: e.current_step ?? null,
