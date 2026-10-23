@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from app.scenario.models import EmployeeCtx, PlannedStep, StepSpec, TimingRule
-from app.scenario.workcal import next_workday, nth_workday
+from app.scenario.workcal import next_workday, nth_workday, prev_workday
 
 DEFAULT_TIME = time(10, 0)
 # Шаг, чьё время прошло больше чем на порог, не отправляем (устарел)
@@ -20,21 +20,27 @@ def add_months(d: date, months: int) -> date:
 
 
 def step_date(rule: TimingRule, emp: EmployeeCtx) -> date | None:
-    """Дата шага по правилу. None — шаг по событию, в расписание не идёт."""
-    start = emp.start_date
+    """Дата шага по правилу. None — шаг по событию, в расписание не идёт.
+
+    Всё считается от первого рабочего дня: если HR указал датой выхода выходной или праздник,
+    «завтра первый рабочий день» и «через месяц» — от понедельника (или первого дня после праздника).
+    """
+    first = next_workday(emp.start_date)
     if rule.kind == "before_start":
-        # календарные дни до выхода, без переноса: «завтра первый рабочий день» в воскресенье — верно
-        return start - timedelta(days=rule.days_before or 1)
+        # календарные дни до первого рабочего дня, без переноса: «завтра первый рабочий день» в воскресенье — верно
+        return first - timedelta(days=rule.days_before or 1)
     if rule.kind == "workday":
-        return nth_workday(start, rule.n or 1)
+        return nth_workday(first, rule.n or 1)
     if rule.kind == "calendar_offset":
-        d = add_months(start, rule.months) + timedelta(weeks=rule.weeks, days=rule.days)
+        d = add_months(first, rule.months) + timedelta(weeks=rule.weeks, days=rule.days)
         return next_workday(d)
     if rule.kind == "month_start":
-        # первый день M-го месяца работы = дата выхода + (M-1) месяцев
-        return next_workday(add_months(start, (rule.month or 1) - 1))
+        # первый день M-го месяца работы = первый рабочий день + (M-1) месяцев
+        return next_workday(add_months(first, (rule.month or 1) - 1))
     if rule.kind == "probation_end":
-        return next_workday(emp.probation_end + timedelta(days=rule.offset_days))
+        d = emp.probation_end + timedelta(days=rule.offset_days)
+        # «последний день испытательного срока» выпал на выходной — последний рабочий день срока
+        return prev_workday(d) if rule.offset_days <= 0 else next_workday(d)
     return None
 
 
@@ -67,16 +73,18 @@ def employee_now(employee: EmployeeCtx, now: datetime) -> datetime:
 
 
 def due_steps(employee: EmployeeCtx, steps: list[StepSpec], now: datetime, sent: set[int],
-              gates: set[str] | frozenset[str] = frozenset()) -> list[PlannedStep]:
+              gates: set[str] | frozenset[str] = frozenset(),
+              fresh: set[int] | frozenset[int] = frozenset()) -> list[PlannedStep]:
     """Шаги для тика планировщика: время наступило, не отправлены, не устарели, отмашка есть.
 
-    Шаги «до выхода» не устаревают до дня выхода: новичка, добавленного накануне, всё равно знакомим.
+    Шаги «до выхода» не устаревают до первого рабочего дня: новичка, добавленного накануне, всё равно знакомим.
     gates — открытые отмашки новичка (recruiter_go, plan_ready).
+    fresh — шаги, которые сейчас не устаревают: реплики после опроса, который новичок прошёл недавно.
     """
     vnow = employee_now(employee, now)
     by_num = {s.number: s for s in steps}
     tz = ZoneInfo(employee.tz)
-    start_dt = datetime.combine(employee.start_date, time(0, 0), tzinfo=tz)
+    start_dt = datetime.combine(next_workday(employee.start_date), time(0, 0), tzinfo=tz)
     res = []
     for p in plan_for(employee, steps):
         if p.step_number in sent or p.due_at > vnow:
@@ -86,7 +94,7 @@ def due_steps(employee: EmployeeCtx, steps: list[StepSpec], now: datetime, sent:
         rule = by_num[p.step_number].timing
         onboarding = rule is not None and rule.kind == "before_start" and vnow < start_dt
         # шаг по отмашке не устаревает: отмашка может прийти позже плана
-        if vnow - p.due_at > STALE_AFTER and not onboarding and not p.gate:
+        if vnow - p.due_at > STALE_AFTER and not onboarding and not p.gate and p.step_number not in fresh:
             continue
         res.append(p)
     return res

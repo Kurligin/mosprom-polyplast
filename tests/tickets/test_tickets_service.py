@@ -163,3 +163,15 @@ async def test_category_mapping():
     assert service.normalize_category("unknown", None) == "unknown"
     t = SimpleNamespace(category="доступы", source="survey", is_personal=False)
     assert service.category_label(t) == "Доступы" and service.is_red(t) is False
+
+
+async def test_reply_window_closed_by_time_machine(session, world, bot):
+    """Окно ответа HR — в настоящем времени: после перемотки вопрос не уходит в старое обращение."""
+    repo = SqlRepo(session)
+    t = await service.create_ticket(None, repo, world.emp, "Как оформить пропуск?", source="hr_command")
+    await service.reply(session, t, world.hr, "Пропуск оформляет охрана.")
+    assert service.open_window(world.emp)
+    world.emp.time_shift_hours = 14 * 24  # ведущий перемотал на две недели
+    assert service.open_window(world.emp) is None
+    ctx = SimpleNamespace(sender=bot)
+    assert await service.route_reply(ctx, repo, world.emp, "Во сколько обед?", {"mid": "in-20"}) is False

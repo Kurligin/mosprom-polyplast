@@ -20,7 +20,8 @@ from app.bot import hooks, runtime
 from app.bot.keyboards import keyboard, open_app
 from app.bot.texts import tv
 from app.config import settings
-from app.db.models import Consent, Flag, Site, SurveyAnswer
+from app.db.models import Consent, Flag, Message, Site, SurveyAnswer, Ticket
+from app.privacy import is_health
 from app.signals import rules as R
 
 log = logging.getLogger(__name__)
@@ -75,11 +76,45 @@ async def _create_ticket(repo, emp, text: str, *, category: str, level: str):
     return ticket
 
 
+async def _follow_up(repo, emp, flag: Flag, text: str) -> bool:
+    """Повтор той же тревоги свободным сообщением: оно уходит в открытое обращение флага, HR узнаёт о нём.
+
+    False — обращения нет или оно закрыто: тогда нужен новый флаг и новое обращение.
+    """
+    from app.tickets import service as tickets
+    from app.tickets import texts as TT
+
+    session = repo.s
+    ticket = await session.get(Ticket, flag.ticket_id) if flag.ticket_id else None
+    if ticket is None or ticket.status == "closed":
+        return False
+    # входящее сообщение уже в журнале (его пишет бот) — в ленту обращения
+    msg = await session.scalar(
+        select(Message).where(Message.employee_id == emp.id, Message.direction == "in",
+                              Message.ticket_id.is_(None), Message.text == text)
+        .order_by(Message.id.desc()).limit(1))
+    if msg is not None:
+        msg.ticket_id = ticket.id
+    quote = text if len(text) <= tickets.QUOTE_LIMIT else text[:tickets.QUOTE_LIMIT].rstrip() + "…"
+    note = TT.FOLLOW_UP.format(id=ticket.id, name=tickets.clean_name(emp.full_name), site=emp.site_code,
+                               text=quote)
+    app = tickets._app_button(ticket.id)
+    try:
+        await tickets.notify_staff(None, repo, emp, note, keyboard([app]) if app else [])
+    except Exception:  # обращение и привязка сообщения важнее уведомления
+        log.exception("Флаг #%s: HR не узнал о повторном сообщении", flag.id)
+    await session.flush()
+    log.info("Флаг #%s: повторное сообщение новичка %s ушло в обращение #%s", flag.id, emp.id, ticket.id)
+    return True
+
+
 async def raise_flag(repo, emp, *, level: str, topic: str, quote: str | None, source: str,
                      answer=None, ticket_id: int | None = None) -> Flag:
     """Флаг новичку. Красный → обращение HR (source="flag") и уведомление в HR-группу.
 
     ticket_id — привязать к уже созданному обращению (несколько флагов из одного текста — одно обращение).
+    Та же тема за 12 часов новый флаг не создаёт. Повтор красного флага свободным сообщением уходит
+    в открытое обращение этого флага (и HR получает уведомление); обращение закрыто — новое обращение.
     """
     session = repo.s
     since = datetime.now(UTC) - DEDUP_WINDOW
@@ -89,7 +124,9 @@ async def raise_flag(repo, emp, *, level: str, topic: str, quote: str | None, so
         q = q.where(Flag.answer_id == answer.id)
     existing = (await session.scalars(q.order_by(Flag.id.desc()).limit(1))).first()
     if existing is not None:
-        return existing
+        repeat = level == "red" and answer is None and ticket_id is None and bool((quote or "").strip())
+        if not repeat or await _follow_up(repo, emp, existing, (quote or "").strip()):
+            return existing
 
     flag = Flag(employee_id=emp.id, level=level, topic=topic[:64], quote=(quote or "")[:QUOTE_LIMIT] or None,
                 source=source[:16], answer_id=getattr(answer, "id", None), ticket_id=ticket_id, status="new")
@@ -128,7 +165,7 @@ async def check_text(repo, emp, text: str, *, source: str, answer=None) -> list[
     hits = R.detect(text)
     flags = await raise_hits(repo, emp, hits, text, source=source, answer=answer)
     if answer is not None:
-        if any(h.category == "health" for h in hits) or R.is_sensitive(text):
+        if any(h.category == "health" for h in hits) or R.is_sensitive(text) or is_health(text):
             log.info("Ответ #%s: тема здоровья, в LLM не отправляем", answer.id)
         elif await has_ai_consent(repo, emp):
             schedule_analysis(answer.id, text, _names(emp), emp.id)

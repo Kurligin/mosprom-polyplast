@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from app.bot import hooks
 from app.bot import texts as T
@@ -29,6 +30,16 @@ ONBOARDING = (S_FORM, S_CONSENT, S_AI)
 # Старые имена состояний (до 23.10) → новые
 _LEGACY_STATES = {"onboard_form": S_FORM, "onboard_consent": S_CONSENT, "onboard_ai": S_AI,
                   "hr_question": S_HR_QUESTION}
+
+# /hr: сколько ждём вопрос. Дальше текст идёт обычным маршрутом (база знаний), новичок не застревает.
+HR_WAIT_KEY = "hr_wait"
+HR_WAIT_TTL = timedelta(minutes=30)
+# «спасибо», «привет», «ок» — не вопрос для HR; «отмена», «не надо» — передумал
+_SMALL_TALK_RE = re.compile(
+    r"^(спасибо|спс|благодарю|пасиб\w*|привет\w*|здравствуй\w*|добрый (день|вечер)|доброе утро|"
+    r"ок|окей|ok|понял|поняла|понятно|ясно|хорошо|ладно|угу|ага|👍|👌)[\s!.,)🙏👋]*$", re.IGNORECASE)
+_CANCEL_RE = re.compile(r"^(отмена|отменить|не надо|не нужно|передумал\w*|неважно|забудь\w*)[\s!.,)]*$",
+                        re.IGNORECASE)
 
 
 @dataclass
@@ -54,6 +65,40 @@ def _set_state(emp, state: str | None, **data) -> None:
 
 def _onboarded(emp) -> bool:
     return bool((emp.dialog_data or {}).get("onboarded")) or emp.status in ("active", "finished")
+
+
+def _is_demo(emp) -> bool:
+    return bool(getattr(emp, "is_test", False) or getattr(emp, "is_synthetic", False))
+
+
+def _enter_hr_question(emp) -> None:
+    """Ждём вопрос для HR. Ожидание текста в опросе запоминаем и вернём после вопроса."""
+    prev = _state(emp)
+    resume = prev if prev and prev.split(":", 1)[0] == "sv" else None
+    _set_state(emp, S_HR_QUESTION, **{HR_WAIT_KEY: {"at": datetime.now(UTC).isoformat(), "resume": resume}})
+
+
+def _leave_hr_question(emp) -> None:
+    """Вопрос передан, отменён или ожидание истекло: возвращаем прежнее ожидание (опрос) или ничего."""
+    data = dict(emp.dialog_data or {})
+    wait = data.pop(HR_WAIT_KEY, None)
+    emp.dialog_data = data
+    if _state(emp) == S_HR_QUESTION:
+        emp.dialog_state = (wait or {}).get("resume") if isinstance(wait, dict) else None
+
+
+def _hr_wait_expired(emp) -> bool:
+    wait = (emp.dialog_data or {}).get(HR_WAIT_KEY)
+    if not isinstance(wait, dict) or not wait.get("at"):
+        return False  # состояние без отметки времени (старые записи): ждём, пока новичок не напишет
+    try:
+        return datetime.now(UTC) - datetime.fromisoformat(wait["at"]) > HR_WAIT_TTL
+    except (TypeError, ValueError):
+        return True
+
+
+def _hr_ask_keyboard() -> list[dict]:
+    return keyboard([callback(T.HR_CANCEL, "hr:cancel")])
 
 
 async def _say(ctx: BotCtx, repo, person, text: str, attachments=None, *, is_staff: bool = False,
@@ -158,9 +203,19 @@ async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int 
         if emp.max_user_id and emp.max_user_id != user_id:
             await ctx.sender.send(repo, T.CODE_TAKEN, chat_id=chat_id, user_id=user_id)
             return True
+        other = await repo.employee_by_user(user_id)
+        if other is not None and other is not emp:
+            if not _is_demo(other):
+                await ctx.sender.send(repo, T.ACCOUNT_TAKEN, chat_id=chat_id, user_id=user_id)
+                return True
+            # демо: ведущий открывает ссылку нового новичка тем же аккаунтом — старую привязку снимаем
+            other.max_user_id = None
+            other.chat_id = None
+            await repo.flush()
         emp.max_user_id = user_id
         emp.chat_id = chat_id
         _sync_test_name(emp, user)
+        await repo.flush()  # привязка в БД до первого сообщения: ошибка не оставит отправленное приветствие
         if not _onboarded(emp):
             await start_onboarding(ctx, repo, emp)
         else:
@@ -209,13 +264,19 @@ async def _hr_callback(cb: Callback, emp) -> None:
     if cb.payload == "hr:forward":
         question = (emp.dialog_data or {}).get("last_question")
         if question:
-            _set_state(emp, None, last_question=None)
+            _set_state(emp, emp.dialog_state, last_question=None)
             await create_hr_ticket(cb.ctx, cb.repo, emp, question, source="unknown")
             # «Передать вопрос HR?» превращается в «Передал HR» в том же сообщении
             await cb.replace(T.tv(emp, T.HR_DONE), employee=emp)
         else:
-            _set_state(emp, S_HR_QUESTION)
-            await cb.replace(T.tv(emp, T.HR_ASK), employee=emp)
+            _enter_hr_question(emp)
+            await cb.replace(T.tv(emp, T.HR_ASK), _hr_ask_keyboard(), employee=emp)
+    elif cb.payload == "hr:cancel":
+        if _state(emp) == S_HR_QUESTION:
+            _leave_hr_question(emp)
+            await cb.replace(T.tv(emp, T.HR_CANCELLED), employee=emp)
+        else:
+            await cb.mark()
     else:
         await cb.mark()
 
@@ -328,14 +389,34 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
     if chat_id and not emp.chat_id:
         emp.chat_id = chat_id
 
-    if _state(emp) in ONBOARDING:
+    # Красный флаг ловится в любом состоянии: /hr, рассказ о себе, знакомство. Пока опрос ждёт
+    # текстовый ответ, флаги проверяет сам опрос и привязывает их к ответу.
+    state = _state(emp)
+    alert = arg.strip() if cmd == "/hr" else ("" if cmd else text)
+    checked = bool(alert) and (cmd == "/hr" or (state or "").split(":", 1)[0] != "sv")
+    if checked:
+        for pre in hooks.pre_routes():
+            if getattr(pre, "always", False) and await pre(ctx, repo, emp, alert, body):
+                if state == S_HR_QUESTION:
+                    _leave_hr_question(emp)  # текст уже у HR
+                return
+
+    if state in ONBOARDING:
         await _say(ctx, repo, emp, T.tv(emp, T.PRESS_BUTTON))
         return
 
     # команды
     if cmd == "/hr":
-        _set_state(emp, S_HR_QUESTION)
-        await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK))
+        question = arg.strip()
+        if question and not _SMALL_TALK_RE.match(question):
+            # «/hr Когда зарплата» — вопрос в той же строке, переспрашивать не нужно
+            if state == S_HR_QUESTION:
+                _leave_hr_question(emp)
+            await _hr_question(ctx, repo, emp, question)
+            return
+        if state != S_HR_QUESTION:
+            _enter_hr_question(emp)
+        await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard())
         return
     if cmd:
         handler = hooks.command_handler(cmd.lstrip("/"))
@@ -348,26 +429,43 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
 
     # ждём текст по состоянию диалога
     if _state(emp) == S_HR_QUESTION:
-        if not text:
-            await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK))
+        if _hr_wait_expired(emp):
+            _leave_hr_question(emp)  # давно открыл /hr: это уже обычный вопрос
+        elif not text:
+            await _say(ctx, repo, emp, T.tv(emp, T.HR_ASK), _hr_ask_keyboard())
             return
-        _set_state(emp, None)
-        ticket = await create_hr_ticket(ctx, repo, emp, text, source="hr_command")
-        await _say(ctx, repo, emp, T.tv(emp, T.HR_DONE), ticket_id=getattr(ticket, "id", None))
-        return
+        elif _CANCEL_RE.match(text):
+            _leave_hr_question(emp)
+            await _say(ctx, repo, emp, T.tv(emp, T.HR_CANCELLED))
+            return
+        elif _SMALL_TALK_RE.match(text):
+            return  # «ок», «спасибо» — не вопрос: ждём сам вопрос, обращение не создаём
+        else:
+            _leave_hr_question(emp)
+            await _hr_question(ctx, repo, emp, text)
+            return
     handler = hooks.state_handler(_state(emp))
-    if handler is not None:
-        await handler(ctx, repo, emp, text, body)
+    # False — состояние этот текст не ждёт: дальше обычный маршрут
+    if handler is not None and await handler(ctx, repo, emp, text, body) is not False:
         return
 
     # ответ в открытое обращение и прочие перехваты до базы знаний
     for pre in hooks.pre_routes():
+        if checked and getattr(pre, "always", False):
+            continue  # этот текст уже проверен выше
         if await pre(ctx, repo, emp, text, body):
             return
 
     if not text:
+        if body.get("attachments"):
+            await _say(ctx, repo, emp, T.tv(emp, T.NON_TEXT))
         return
     await route_free_text(ctx, repo, emp, text)
+
+
+async def _hr_question(ctx: BotCtx, repo, emp, text: str) -> None:
+    ticket = await create_hr_ticket(ctx, repo, emp, text, source="hr_command")
+    await _say(ctx, repo, emp, T.tv(emp, T.HR_DONE), ticket_id=getattr(ticket, "id", None))
 
 
 def _button_label(body: dict, payload: str) -> str | None:

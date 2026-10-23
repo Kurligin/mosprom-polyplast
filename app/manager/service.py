@@ -3,6 +3,7 @@
 Встречи (`ManagerTask`):
 - 3-й рабочий день;
 - 30-й и 60-й день, если выпали на выходной — ближайший рабочий после;
+  дни считаются от первого рабочего дня (дата выхода в выходной или праздник — от следующего рабочего);
 - итоговая — за 5 дней до конца испытательного, если выпала на выходной — ближайший рабочий раньше.
 Встречи на 30-й и 60-й день после итоговой не ставим (короткий испытательный).
 
@@ -28,7 +29,7 @@ from app.bot.keyboards import callback, keyboard, open_app
 from app.config import settings
 from app.db.models import Employee, ManagerTask, Staff
 from app.manager import texts as T
-from app.scenario.workcal import is_workday, next_workday, nth_workday
+from app.scenario.workcal import is_workday, next_workday, nth_workday, prev_workday
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def adaptation_day(emp, now: datetime | None = None) -> int:
             return int(fn(emp, now))
         except Exception as e:  # noqa: BLE001 — движок не должен ломать экран руководителя
             log.debug("engine.adaptation_day: %s", e)
-    return (employee_now(emp, now).date() - emp.start_date).days + 1
+    return (employee_now(emp, now).date() - next_workday(emp.start_date)).days + 1
 
 
 def probation_days(emp) -> int:
@@ -110,23 +111,19 @@ def display_name(emp) -> str:
 
 # --- план встреч (чистые функции) ------------------------------------------
 
-def prev_workday(d: date) -> date:
-    while not is_workday(d):
-        d -= timedelta(days=1)
-    return d
-
-
 def plan_meetings(start: date, probation_end: date | None) -> list[Milestone]:
+    """План встреч. День N — от первого рабочего дня, как adaptation_day в движке сценария."""
+    first = next_workday(start)
     plan = [
-        Milestone(KIND_MEETING, 3, nth_workday(start, 3)),
-        Milestone(KIND_MEETING, 30, next_workday(start + timedelta(days=29))),
-        Milestone(KIND_MEETING, 60, next_workday(start + timedelta(days=59))),
+        Milestone(KIND_MEETING, 3, nth_workday(first, 3)),
+        Milestone(KIND_MEETING, 30, next_workday(first + timedelta(days=29))),
+        Milestone(KIND_MEETING, 60, next_workday(first + timedelta(days=59))),
     ]
     if probation_end:
         due = prev_workday(probation_end - timedelta(days=PROBATION_LEAD_DAYS))
         if due > plan[0].due:
             plan = [m for m in plan if m.due < due]
-            plan.append(Milestone(KIND_PROBATION, (due - start).days + 1, due))
+            plan.append(Milestone(KIND_PROBATION, (due - first).days + 1, due))
     return plan
 
 
@@ -134,11 +131,12 @@ def push_window(task, emp) -> tuple[date, date]:
     """Дни, когда push по встрече уместен: с даты встречи и ещё немного, если пропустили."""
     due = task.due_date
     if task.kind == KIND_PROBATION:
-        return due, max(emp.probation_end or due, due)
+        # конец срока в выходной: push догоняет и в первый рабочий день после него
+        return due, max(next_workday(emp.probation_end) if emp.probation_end else due, due)
     lo = due
     if emp.time_shift_hours and task.day in MEETING_DAYS:
         # демо-перемотка ставит календарный день, он может выпасть на выходной до даты встречи
-        lo = min(due, emp.start_date + timedelta(days=task.day - 1))
+        lo = min(due, next_workday(emp.start_date) + timedelta(days=task.day - 1))
     return lo, due + timedelta(days=PUSH_GRACE_DAYS)
 
 

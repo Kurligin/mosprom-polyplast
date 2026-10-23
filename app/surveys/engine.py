@@ -18,9 +18,11 @@ from zoneinfo import ZoneInfo
 
 from app.bot import runtime
 from app.bot.keyboards import callback, keyboard
+from app.bot.repo import lock_employee
 from app.bot.texts import tv
 from app.config import settings
 from app.db.models import SurveyAnswer
+from app.scenario.workcal import is_workday
 from app.surveys import config as C
 from app.surveys import store
 from app.surveys import texts as T
@@ -32,7 +34,7 @@ STATE_KEY = "survey"
 HISTORY_KEY = "surveys"
 TEXT_WAIT_TTL = timedelta(hours=12)   # дольше ждать текст не будем: дальше это просто вопрос в бот
 REMIND_HOUR = 10                       # напоминания — не раньше 10:00 по времени площадки
-STALE_DAYS = 3                         # опросу больше 3 дней — не напоминаем
+STALE_DAYS = 3                         # опросу больше 3 рабочих дней — не напоминаем
 
 ACT = {"recruiter": "rc", "hr": "hc", "forward": "fw", "forward_hr": "fh", "remind_access": "acc"}
 _X = re.compile(r"(?<![А-Яа-яЁёA-Za-z])Х(?![А-Яа-яЁёA-Za-z])")
@@ -351,6 +353,8 @@ async def start_survey(repo, emp, code: str, *, force: bool = False) -> str | No
     qs = sv.visible(_site(emp))
     if not qs:
         return None
+    # планировщик: бот или API могли поменять dialog_data, пока мы работали — читаем свежие под блокировкой
+    await lock_employee(getattr(repo, "s", None), emp)
     st = _state(emp)
     if st and st.get("code") == code and not st.get("done") and not force:
         return st.get("mid")
@@ -375,7 +379,7 @@ async def start_survey(repo, emp, code: str, *, force: bool = False) -> str | No
     st["mid"] = mids[-1] if mids else None
     if img and st["mid"]:
         st["img"], st["img_mid"] = img, st["mid"]
-    st["view"] = {"text": text, "kb": kb}
+    st["view"] = {"text": text, "kb": kb, "wait": st.get("wait")}
     _save(emp, st, new_run=True, started_at=st["started_at"])
     log.info("Опрос %s начат у новичка %s", code, emp.id)
     return st["mid"]
@@ -411,7 +415,8 @@ def reset(emp, code: str | None = None) -> None:
 # --- кнопки ----------------------------------------------------------------------------
 
 async def _show(cb, emp, st: dict, text: str, kb: list[dict]) -> None:
-    st["view"] = {"text": text, "kb": kb}
+    # режим ожидания текста — вместе с видом: «Продолжить опрос» вернёт и вопрос, и ожидание ответа
+    st["view"] = {"text": text, "kb": kb, "wait": st.get("wait")}
     history = {}
     if st.get("_done_at"):
         history["done_at"] = st.pop("_done_at")
@@ -500,6 +505,9 @@ async def _dispatch(cb, emp, sv: C.Survey, st: dict, i: int, q: C.Question, act:
     elif act in ("n", "sk"):
         await _show(cb, emp, st, *_advance(emp, sv, st))
     elif act in ("rc", "hc"):
+        if _contacted(st, i, act):
+            await cb.toast(T.ALREADY_SENT)
+            return
         await _ticket(ctx, repo, emp, _contact_text(emp, sv, q, st.get("value")), category="contact_request")
         ack = tv(emp, T.CONTACT_RECRUITER if act == "rc" else T.CONTACT_HR)
         await _show(cb, emp, st, *_advance(emp, sv, st, prefix=_ack_prefix(emp, sv, st, i, ack)))
@@ -509,10 +517,25 @@ async def _dispatch(cb, emp, sv: C.Survey, st: dict, i: int, q: C.Question, act:
         ask = tv(emp, T.FORWARD_ASK if act == "fw" else T.FORWARD_HR_ASK)
         await _show(cb, emp, st, _join(current, ask), keyboard([_btn(T.BTN_SKIP, sv.code, i, "sk")]))
     elif act == "acc":
+        if _contacted(st, i, act):
+            await cb.toast(T.ALREADY_SENT)
+            return
         ack = await _remind_access(ctx, repo, emp)
         await _show(cb, emp, st, *_advance(emp, sv, st, prefix=_ack_prefix(emp, sv, st, i, ack)))
     else:
         await cb.toast(T.STALE)
+
+
+def _contacted(st: dict | None, i: int, act: str) -> bool:
+    """Обращение «связаться» / напоминание про доступы по этому вопросу уже было. Иначе — отмечаем."""
+    if st is None:
+        return False
+    key = f"{i}:{act}"
+    done = list(st.get("contacted") or [])
+    if key in done:
+        return True
+    st["contacted"] = [*done, key]
+    return False
 
 
 def _ack_prefix(emp, sv: C.Survey, st: dict, i: int, ack: str) -> str:
@@ -537,7 +560,20 @@ async def _after_choice(cb, emp, sv: C.Survey, st: dict, i: int, opt: C.Option, 
 
 
 async def _stale_action(cb, emp, sv: C.Survey, i: int, act: str) -> None:
-    """Кнопка из сообщения, которое уже не текущее. Действия «связаться» и «доступы» работают и так."""
+    """Кнопка из сообщения, которое уже не текущее. Действия «связаться» и «доступы» работают и так.
+
+    Повторное нажатие в живом сообщении опроса (двойной тап, пока шёл первый ответ) — только всплывашка:
+    второе обращение не нужно, а правка затёрла бы следующий вопрос.
+    """
+    st = _state(emp)
+    live = bool(st and cb.mid and cb.mid == st.get("mid"))
+    if act in ("acc", "rc", "hc"):
+        same = st if st and st.get("code") == sv.code else None
+        if live or _contacted(same, i, act):
+            await cb.toast(T.ALREADY_SENT)
+            return
+        if same is not None:
+            _save(emp, same)
     if act == "acc":
         ack = await _remind_access(cb.ctx, cb.repo, emp)
         await cb.replace(_join(cb.orig_text, ack), [], employee=emp)
@@ -565,6 +601,10 @@ async def _continue(cb, emp, sv: C.Survey, st: dict | None) -> None:
     if old and old != cb.mid:
         await runtime.edit(old, T.MOVED_DOWN, [], chat_id=getattr(emp, "chat_id", None))
     st["mid"] = cb.mid
+    # опрос ждал текст («Что мешает?», свой вариант): ждём заново, иначе ответ уйдёт в базу знаний
+    mode = st.get("wait") or view.get("wait")
+    if mode:
+        _set_wait(emp, st, mode)
     await _show(cb, emp, st, view["text"], view.get("kb") or [])
 
 
@@ -580,15 +620,12 @@ def _parse_state(state: str | None) -> tuple[str, int, str] | None:
         return None
 
 
-async def _to_free_text(ctx, repo, emp, text: str) -> None:
-    from app.bot.handlers import route_free_text
+async def handle_text(ctx, repo, emp, text: str, msg: dict) -> bool | None:
+    """Текст новичка, пока опрос ждёт свой вариант, причину или открытый ответ.
 
-    if text:
-        await route_free_text(ctx, repo, emp, text)
-
-
-async def handle_text(ctx, repo, emp, text: str, msg: dict) -> None:
-    """Текст новичка, пока опрос ждёт свой вариант, причину или открытый ответ."""
+    False — опрос этот текст уже не ждёт: бот ведёт его обычным маршрутом (красный флаг, окно ответа HR,
+    база знаний).
+    """
     st = _state(emp)
     parsed = _parse_state(emp.dialog_state)
     sv = C.get(parsed[0]) if parsed else None
@@ -599,14 +636,14 @@ async def handle_text(ctx, repo, emp, text: str, msg: dict) -> None:
         except ValueError:
             fresh = False
     if not (sv and st and st.get("code") == sv.code and st.get("q") == parsed[1] and st.get("wait") and fresh):
-        # опрос давно брошен или состояние не совпало: это обычный вопрос в бот
+        # опрос давно брошен или состояние не совпало: это обычный текст в бот. Режим ожидания остаётся
+        # в st["view"]: «Продолжить опрос» из напоминания вернёт его.
         if st and st.get("wait"):
             _set_wait(emp, st, None)
             _save(emp, st)
         elif (emp.dialog_state or "").split(":", 1)[0] == PREFIX:
             emp.dialog_state = None
-        await _to_free_text(ctx, repo, emp, text)
-        return
+        return False
     text = (text or "").strip()
     if not text:
         await ctx.sender.send(repo, tv(emp, T.TEXT_ONLY), chat_id=emp.chat_id, user_id=emp.max_user_id,
@@ -648,7 +685,7 @@ async def handle_text(ctx, repo, emp, text: str, msg: dict) -> None:
     mids = await ctx.sender.send(repo, text_out, chat_id=emp.chat_id, user_id=emp.max_user_id,
                                  attachments=kb or None, employee=emp)
     st["mid"] = mids[-1] if mids else None
-    st["view"] = {"text": text_out, "kb": kb}
+    st["view"] = {"text": text_out, "kb": kb, "wait": st.get("wait")}
     history = {"done_at": st.pop("_done_at")} if st.get("_done_at") else {}
     _save(emp, st, **history)
 
@@ -656,7 +693,10 @@ async def handle_text(ctx, repo, emp, text: str, msg: dict) -> None:
 # --- напоминания -----------------------------------------------------------------------
 
 def reminder_due(emp, st: dict, tz: str, now: datetime | None = None) -> int:
-    """Какое напоминание пора слать: 0 — никакое, 1 — на следующий день, 2 — через день."""
+    """Какое напоминание пора слать: 0 — никакое, 1 — на следующий рабочий день, 2 — через рабочий день.
+
+    Дни — по производственному календарю, как шаги сценария: в выходные и праздники не пишем.
+    """
     if not st or st.get("done") or not st.get("started_at"):
         return 0
     try:
@@ -665,14 +705,18 @@ def reminder_due(emp, st: dict, tz: str, now: datetime | None = None) -> int:
         return 0
     zone = ZoneInfo(tz or settings.tz_default)
     local_now = emp_now(emp, now).astimezone(zone)
-    days = (local_now.date() - started.astimezone(zone).date()).days
-    if days < 1 or days >= STALE_DAYS or local_now.hour < REMIND_HOUR:
+    today, start = local_now.date(), started.astimezone(zone).date()
+    if not start < today <= start + timedelta(days=31) or local_now.hour < REMIND_HOUR or not is_workday(today):
+        return 0
+    days = sum(1 for k in range(1, (today - start).days + 1) if is_workday(start + timedelta(days=k)))
+    if days < 1 or days >= STALE_DAYS:
         return 0
     due = min(days, 2)
     return due if due > int(st.get("reminded") or 0) else 0
 
 
 async def send_reminder(repo, emp, st: dict, due: int) -> list[str] | None:
+    """Напоминание с кнопкой «Продолжить опрос». st — свежее состояние опроса (после lock_employee)."""
     text = tv(emp, T.REMINDER).format(name=getattr(emp, "first_name", "") or "")
     kb = keyboard([callback(T.BTN_CONTINUE, f"{PREFIX}:{st['code']}:go")])
     mids = await runtime.send(repo, text, employee=emp, attachments=kb)
@@ -707,7 +751,13 @@ async def remind_all(session, now: datetime | None = None, employee_ids=None) ->
             continue
         if not (emp.chat_id or emp.max_user_id):
             continue
-        due = reminder_due(emp, st, tzs.get(emp.site_code) or settings.tz_default, now)
+        tz = tzs.get(emp.site_code) or settings.tz_default
+        if not reminder_due(emp, st, tz, now):
+            continue
+        # бот мог поменять опрос, пока мы шли по списку: перечитываем под блокировкой и проверяем заново
+        await lock_employee(session, emp)
+        st = _state(emp)
+        due = reminder_due(emp, st, tz, now) if st else 0
         if due:
             try:
                 await send_reminder(repo, emp, st, due)

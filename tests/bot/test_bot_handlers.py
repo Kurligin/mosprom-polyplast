@@ -3,7 +3,7 @@
 import pytest
 
 from app.bot import texts as T
-from app.bot.handlers import S_CONSENT, S_FORM, handle_update
+from app.bot.handlers import S_CONSENT, S_FORM, S_HR_QUESTION, handle_update
 from tests.bot.conftest import ev_cb, ev_started, ev_text
 
 pytestmark = pytest.mark.asyncio
@@ -107,6 +107,42 @@ async def test_hr_command_creates_ticket_and_notifies_group(ctx, repo, api):
     assert api.sent[-2]["chat_id"] == -900
     assert api.sent[-1]["text"] == T.HR_DONE[0]
     assert emp.dialog_state is None
+
+
+async def test_hr_command_with_question_in_same_line(ctx, repo, api):
+    emp = repo.add_employee(max_user_id=100, chat_id=500, status="active", address_form="ty")
+    await handle_update(ctx, repo, ev_text("/hr Когда придёт первая зарплата"))
+    t = repo.tickets[-1]
+    assert t.source == "hr_command" and t.text == "Когда придёт первая зарплата"
+    assert api.sent[-1]["text"] == T.HR_DONE[0] and emp.dialog_state is None
+
+
+async def test_hr_question_has_exits(ctx, repo, api):
+    emp = repo.add_employee(max_user_id=100, chat_id=500, status="active", address_form="ty")
+    await handle_update(ctx, repo, ev_text("/hr"))
+    assert api.buttons() == ["hr:cancel"]
+    # «ок» и «спасибо» — не вопрос: обращение не создаём, ждём дальше
+    await handle_update(ctx, repo, ev_text("ок"))
+    await handle_update(ctx, repo, ev_text("Спасибо!"))
+    assert repo.tickets == [] and emp.dialog_state == S_HR_QUESTION
+    # кнопка «Отмена» — ожидание снято, сообщение меняется на месте
+    await handle_update(ctx, repo, ev_cb("hr:cancel"))
+    assert emp.dialog_state is None and api.answers[-1]["message"]["text"] == T.HR_CANCELLED[0]
+    await handle_update(ctx, repo, ev_text("Где взять спецодежду?"))
+    assert repo.tickets == [] and api.buttons() == ["hr:forward"], "вопрос ушёл обычным маршрутом"
+    # «отмена» текстом
+    await handle_update(ctx, repo, ev_text("/hr"))
+    await handle_update(ctx, repo, ev_text("не надо"))
+    assert emp.dialog_state is None and api.sent[-1]["text"] == T.HR_CANCELLED[0] and repo.tickets == []
+
+
+async def test_hr_question_expires(ctx, repo, api):
+    emp = repo.add_employee(max_user_id=100, chat_id=500, status="active", address_form="ty")
+    await handle_update(ctx, repo, ev_text("/hr"))
+    emp.dialog_data = {**emp.dialog_data, "hr_wait": {"at": "2020-01-01T00:00:00+00:00", "resume": None}}
+    await handle_update(ctx, repo, ev_text("Где взять спецодежду?"))
+    assert repo.tickets == [] and emp.dialog_state is None, "через полчаса это обычный вопрос"
+    assert api.buttons() == ["hr:forward"]
 
 
 async def test_food_stub_vy(ctx, repo, api):

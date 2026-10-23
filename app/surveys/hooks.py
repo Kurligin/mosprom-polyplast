@@ -13,13 +13,14 @@ async def survey_button(cb: hooks.Callback, person) -> None:
 
 
 @hooks.on_state(engine.PREFIX)
-async def survey_text(ctx, repo, emp, text: str, msg: dict) -> None:
-    await engine.handle_text(ctx, repo, emp, text, msg)
+async def survey_text(ctx, repo, emp, text: str, msg: dict) -> bool | None:
+    # False — опрос этот текст уже не ждёт, бот ведёт его обычным маршрутом
+    return await engine.handle_text(ctx, repo, emp, text, msg)
 
 
 @job("survey_reminders", seconds=60)
 async def survey_reminders() -> None:
-    """На следующий день и через день после начала опроса, не раньше 10:00 по времени площадки."""
+    """На следующий и через рабочий день после начала опроса, не раньше 10:00 по времени площадки."""
     from app.db.session import async_session
 
     async with async_session() as s:

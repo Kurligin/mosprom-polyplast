@@ -4,6 +4,7 @@
   Если HR-группа не подключена, уведомление получает сам рекрутер в личном чате.
 - reply: ответ HR из Mini App уходит новичку с подписью «Имя (HR)». 30 минут после ответа
   сообщения новичка попадают в то же обращение (окно — в emp.dialog_data["ticket_window"]).
+  Окно живёт в настоящем времени: машина времени (time_shift_hours) его закрывает.
 - take / close: статус меняется, уведомление в HR-группе правится на месте.
 
 Статусы в БД: new → in_progress → closed. В Mini App new называется open.
@@ -20,6 +21,7 @@ from sqlalchemy import select, update
 
 from app.bot import runtime
 from app.bot.keyboards import callback, keyboard, open_app
+from app.bot.repo import lock_employee
 from app.bot.texts import tv
 from app.config import settings
 from app.db.models import Employee, Flag, HrAnswer, Message, Staff, Ticket
@@ -336,14 +338,17 @@ def _set_window(emp, ticket_id: int | None, until: datetime | None = None) -> No
     if ticket_id is None:
         data.pop(WINDOW_KEY, None)
     else:
-        data[WINDOW_KEY] = {"ticket_id": ticket_id, "until": until.isoformat(), "relayed": False}
+        data[WINDOW_KEY] = {"ticket_id": ticket_id, "until": until.isoformat(), "relayed": False,
+                            "shift": getattr(emp, "time_shift_hours", 0) or 0}
     emp.dialog_data = data  # новый dict, чтобы SQLAlchemy заметил изменение JSONB
 
 
 def open_window(emp) -> dict | None:
-    """Открытое окно ответа HR или None."""
+    """Открытое окно ответа HR или None. После перемотки времени (другой time_shift_hours) окна нет."""
     w = (emp.dialog_data or {}).get(WINDOW_KEY)
     if not isinstance(w, dict) or not w.get("ticket_id"):
+        return None
+    if int(w.get("shift") or 0) != int(getattr(emp, "time_shift_hours", 0) or 0):
         return None
     try:
         until = datetime.fromisoformat(w["until"])
@@ -439,6 +444,8 @@ async def reply(session, ticket: Ticket, staff, text: str, *, add_to_kb: bool = 
     elif ticket.assignee_id is None:
         ticket.assignee_id = staff.id
     if mids:
+        # пока шёл ответ, бот мог записать новичку состояние опроса: окно пишем поверх свежих данных
+        await lock_employee(session, emp)
         _set_window(emp, ticket.id, now + REPLY_WINDOW)
     if add_to_kb and not ticket.is_personal:
         site = None if kb_site in (None, "", "all") else kb_site
@@ -468,6 +475,7 @@ async def close(session, ticket: Ticket, staff) -> Ticket:
         if ticket.assignee_id is None:
             ticket.assignee_id = staff.id
     emp = await session.get(Employee, ticket.employee_id)
+    await lock_employee(session, emp)
     w = (emp.dialog_data or {}).get(WINDOW_KEY)
     if isinstance(w, dict) and w.get("ticket_id") == ticket.id:
         _set_window(emp, None)

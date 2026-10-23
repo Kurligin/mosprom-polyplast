@@ -59,6 +59,17 @@ def test_plan_skips_holidays_and_weekends():
     assert S.plan_meetings(start, None)[1].due == date(2026, 11, 2)
 
 
+def test_plan_counts_days_from_first_workday():
+    """Выход в вс 25.10: день 1 — пн 26.10, поэтому 30-й день — вт 24.11, а итоговая — день адаптации даты."""
+    plan = S.plan_meetings(date(2026, 10, 25), date(2027, 1, 23))
+    assert plan[1].due == date(2026, 11, 24) and plan[2].due == date(2026, 12, 24)
+    final = plan[-1]
+    assert final.kind == S.KIND_PROBATION and final.due == date(2027, 1, 18)
+    assert final.day == (date(2027, 1, 18) - date(2026, 10, 26)).days + 1 == 85
+    e = emp_(start_date=date(2026, 10, 25), probation_end=date(2027, 1, 23))
+    assert S.adaptation_day(e, at(2027, 1, 18, 12)) == final.day, "день встречи совпадает с днём адаптации"
+
+
 def test_final_meeting_moves_to_previous_workday():
     # конец испытательного 2026-11-09 (пн) → −5 = 4 ноября (праздник) → 3 ноября
     plan = S.plan_meetings(date(2026, 8, 10), date(2026, 11, 9))
@@ -85,11 +96,14 @@ def test_push_at_ten_on_due_day():
 
 
 def test_push_with_time_travel_on_calendar_day():
-    # выход в воскресенье, перемотка на 3-й календарный день (вт), встреча — 3-й рабочий (ср)
+    # выход в воскресенье: день 1 — пн 26.10, перемотка «3» и встреча — 3-й рабочий (ср 28.10)
     e = emp_(start_date=date(2026, 10, 25), time_shift_hours=96)
     t = task_(due_date=date(2026, 10, 28))
-    assert S.push_is_due(t, e, at(2026, 10, 27, 10, 30))
-    assert not S.push_is_due(t, e, at(2026, 10, 26, 12))
+    assert S.push_is_due(t, e, at(2026, 10, 28, 10, 30))
+    assert not S.push_is_due(t, e, at(2026, 10, 27, 12)), "второй рабочий день — рано"
+    # выход в пт 2.10: 30-й день — сб 31.10, встреча — пн 2.11; перемотка на сам день 30 уже шлёт push
+    e30 = emp_(start_date=date(2026, 10, 2), time_shift_hours=96)
+    assert S.push_is_due(task_(day=30, due_date=date(2026, 11, 2)), e30, at(2026, 10, 31, 10, 30))
     # без перемотки — строго в день встречи
     assert not S.push_is_due(t, emp_(start_date=date(2026, 10, 25)), at(2026, 10, 27, 10, 30))
 
@@ -99,6 +113,11 @@ def test_final_push_until_probation_end():
     t = task_(kind=S.KIND_PROBATION, day=88, due_date=date(2027, 1, 14))
     assert S.push_is_due(t, e, at(2027, 1, 19, 11))
     assert not S.push_is_due(t, e, at(2027, 1, 20, 11))
+    # конец срока в субботу 23.01: перемотка «end» (пт 22.01) и первый рабочий день после него — ещё в окне
+    sat = emp_(start_date=date(2026, 10, 26), probation_end=date(2027, 1, 23), time_shift_hours=24)
+    final = task_(kind=S.KIND_PROBATION, day=85, due_date=date(2027, 1, 18))
+    assert S.push_is_due(final, sat, at(2027, 1, 22, 10, 30))
+    assert S.push_is_due(final, sat, at(2027, 1, 25, 10, 30))
 
 
 def test_employee_now_uses_shift():

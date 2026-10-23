@@ -1,5 +1,8 @@
 """Сигналы в свободных сообщениях: если новичок пишет о себе про угрозы, травлю или опасность на работе,
-сообщение сразу уходит HR красным флагом, а не в поиск по базе знаний."""
+сообщение сразу уходит HR красным флагом, а не в поиск по базе знаний.
+
+Проверка идёт в любом состоянии диалога (/hr, рассказ о себе, окно ответа HR), кроме ожидания ответа
+в опросе: там флаги проверяет сам опрос."""
 
 from __future__ import annotations
 
@@ -11,7 +14,7 @@ from app.signals import rules, service
 log = logging.getLogger(__name__)
 
 
-@hooks.pre_route
+@hooks.pre_route_always
 async def red_flag_in_message(ctx, repo, emp, text: str, msg: dict) -> bool:
     if not text or getattr(repo, "s", None) is None:
         return False

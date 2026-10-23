@@ -182,17 +182,18 @@ async def test_gate_recruiter_go_and_intro(db, emp, api, sender):
     assert api.sent[-1]["text"] == "Расскажи о себе и приложи фото"
 
     ctx = BotCtx(sender=sender)
+    about = "Я инженер-технолог, пять лет на экструзии"
     async with db() as s:
         e = await s.get(Employee, emp.id)
-        assert e.dialog_state == engine.INTRO_STATE
-        await engine.on_intro(ctx, SqlRepo(s), e, "Я инженер-технолог", {"attachments": []})
+        assert e.dialog_state is None and engine.intro_wait(e), "ждём рассказ в dialog_data, а не в dialog_state"
+        assert await engine.on_intro(ctx, SqlRepo(s), e, about, {"attachments": []}) is True
         assert api.sent[-1]["text"] == T.INTRO_NEED_PHOTO[0]
         photo = {"attachments": [{"type": "image", "payload": {"url": "https://example.test/p.jpg"}}]}
-        await engine.on_intro(ctx, SqlRepo(s), e, "", photo)
+        assert await engine.on_intro(ctx, SqlRepo(s), e, "", photo) is True
         await s.commit()
         assert api.sent[-1]["text"] == T.INTRO_THANKS[0]
-        assert e.dialog_state is None
-        assert e.dialog_data["intro"]["text"] == "Я инженер-технолог"
+        assert e.dialog_state is None and engine.intro_wait(e) is None
+        assert e.dialog_data["intro"]["text"] == about
         assert e.dialog_data["intro"]["photo_url"] == "https://example.test/p.jpg"
 
 
@@ -263,7 +264,8 @@ async def test_time_travel_sends_new_day_without_backlog(db, emp, api, sender):
         res = await engine.time_travel(s, e, "now", now=real)
         assert e.time_shift_hours == 0 and res["day"] == -9
         up = await engine.upcoming_steps(s, e, now=real)
-        assert up and up[0]["at"].startswith("2026-11-01T10:00")
+        # отправки «будущих» дней из репетиции забыты: шаги за 3 дня до выхода снова впереди
+        assert up and up[0]["at"].startswith("2026-10-30T10:00")
 
 
 async def test_on_onboarded_sends_due_steps_in_handler(db, emp, api, sender, monkeypatch):
@@ -292,12 +294,13 @@ async def test_replay_closes_gates_of_replayed_days(db, emp, api, sender):
         e = await s.get(Employee, emp.id)
         await engine.open_gate(s, e, "recruiter_go")
         e.dialog_state = engine.INTRO_STATE
+        e.dialog_data = {**e.dialog_data, engine.INTRO_WAIT: {"since": engine._vnow(e).isoformat(), "asked": []}}
         await engine.time_travel(s, e, "3", now=real)
         assert engine.gates(e)["recruiter_go"] is True  # шаг 2-го дня раньше цели — отмашка остаётся
         await engine.time_travel(s, e, "1", now=real)
         await s.commit()
         assert engine.gates(e) == {"recruiter_go": False, "plan_ready": False}
-        assert e.dialog_state is None
+        assert e.dialog_state is None and engine.INTRO_WAIT not in e.dialog_data
 
 
 async def test_timeline_past_from_deliveries_and_upcoming(db, emp, api, sender):
@@ -333,3 +336,119 @@ async def test_timeline_synthetic_past_from_plan(db):
         e.status = "waiting"
         tl = await engine.timeline(s, e, now=at(3, 12))
     assert tl["past"] == []
+
+
+class DoneSurveys(FakeSurveys):
+    """Опрос day3 с временем прохождения и сбросом (машина времени)."""
+
+    def __init__(self):
+        super().__init__()
+        self.done_at: str | None = None
+        self.resets: list[str] = []
+
+    def survey_history(self, emp):
+        return {"day3": {"started_at": "x", **({"done_at": self.done_at} if self.done_at else {})}}
+
+    def reset(self, emp, code=None):
+        self.resets.append(code)
+
+
+async def test_outro_after_survey_survives_next_day(db, emp, api, sender, monkeypatch):
+    """Реплика после опроса не устаревает, пока опрос не пройден: пройден на следующий день — приходит."""
+    sv = DoneSurveys()
+    monkeypatch.setattr(engine, "_surveys", lambda: sv)
+    await tick(db, sender, at(5, 17, 31))
+    assert sv.started == ["day3"]
+    await tick(db, sender, at(6, 18, 0))  # больше суток после 17:30, опрос ещё не пройден
+    assert 15 not in await deliveries(db, emp.id), "«Пока, Х!» ждёт опрос, а не помечен устаревшим"
+    sv.done_at = at(6, 18, 5).isoformat()  # прошёл по напоминанию
+    assert await tick(db, sender, at(6, 18, 6)) == 1
+    assert api.sent[-1]["text"] == "Пока, Тест!"
+
+
+async def test_outro_goes_stale_a_day_after_survey(db, emp, api, sender, monkeypatch):
+    sv = DoneSurveys()
+    monkeypatch.setattr(engine, "_surveys", lambda: sv)
+    await tick(db, sender, at(5, 17, 31))
+    sv.done_at = at(5, 17, 40).isoformat()
+    await tick(db, sender, at(6, 19, 0))  # тик не работал больше суток после прохождения
+    d = await deliveries(db, emp.id)
+    assert d[15].status == "skipped" and d[15].error == engine.STALE_NOTE
+
+
+async def test_back_to_now_forgets_rehearsed_days(db, emp, api, sender, monkeypatch):
+    """Тестовый новичок: «вернуть к сегодняшнему дню» забывает отправки, опросы и отмашки будущих дней."""
+    sv = DoneSurveys()
+    monkeypatch.setattr(engine, "_surveys", lambda: sv)
+    ticks = []
+
+    async def manager_tick(session):
+        ticks.append(1)
+
+    monkeypatch.setattr(engine, "_manager_tick", manager_tick)
+    real = at(23, 12, month=10)
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        await engine.time_travel(s, e, "3", now=real)
+        await s.commit()
+    await tick(db, sender, real)
+    assert sv.started == ["day3"]
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        await engine.open_gate(s, e, "recruiter_go")
+        e.dialog_data = {**e.dialog_data, "ticket_window": {"ticket_id": 1, "until": real.isoformat(), "shift": 0}}
+        await s.commit()
+
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        res = await engine.time_travel(s, e, "now", now=real)
+        await s.commit()
+        assert res["day"] == -9 and e.time_shift_hours == 0
+        assert engine.gates(e) == {"recruiter_go": False, "plan_ready": False}
+        assert "ticket_window" not in e.dialog_data
+        tl = await engine.timeline(s, e, now=real)
+    left = await deliveries(db, emp.id)
+    assert all(d.scheduled_at <= real for d in left.values()), "отправок «из будущего» не осталось"
+    assert sv.resets == ["day3"] and ticks, "опрос 3-го дня забыт, встречи пересчитаны"
+    assert tl["past"] == [] and tl["upcoming"][0]["at"].startswith("2026-10-30T10:00")
+
+
+async def test_time_travel_end_lands_inside_probation(db, emp, api, sender):
+    """Конец срока в субботу: перемотка «end» — на пятницу, push об итоговой встрече ещё уместен."""
+    from datetime import date
+
+    from app.manager import service as manager
+
+    real = at(23, 12, month=10)
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        e.start_date, e.probation_end = date(2026, 10, 26), date(2027, 1, 23)
+        await engine.time_travel(s, e, "end", now=real)
+        await s.commit()
+        vnow = engine.employee_now(engine.employee_ctx(e, "Europe/Moscow"), real)
+        assert vnow.date() == date(2027, 1, 22)
+        (final,) = [m for m in manager.plan_meetings(e.start_date, e.probation_end) if m.kind == "probation"]
+        task = SimpleNamespace(kind=final.kind, day=final.day, due_date=final.due)
+        assert manager.push_is_due(task, e, vnow)
+
+
+async def test_intro_step_has_skip_button(db, emp, api, sender):
+    await tick(db, sender, at(3, 11))
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        await engine.open_gate(s, e, "recruiter_go")
+        await s.commit()
+    assert await tick(db, sender, at(3, 11, 1)) == 1
+    did = (await deliveries(db, emp.id))[11].id
+    assert api.payloads() == [f"sc:{did}:{engine.INTRO_SKIP}"]
+    async with db() as s:
+        e = await s.get(Employee, emp.id)
+        assert engine.intro_wait(e)
+        cb = Callback(ctx=BotCtx(sender=sender), repo=SqlRepo(s), callback_id="cb1",
+                      payload=f"sc:{did}:{engine.INTRO_SKIP}", label=T.INTRO_SKIP_BUTTON,
+                      orig_text="Расскажи о себе и приложи фото", mid="mid1", chat_id=500, user_id=100)
+        await engine.on_button(cb, e)
+        await s.commit()
+        assert engine.intro_wait(e) is None
+    msg = api.answers[-1]["message"]
+    assert msg["text"].endswith(T.INTRO_SKIPPED[0]) and msg["attachments"] == []

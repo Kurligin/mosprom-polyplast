@@ -25,6 +25,14 @@ def test_all_surveys_and_steps():
     assert engine.survey_for_step(1) is None and engine.survey_for_step("x") is None
 
 
+def test_month2_intro_is_one_message():
+    """Шаги 51 («Привет!» с картинкой) и 52 — подводка опроса month2 в том же сообщении, как 36 у day3."""
+    sv = C.load()["month2"]
+    assert engine.survey_for_step(51) == engine.survey_for_step(52) == "month2"
+    assert sv.image == "img_08.png"
+    assert sv.intro.startswith("Привет!\nМы подготовили небольшой опрос")
+
+
 def test_question_kinds_and_counts():
     s = C.load()
     assert [q.kind for q in s["day3"].questions] == ["choice", "choice", "choice"]

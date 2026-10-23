@@ -196,7 +196,9 @@ async def test_access_question_for_gtp(world):
 
 async def test_reminders_next_day_and_day_after(world):
     mid = await engine.start_survey(world.repo, world.emp, "day3")
-    st = world.emp.dialog_data["survey"]
+    # опрос начат во вторник 20.10 в 17:30 МСК: напоминания в ср и чт (рабочие дни)
+    st = {**world.emp.dialog_data["survey"], "started_at": "2026-10-20T14:30:00+00:00"}
+    world.emp.dialog_data = {**world.emp.dialog_data, "survey": st}
     started = datetime.fromisoformat(st["started_at"])
     day1 = started.replace(hour=8, minute=0) + timedelta(days=1)   # 11:00 МСК
     assert engine.reminder_due(world.emp, st, "Europe/Moscow", started + timedelta(hours=1)) == 0
@@ -287,3 +289,68 @@ async def test_survey_image_stays_on_card(world, monkeypatch):
     await world.say("Не понимаю, где брать регламенты")
     assert images(mid) and world.api.buttons(mid) == []
     assert images(world.api.last()) == [], "в новом сообщении картинки нет"
+
+
+async def test_double_tap_contact_keeps_next_question(world):
+    """Двойной тап «Связаться с рекрутером»: одно обращение, вопрос 2 на месте с кнопками."""
+    from app.bot.handlers import handle_update
+    from tests.surveys.fakes import ev_press
+
+    mid = await engine.start_survey(world.repo, world.emp, "day3")
+    await world.press("Остались вопросы", mid)
+    second = ev_press(world.api, mid, "Связаться с рекрутером")  # второй тап несёт тот же старый вид
+    await world.press("Связаться с рекрутером", mid)
+    await handle_update(world.ctx, world.repo, second)
+    await world.session.flush()
+    assert await _count(world.session, Ticket, Ticket.employee_id == world.emp.id) == 1
+    assert "Вопрос 2 из 3" in world.api.text(mid) and world.api.buttons(mid), "следующий вопрос не затёрт"
+    assert world.emp.dialog_data["survey"]["q"] == 1
+
+
+async def test_continue_from_reminder_restores_text_wait(world):
+    """«Продолжить опрос» после брошенного «Что мешает?»: текст снова уходит в опрос, а не в базу знаний."""
+    mid = await engine.start_survey(world.repo, world.emp, "week2")
+    await world.press("Нет", mid)
+    st = {**world.emp.dialog_data["survey"], "wait_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
+          "started_at": "2026-10-20T14:30:00+00:00"}
+    world.emp.dialog_data = {**world.emp.dialog_data, "survey": st}
+    assert await engine.remind_all(world.session, datetime(2026, 10, 21, 8, 0, tzinfo=UTC), [world.emp.id]) == 1
+    rem = world.api.last()
+    await world.press("Продолжить опрос", rem)
+    assert world.emp.dialog_state == "sv:week2:0:reason"
+    await world.say("Нет ТЗ, руководитель в отпуске")
+    assert world.emp.dialog_data.get("last_question") is None, "текст не ушёл в базу знаний"
+    assert world.emp.dialog_data["survey"]["q"] == 1
+    ans = (await world.session.scalars(select(SurveyAnswer).where(SurveyAnswer.employee_id == world.emp.id,
+                                                                  SurveyAnswer.value == "Нет"))).one()
+    assert ans.text == "Нет ТЗ, руководитель в отпуске"
+
+
+async def test_continue_after_stale_text_restores_wait(world):
+    """Текст после 12 часов ушёл обычным маршрутом, но «Продолжить опрос» снова ждёт ответ."""
+    mid = await engine.start_survey(world.repo, world.emp, "week2")
+    await world.press("Нет", mid)
+    st = {**world.emp.dialog_data["survey"], "wait_at": (datetime.now(UTC) - timedelta(days=1)).isoformat()}
+    world.emp.dialog_data = {**world.emp.dialog_data, "survey": st}
+    await world.say("Когда зарплата?")
+    assert world.emp.dialog_state is None
+    await engine.send_reminder(world.repo, world.emp, world.emp.dialog_data["survey"], 1)
+    await world.press("Продолжить опрос", world.api.last())
+    assert world.emp.dialog_state == "sv:week2:0:reason"
+
+
+async def test_reminders_skip_weekends_and_holidays(world):
+    """Опрос в пятницу 30.10 в 17:30: в выходные молчим, напоминания в пн 2.11 и вт 3.11; 4.11 — праздник."""
+    from types import SimpleNamespace
+
+    emp = SimpleNamespace(time_shift_hours=0)
+    st = {"code": "day3", "started_at": "2026-10-30T14:30:00+00:00", "reminded": 0, "done": False}
+    due = lambda d, h=7: engine.reminder_due(emp, st, "Europe/Moscow", datetime(2026, 10, d, h, 5, tzinfo=UTC)
+                                             if d > 9 else datetime(2026, 11, d, h, 5, tzinfo=UTC))
+    assert due(31) == 0 and due(1) == 0, "суббота и воскресенье"
+    assert due(2) == 1, "понедельник — первое напоминание"
+    st["reminded"] = 1
+    assert due(3) == 2, "вторник — второе"
+    st["reminded"] = 0
+    assert due(4) == 0, "4 ноября — праздник"
+    assert due(5) == 0, "три рабочих дня прошло — не напоминаем"

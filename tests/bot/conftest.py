@@ -10,6 +10,7 @@ import pytest
 from app.bot.api import MaxApiError
 from app.bot.handlers import BotCtx
 from app.bot.sender import Sender
+from tests.surveys.fakes import session, world  # noqa: F401  (настоящая БД: test_bot_dialogs.py)
 
 
 class FakeApi:

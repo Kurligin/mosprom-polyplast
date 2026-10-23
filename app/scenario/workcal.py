@@ -42,6 +42,13 @@ def next_workday(d: date) -> date:
     return d
 
 
+def prev_workday(d: date) -> date:
+    """Ближайший рабочий день, начиная с d включительно и назад."""
+    while not is_workday(d):
+        d -= timedelta(days=1)
+    return d
+
+
 def nth_workday(start: date, n: int) -> date:
     """N-й рабочий день, считая от start (первый рабочий день выхода = 1)."""
     if n < 1:

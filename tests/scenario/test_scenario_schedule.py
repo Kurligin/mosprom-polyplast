@@ -122,3 +122,36 @@ def test_real_scenario_gtp_vs_luzhniki():
     lunch = next(s for s in steps if any(b.action == "branch" for b in s.buttons))
     t = branch_targets(steps, lunch.number, "Да!", emp("GTP"))
     assert [s.attachment for s in t] == ["food_GTP.pdf"]
+
+
+def test_dates_count_from_first_workday_when_start_is_weekend():
+    """Выход в вс 25.10: первый рабочий день — пн 26.10, «завтра первый день» — в вс, а не в сб."""
+    e = emp("GrPP", "office", start_date=date(2026, 10, 25))
+    d = dues(plan_for(e, STEPS))
+    assert d[1].date() == date(2026, 10, 23), "за 3 дня до пн 26.10"
+    assert d[2].date() == date(2026, 10, 26)
+    assert d[7].date() == date(2026, 11, 5)  # 26.10 + 10 дней
+    one = [S(1, {"kind": "before_start", "days_before": 1})]
+    assert dues(plan_for(e, one))[1].date() == date(2026, 10, 25)
+    # выход 4.11 (праздник): «завтра первый день» — 4.11, первый день — 5.11
+    h = emp("GrPP", "office", start_date=date(2026, 11, 4))
+    assert dues(plan_for(h, one))[1].date() == date(2026, 11, 4)
+    # шаги «до выхода» не устаревают до первого рабочего дня, а не до даты из карточки
+    sun = datetime(2026, 10, 25, 20, 0, tzinfo=MSK)
+    late = [S(1, {"kind": "before_start", "days_before": 3})]
+    assert [p.step_number for p in due_steps(e, late, sun, set())] == [1]
+
+
+def test_probation_end_on_weekend_lands_on_last_workday():
+    """Последний день срока — сб 23.01.2027: шаг «эти 3 месяца пролетели» в пт 22.01, а не после срока."""
+    e = emp("GrPP", "office", start_date=date(2026, 10, 26), probation_end=date(2027, 1, 23))
+    assert dues(plan_for(e, STEPS))[10].date() == date(2027, 1, 22)
+
+
+def test_fresh_steps_do_not_go_stale():
+    """Реплика после опроса ждёт прохождения: устаревание считает движок, due_steps её не отбрасывает."""
+    e = emp("GrPP", "office")
+    steps = [S(6, {"kind": "workday", "n": 3, "time": "17:30"})]
+    later = datetime(2026, 11, 7, 12, 0, tzinfo=MSK)
+    assert due_steps(e, steps, later, set()) == []
+    assert [p.step_number for p in due_steps(e, steps, later, set(), fresh={6})] == [6]

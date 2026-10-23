@@ -296,6 +296,12 @@ def test_month2_surveys_without_time_travel(journey):
     assert other["text"] == "Наставник на смене в первую неделю"
     pushes = [e["text"] for st in live for e in new_sends(journey, st, J.MANAGER)]
     assert any("уже месяц" in t for t in pushes) and any("заканчивает испытательный срок" in t for t in pushes)
+    # день опроса month2: «Привет!», подводка и первый вопрос — одно сообщение с картинкой, потом «спасибо»
+    day = next(st for st in live if any(a["survey"] == "month2" for a in mine(st.new("answers"), journey.emp_id).values()))
+    sends = new_sends(journey, day, J.NEWCOMER)
+    assert len(sends) == 2, [e["text"][:60] for e in sends]
+    first = sends[0]
+    assert first["text"].startswith("Привет!\nМы подготовили небольшой опрос") and "img_08.png" in J.media(first["attachments"])
 
 
 def test_day60_push_and_step(journey):
@@ -337,11 +343,8 @@ def test_red_flag_inside_hr_reply_window(journey):
     assert any("увидит только HR" in e["text"] for e in new_sends(journey, st, J.PETR))
 
 
-@pytest.mark.xfail(reason=(
-    "Баг демо: окно ответа HR считается по настоящему времени, а не по машине времени. После перемотки "
-    "на две недели новый вопрос новичка в течение 30 минут уходит в старое обращение вместо базы знаний. "
-    "app/tickets/service.py: open_window / reply (datetime.now без time_shift_hours)."))
 def test_reply_window_closed_after_time_travel(journey):
+    """Окно ответа HR живёт в настоящем времени: после перемотки новый вопрос идёт в базу знаний."""
     st = ok(journey, "edge-window-travel")
     emp_id = journey.edge_ids["anna"]
     asked = [q for q in mine(st.new("questions"), emp_id).values() if q["question"] == J.QUESTION]
@@ -349,7 +352,7 @@ def test_reply_window_closed_after_time_travel(journey):
 
 
 def test_edge_scenarios_ran(journey):
-    """Сами проверки вне маршрута отработали без исключений (иначе xfail выше ничего не доказывает)."""
+    """Сами проверки вне маршрута отработали без исключений (иначе проверки выше ничего не доказывают)."""
     for key in ("edge-window-red", "edge-window-travel"):
         ok(journey, key)
     petr = journey.edge_ids["petr"]

@@ -23,8 +23,11 @@ class SqlRepo:
         return (await self.s.execute(select(Staff).where(Staff.bind_code == code))).scalar_one_or_none()
 
     async def employee_by_user(self, max_user_id: int):
+        """Новичок по аккаунту «МАКС». Строка блокируется до конца события (FOR NO KEY UPDATE):
+        планировщик и API, которые меняют dialog_data, дождутся коммита бота и перечитают свежие данные."""
         return (await self.s.execute(
-            select(Employee).where(Employee.max_user_id == max_user_id))).scalar_one_or_none()
+            select(Employee).where(Employee.max_user_id == max_user_id)
+            .with_for_update(key_share=True))).scalar_one_or_none()
 
     async def staff_by_user(self, max_user_id: int):
         return (await self.s.execute(select(Staff).where(Staff.max_user_id == max_user_id))).scalar_one_or_none()
@@ -63,3 +66,17 @@ class SqlRepo:
 
     async def flush(self) -> None:
         await self.s.flush()
+
+
+async def lock_employee(session, emp) -> None:
+    """Перечитать новичка из БД с блокировкой строки до конца транзакции (FOR NO KEY UPDATE).
+
+    Зовём перед тем, как менять dialog_data вне обработчика бота (планировщик, API): бот, задача и API
+    пишут JSONB целиком, и без этого более поздний коммит затирает чужие ключи. Свои изменения новичка
+    сначала уходят в БД (flush), потом объект обновляется: меняем dialog_data поверх свежих данных.
+    """
+    if session is None or not isinstance(emp, Employee) or emp.id is None:
+        return
+    await session.flush()
+    await session.execute(select(Employee).where(Employee.id == emp.id).with_for_update(key_share=True)
+                          .execution_options(populate_existing=True))

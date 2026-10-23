@@ -129,3 +129,35 @@ async def test_free_text_red_flag_pre_route(world, monkeypatch):
     await handle_update(world.ctx, world.repo, ev_text("Что делать при травме на производстве?"))
     assert len(await _flags(world)) == 1, "общий вопрос о травме идёт в базу знаний, не в флаги"
     assert len(world.api.sent(500)) == before + 1
+
+
+async def test_repeated_red_flag_goes_to_open_ticket(world, monkeypatch):
+    """Второе сообщение об угрозе за 12 часов: то же обращение, сообщение в его ленте, HR узнаёт."""
+    from app.bot import hooks
+    from app.db.models import Message
+
+    monkeypatch.setattr(hooks, "_pre_routes", [signal_hooks.red_flag_in_message])
+    await handle_update(world.ctx, world.repo, ev_text("Мастер угрожает мне, говорит что побьёт после смены"))
+    (flag,) = await _flags(world)
+    group_before = len(world.api.sent(900))
+
+    again = "Он опять угрожал мне сегодня, мне страшно идти на смену"
+    await handle_update(world.ctx, world.repo, ev_text(again))
+    await world.session.flush()
+    assert [f.id for f in await _flags(world)] == [flag.id], "флаг той же темы не дублируется"
+    tickets = (await world.session.scalars(select(Ticket).where(Ticket.employee_id == world.emp.id))).all()
+    assert [t.id for t in tickets] == [flag.ticket_id], "новое обращение не нужно"
+    msg = (await world.session.scalars(select(Message).where(Message.text == again,
+                                                             Message.direction == "in"))).one()
+    assert msg.ticket_id == flag.ticket_id, "второе сообщение — в ленте обращения"
+    group = [world.api.text(m) for m in world.api.sent(900)[group_before:]]
+    assert len(group) == 1 and group[0].startswith(f"Новый ответ в обращении #{flag.ticket_id}") and again in group[0]
+    assert world.api.text(world.api.last(500)).startswith("Это важно.")
+
+    # обращение закрыли — следующая тревога открывает новое
+    t = tickets[0]
+    t.status = "closed"
+    await world.session.flush()
+    await handle_update(world.ctx, world.repo, ev_text("Мастер снова угрожает мне, что побьёт"))
+    tickets = (await world.session.scalars(select(Ticket).where(Ticket.employee_id == world.emp.id))).all()
+    assert len(tickets) == 2

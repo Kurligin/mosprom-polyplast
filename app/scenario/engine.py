@@ -40,6 +40,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.bot import runtime, uploads
 from app.bot.keyboards import callback, keyboard
+from app.bot.repo import lock_employee
 from app.bot.texts import tv
 from app.config import settings
 from app.db.models import Delivery, Employee, ScenarioStep, Site
@@ -54,12 +55,20 @@ from app.scenario.schedule import (
     employee_now,
     plan_for,
 )
-from app.scenario.workcal import next_workday
+from app.scenario.workcal import next_workday, prev_workday
 
 log = logging.getLogger(__name__)
 
 GATES = ("recruiter_go", "plan_ready")
-INTRO_STATE = "sc:intro"
+INTRO_STATE = "sc:intro"        # старое ожидание рассказа о себе в dialog_state (до 23.10); теперь — INTRO_WAIT
+INTRO_WAIT = "intro_wait"       # dialog_data: ждём рассказ о себе и фото {"since": iso, "asked": [...]}
+INTRO_TTL = timedelta(hours=48)  # дольше не ждём: дальше всё, что пишет новичок, идёт обычным маршрутом
+INTRO_MIN_TEXT = 25             # короче — реплика («спасибо», «сейчас пришлю»), а не рассказ о себе
+INTRO_SKIP = "skip"             # кнопка «Пропустить» у просьбы рассказать о себе: sc:<delivery_id>:skip
+# начало вопроса без «?»; «как» и «что» не берём: «Как оператор экструдера, я…» — тоже рассказ о себе
+_QUESTION_RE = re.compile(r"^(где|когда|куда|почему|зачем|сколько|можно|нужно ли|надо ли|подскаж\w*)\b",
+                          re.IGNORECASE)
+_NOTE_RE = re.compile(r"\s*[\[(][^\])]*[\])]")
 COVERED_NOTE = "знакомство в боте"
 TRAVEL_NOTE = "перемотка времени"
 STALE_NOTE = "устарел"
@@ -100,7 +109,7 @@ async def _tz(session, emp) -> str:
 
 
 def _probation_end(emp) -> date:
-    return emp.probation_end or (add_months(emp.start_date, 3) - timedelta(days=1))
+    return emp.probation_end or (add_months(first_day(emp), 3) - timedelta(days=1))
 
 
 def employee_ctx(emp, tz: str) -> EmployeeCtx:
@@ -338,9 +347,13 @@ async def _send_msg(session, repo, emp, rows: list[ScenarioStep], at: datetime, 
         await session.commit()
     last = rows[-1]
     atts = await _attach(_attachment_path(last, emp), repo, sender)
-    if last.buttons:
-        did = claimed[last.id].id
-        atts += keyboard(*[[callback(b.get("text") or "…", f"sc:{did}:{i}")] for i, b in enumerate(last.buttons)])
+    did = claimed[last.id].id
+    kb_rows = [[callback(b.get("text") or "…", f"sc:{did}:{i}")] for i, b in enumerate(last.buttons or [])]
+    intro = any(_ex(r).get("gate") == "recruiter_go" for r in rows)
+    if intro:
+        kb_rows.append([callback(T.INTRO_SKIP_BUTTON, f"sc:{did}:{INTRO_SKIP}")])
+    if kb_rows:
+        atts += keyboard(*kb_rows)
     mids = await _send(sender, repo, emp, _join(rows, emp), atts)
     for r in rows:
         d = claimed[r.id]
@@ -348,9 +361,34 @@ async def _send_msg(session, repo, emp, rows: list[ScenarioStep], at: datetime, 
             d.status, d.sent_at, d.mid = "sent", utcnow(), mids[-1]
         else:
             d.status, d.error = "failed", "не доставлено (бот остановлен или ошибка API)"
-    if mids and any(_ex(r).get("gate") == "recruiter_go" for r in rows):
-        emp.dialog_state = INTRO_STATE
+    if mids and intro:
+        # ждём рассказ о себе в dialog_data, а не в dialog_state: опрос и /hr это ожидание не сотрут
+        await lock_employee(session, emp)
+        _set_data(emp, **{INTRO_WAIT: {"since": _vnow(emp).isoformat(), "asked": []}})
+        if emp.dialog_state == INTRO_STATE:
+            emp.dialog_state = None
     return 1 if mids else 0
+
+
+def _after_survey_state(emp, sv, plan: Plan, delivered: dict[str, Delivery], row: ScenarioStep,
+                        vnow: datetime) -> str | None:
+    """Реплика после опроса (65 плейлист, 66 прощание): "wait" — опрос ещё не пройден, "fresh" — пройден
+    меньше суток назад (устаревание считаем от прохождения, а не от плана), None — обычное правило."""
+    sk = _ex(row).get("after_survey")
+    if not sk or _survey_code(sv, row) is not None:
+        return None
+    survey_row, survey_delivery = plan.by_key.get(sk), delivered.get(f"{sk}:{emp.id}")
+    if survey_delivery is not None and survey_delivery.status in ("skipped", "failed"):
+        return None
+    if not _survey_done(emp, sv, survey_row, survey_delivery):
+        return "wait"
+    try:
+        done_at = datetime.fromisoformat((sv.survey_history(emp) or {})[_survey_code(sv, survey_row)]["done_at"])
+    except Exception:  # noqa: BLE001 — время прохождения неизвестно: считаем, что только что
+        return "fresh"
+    if done_at.tzinfo is None:
+        done_at = done_at.replace(tzinfo=UTC)
+    return "fresh" if vnow - done_at <= STALE_AFTER else None
 
 
 def _survey_done(emp, sv, survey_row: ScenarioStep | None, survey_delivery: Delivery | None) -> bool:
@@ -402,12 +440,18 @@ async def deliver_due(session, emp, *, sender, repo=None, now: datetime | None =
         await _claim(session, emp, covered, status="sent", note=COVERED_NOTE)
 
         # устаревшие — пометить, чтобы не висели «впереди»
-        start_dt = datetime.combine(ctx.start_date, time(0, 0), tzinfo=ZoneInfo(tz))
-        stale = []
+        start_dt = datetime.combine(first_day(emp), time(0, 0), tzinfo=ZoneInfo(tz))
+        stale, fresh = [], set()
         for s in specs:
             due = planned.get(s.number)
             row = plan.by_number[s.number]
             if due is None or has(row) or s.gate or _ex(row).get("covered"):
+                continue
+            after = _after_survey_state(emp, sv, plan, delivered, row, vnow)
+            if after == "wait":
+                continue  # реплика после опроса ждёт, пока его пройдут (напоминание — на следующий день)
+            if after == "fresh":
+                fresh.add(s.number)  # опрос только что пройден: реплики после него ещё не устарели
                 continue
             pre_start = s.timing is not None and s.timing.kind == "before_start" and vnow < start_dt
             if vnow - due > STALE_AFTER and not pre_start:
@@ -416,7 +460,7 @@ async def deliver_due(session, emp, *, sender, repo=None, now: datetime | None =
 
         sent_numbers = {r.order_no for r in plan.rows if has(r) or _ex(r).get("covered")}
         sent_numbers |= {r.order_no for r, _ in stale}
-        due = due_steps(ctx, specs, now, sent_numbers, {g for g, v in gates(emp).items() if v})
+        due = due_steps(ctx, specs, now, sent_numbers, {g for g, v in gates(emp).items() if v}, fresh)
 
         email, ready = [], []
         for p in due:
@@ -558,6 +602,10 @@ async def on_button(cb, person) -> None:
     base = _join(rows, emp)
     media = await _attach(_attachment_path(step, emp), repo, cb.ctx.sender)
 
+    if parts[2] == INTRO_SKIP:
+        _drop_intro_wait(emp)
+        await cb.replace(f"{base}\n\n✅ {T.INTRO_SKIP_BUTTON}\n\n{tv(emp, T.INTRO_SKIPPED)}", media, employee=emp)
+        return
     if parts[2] == "ra":
         ok = await _remind_access(repo, emp)
         await cb.replace(f"{cb.orig_text or base}\n\n{tv(emp, T.ACCESS_DONE if ok else T.ACCESS_FAIL)}",
@@ -648,31 +696,79 @@ def _photo_url(msg: dict) -> str | None:
     return None
 
 
-async def on_intro(ctx, repo, emp, text: str, msg: dict) -> None:
-    """Состояние sc:intro: новичок присылает рассказ о себе и фото → dialog_data["intro"]."""
+def _vnow(emp, now: datetime | None = None) -> datetime:
+    """«Сейчас» новичка (UTC + машина времени)."""
+    return (now or utcnow()) + timedelta(hours=emp.time_shift_hours or 0)
+
+
+def intro_wait(emp, now: datetime | None = None) -> dict | None:
+    """Ожидание рассказа о себе, если оно открыто и не истекло (48 часов по времени новичка)."""
+    w = (emp.dialog_data or {}).get(INTRO_WAIT)
+    if not isinstance(w, dict):
+        return None
+    try:
+        since = datetime.fromisoformat(w["since"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return w if _vnow(emp, now) - since <= INTRO_TTL else None
+
+
+def _drop_intro_wait(emp) -> None:
+    data = dict(emp.dialog_data or {})
+    if data.pop(INTRO_WAIT, None) is not None:
+        emp.dialog_data = data
+    if emp.dialog_state == INTRO_STATE:
+        emp.dialog_state = None
+
+
+def _is_intro_text(text: str) -> bool:
+    """Рассказ о себе, а не вопрос и не короткая реплика («спасибо», «сейчас пришлю»)."""
+    return len(text) >= INTRO_MIN_TEXT and not text.rstrip().endswith("?") and not _QUESTION_RE.match(text)
+
+
+def clean_name(full_name: str | None) -> str:
+    """ФИО без пометок в скобках: «Смирнов Иван (синтетика)» → «Смирнов Иван»."""
+    return _NOTE_RE.sub("", full_name or "").strip()
+
+
+async def on_intro(ctx, repo, emp, text: str, msg: dict) -> bool:
+    """Рассказ о себе и фото после просьбы «представлю тебя коллегам» → dialog_data["intro"].
+
+    False — это не рассказ (вопрос, «спасибо», короткая реплика) или ожидания нет: бот ведёт текст
+    обычным маршрутом, а ожидание рассказа остаётся. «Пришли фото» и «напиши о себе» — по разу.
+    """
+    if intro_wait(emp) is None:
+        if (emp.dialog_data or {}).get(INTRO_WAIT) is not None or emp.dialog_state == INTRO_STATE:
+            _drop_intro_wait(emp)  # 48 часов прошло: больше не ждём
+        return False
     photo = _photo_url(msg)
     text = (text or "").strip()
-    if text and not photo and text.endswith("?") and len(text) < 200:
-        # похоже на вопрос, а не на рассказ о себе: отвечаем как на вопрос и ждём дальше
-        from app.bot.handlers import route_free_text
-
-        await route_free_text(ctx, repo, emp, text)
-        return
+    is_text = _is_intro_text(text)
+    if not photo and not is_text:
+        return False
+    w = dict(intro_wait(emp))
+    asked = list(w.get("asked") or [])
     intro = dict((emp.dialog_data or {}).get("intro") or {})
-    if text:
+    if is_text:
         intro["text"] = f"{intro['text']}\n{text}" if intro.get("text") else text
     if photo:
         intro["photo_url"] = photo
     intro["at"] = utcnow().isoformat()
     _set_data(emp, intro=intro)
-    if intro.get("text") and intro.get("photo_url"):
+    if emp.dialog_state == INTRO_STATE:
         emp.dialog_state = None
+    if intro.get("text") and intro.get("photo_url"):
+        _drop_intro_wait(emp)
         await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_THANKS), [])
-        await runtime.notify_hr_group(repo, T.HR_GROUP_INTRO.format(name=emp.full_name, site=emp.site_code))
-    elif intro.get("text"):
-        await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_NEED_PHOTO), [])
-    else:
-        await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_NEED_TEXT), [])
+        await runtime.notify_hr_group(repo, T.HR_GROUP_INTRO.format(name=clean_name(emp.full_name),
+                                                                    site=emp.site_code))
+        return True
+    need = "photo" if intro.get("text") else "text"
+    if need not in asked:
+        await _send(ctx.sender, repo, emp, tv(emp, T.INTRO_NEED_PHOTO if need == "photo" else T.INTRO_NEED_TEXT), [])
+        asked.append(need)
+    _set_data(emp, **{INTRO_WAIT: {**w, "asked": asked}})
+    return True
 
 
 # --- отмашки, ближайшие шаги, машина времени ---------------------------------------------
@@ -684,6 +780,7 @@ async def open_gate(session, emp, gate: str, *, file_path: str | None = None) ->
     """
     if gate not in GATES:
         raise ValueError(f"Неизвестная отмашка: {gate}")
+    await lock_employee(session, emp)
     raw = dict((emp.dialog_data or {}).get("gates") or {})
     raw[gate] = {"at": utcnow().isoformat(), "file": file_path}
     _set_data(emp, gates=raw)
@@ -780,11 +877,18 @@ def _target_date(to: str, emp, ctx: EmployeeCtx, plan: Plan) -> date:
                if specs[p.step_number].timing and specs[p.step_number].timing.kind == "before_start"]
         return min(pre) if pre else first_day(emp) - timedelta(days=3)
     if to == "end":
-        target = next_workday(ctx.probation_end)
+        # последний рабочий день срока: шаг «Дорогой Х, эти 3 месяца…» и push об итоговой встрече — в срок
+        target = prev_workday(ctx.probation_end)
     else:
         target = first_day(emp) + timedelta(days=int(to) - 1)
     near = [d for d in planned if target <= d <= target + timedelta(days=10)]
     return near[0] if near else target
+
+
+def _drop_reply_window(emp) -> None:
+    data = dict(emp.dialog_data or {})
+    if data.pop("ticket_window", None) is not None:
+        emp.dialog_data = data
 
 
 async def _manager_tick(session) -> None:
@@ -809,8 +913,7 @@ def _forget_gates(emp, ctx: EmployeeCtx, plan: Plan, since: datetime) -> None:
             raw.pop(p.gate)
             if p.gate == "recruiter_go":
                 _set_data(emp, intro=None)
-                if emp.dialog_state == INTRO_STATE:
-                    emp.dialog_state = None
+                _drop_intro_wait(emp)
     _set_data(emp, gates=raw)
 
 
@@ -839,16 +942,27 @@ async def time_travel(session, emp, to: str, *, now: datetime | None = None) -> 
         raise ValueError(f"Неизвестная точка перемотки: {to}")
     name = (emp.first_name or emp.full_name or "").strip()
     now = now or utcnow()
-    if to == "now":
-        emp.time_shift_hours = 0
-        await session.flush()
-        return {"employee_id": emp.id, "day": adaptation_day(emp, now),
-                "message": T.TRAVEL_NOW.format(name=name, day=adaptation_day(emp, now))}
-
+    await lock_employee(session, emp)
+    _drop_reply_window(emp)  # окно ответа HR — в настоящем времени: после перемотки вопрос не уходит в старое обращение
     plan = await load_plan(session)
     tz_name = await _tz(session, emp)
     tz = ZoneInfo(tz_name)
     ctx = employee_ctx(emp, tz_name).model_copy(update={"time_shift_hours": 0})
+    if to == "now":
+        emp.time_shift_hours = 0
+        if emp.is_test:
+            # отправки, опросы и отмашки «будущих» дней из репетиции забываем: в свой день они придут заново
+            since = now.astimezone(tz)
+            await _forget_surveys(session, emp, since)
+            _forget_gates(emp, ctx, plan, since)
+            await session.execute(delete(Delivery).where(Delivery.employee_id == emp.id,
+                                                         Delivery.scheduled_at >= since))
+        await session.flush()
+        if emp.is_test:
+            await _manager_tick(session)  # будущие встречи снова ждут push
+        return {"employee_id": emp.id, "day": adaptation_day(emp, now),
+                "message": T.TRAVEL_NOW.format(name=name, day=adaptation_day(emp, now))}
+
     target = _target_date(to, emp, ctx, plan)
     times = [p.due_at for p in plan_for(ctx, plan.specs_for(emp)) if p.due_at.date() == target and not p.gate]
     landing = (max(times) + timedelta(minutes=1)) if times else datetime.combine(target, time(12, 0), tzinfo=tz)

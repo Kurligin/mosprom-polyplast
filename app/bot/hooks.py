@@ -106,6 +106,7 @@ def on_state(prefix: str):
     """Текст (или вложение) новичка, когда dialog_state начинается с "<prefix>:" или равен prefix.
 
     Обработчик (ctx, repo, emp, text, msg): msg — тело сообщения «МАКС» (body) с attachments.
+    Вернул False — текст не про это состояние: бот ведёт его обычным маршрутом (pre_route, база знаний).
     """
     def deco(fn: StateHandler) -> StateHandler:
         _states[prefix] = fn
@@ -123,6 +124,17 @@ def on_command(name: str):
 
 def pre_route(fn: PreRoute) -> PreRoute:
     """Свободный текст до базы знаний (например, ответ в открытое обращение). True — текст обработан."""
+    _pre_routes.append(fn)
+    return fn
+
+
+def pre_route_always(fn: PreRoute) -> PreRoute:
+    """pre_route, который проверяет текст до состояний диалога (/hr, рассказ о себе, знакомство).
+
+    Так красный флаг срабатывает в любом состоянии. Пока опрос ждёт текстовый ответ, бот его не зовёт:
+    опрос сам проверяет флаги и привязывает их к ответу. В обычном маршруте он идёт по порядку загрузки.
+    """
+    fn.always = True
     _pre_routes.append(fn)
     return fn
 

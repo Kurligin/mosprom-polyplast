@@ -44,6 +44,7 @@ REMINDER = (
 MOVED_DOWN = "Опрос продолжили ниже 👇"
 
 STALE = "Этот вопрос уже позади"
+ALREADY_SENT = "Уже передал 👍"
 DONE_ALREADY = "Опрос уже пройден, спасибо!"
 NOT_FOR_STAFF = "Кнопка для новичка"
 
