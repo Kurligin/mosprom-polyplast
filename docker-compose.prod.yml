@@ -1,0 +1,49 @@
+# Боевой запуск на сервере поверх docker-compose.yml:
+#   DOMAIN=korsik.example.ru docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Отличия от разработки: без автоперезагрузки, порты базы и API наружу не открыты,
+# Mini App собирается в статику и отдаётся Caddy по HTTPS, вход в панель только через «МАКС».
+
+services:
+  postgres:
+    ports: !reset []
+    restart: always
+
+  app:
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+    ports: !reset []
+    environment:
+      DEV_ALLOW_NO_INIT_DATA: "false"
+      MINIAPP_URL: https://${DOMAIN:?укажите DOMAIN}
+      PUBLIC_BASE_URL: https://${DOMAIN}
+    restart: always
+
+  # Сборка Mini App в miniapp/dist один раз при запуске
+  miniapp:
+    command: sh -c "npm install && npm run build"
+    ports: !reset []
+    environment:
+      KORSIK_TUNNEL_BUILD: "0"
+    restart: "no"
+
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN:?укажите DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./miniapp/dist:/srv/miniapp:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      miniapp:
+        condition: service_completed_successfully
+      app:
+        condition: service_started
+    restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:

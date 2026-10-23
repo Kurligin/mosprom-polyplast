@@ -32,27 +32,13 @@ open http://localhost:5173    # панель HR с горячей перезаг
 
 ### 1. HTTPS-адрес на своём домене
 
-1. Поддомен с A-записью на IP сервера с Docker, например `korsik.example.ru`. Порты 80 и 443 открыты.
-2. Собрать фронт: `docker compose exec miniapp npm run build`, папку `miniapp/dist` положить на сервер.
-3. Добавить в compose сервис `caddy` (образ `caddy:2`, порты 80 и 443) с таким `Caddyfile`:
+Поддомен с A-записью на IP сервера, порты 80 и 443 открыты. Запуск в корне репозитория:
 
-   ```
-   korsik.example.ru {
-     encode zstd gzip
-     handle /api/* {
-       reverse_proxy app:8000
-     }
-     handle {
-       root * /srv/miniapp
-       try_files {path} /index.html
-       file_server
-     }
-   }
-   ```
+```bash
+DOMAIN=korsik.example.ru docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
 
-   и смонтировать `./miniapp/dist:/srv/miniapp:ro`. HTTPS-сертификат Caddy получит сам.
-
-Адрес не меняется, регистрировать его у бота нужно один раз.
+`docker-compose.prod.yml` собирает Mini App в статику, а Caddy (`deploy/Caddyfile`) отдаёт её и `/api` по HTTPS и сам получает сертификат. Адрес не меняется, регистрировать его у бота нужно один раз.
 
 ### 2. Зарегистрировать адрес у бота (нужен вход владельца бота)
 
