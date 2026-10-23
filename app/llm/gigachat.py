@@ -1,0 +1,208 @@
+"""Клиент GigaChat: выбор пункта из найденных и разбор свободного ответа опроса.
+
+ИИ не пишет норму: choose_chunk только возвращает номер найденного пункта или None.
+Фрагменты с пометкой КТ в LLM не уходят, вопрос маскируется. В лог — без текстов.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import re
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+from app.privacy.mask import mask_with_classes
+
+log = logging.getLogger("llm_log")
+
+# У физлица в GigaChat — один поток: все вызовы строго по очереди
+_SEM = asyncio.Semaphore(1)
+_client = None
+
+TOPICS = [
+    "доступы",
+    "документы",
+    "наставник",
+    "руководитель",
+    "коллектив",
+    "понимание задач",
+    "нагрузка",
+    "быт и транспорт",
+    "обучение",
+    "охрана труда",
+    "другое",
+]
+MOODS = ["негатив", "нейтрально", "позитив"]
+
+# Тексты о здоровье в LLM не отправляем (dev-plan 4.10)
+_HEALTH_RE = re.compile(r"(болез|болею|болит|заболел|больнич|диагноз|депресс|давлени|беремен|врач|лекарств|травм)", re.I)
+
+
+def _settings():
+    """Настройки из app.config; если модуля нет или нет pydantic-settings — из окружения."""
+    try:
+        from app.config import settings  # type: ignore
+
+        return settings
+    except Exception:  # noqa: BLE001
+        return SimpleNamespace(
+            gigachat_credentials=os.environ.get("GIGACHAT_CREDENTIALS", ""),
+            gigachat_scope=os.environ.get("GIGACHAT_SCOPE", "GIGACHAT_API_PERS"),
+            gigachat_model=os.environ.get("GIGACHAT_MODEL", "GigaChat-2"),
+            ca_bundle_file=os.environ.get("CA_BUNDLE_FILE", "certs/russian_trusted_ca_bundle.pem"),
+        )
+
+
+def get_client():
+    global _client
+    if _client is None:
+        from gigachat import GigaChat
+
+        s = _settings()
+        ca = s.ca_bundle_file or None
+        if ca and not Path(ca).is_absolute():
+            ca = str(Path(__file__).resolve().parents[2] / ca)
+        _client = GigaChat(
+            credentials=s.gigachat_credentials,
+            scope=s.gigachat_scope or "GIGACHAT_API_PERS",
+            model=s.gigachat_model or None,
+            ca_bundle_file=ca,
+            verify_ssl_certs=True,
+            timeout=60,
+        )
+    return _client
+
+
+def _log(kind: str, classes: set[str], started: float, ok: bool, **extra) -> None:
+    # Только метаданные: время, тип вызова, классы данных. Никаких текстов.
+    log.info(
+        "llm_call type=%s classes=%s ms=%d ok=%s %s",
+        kind,
+        ",".join(sorted(classes)) or "-",
+        int((time.monotonic() - started) * 1000),
+        ok,
+        " ".join(f"{k}={v}" for k, v in extra.items()),
+    )
+
+
+async def _complete(system: str, user: str, temperature: float = 0.01) -> str:
+    from gigachat.models import Chat, Messages, MessagesRole
+
+    chat = Chat(
+        messages=[
+            Messages(role=MessagesRole.SYSTEM, content=system),
+            Messages(role=MessagesRole.USER, content=user),
+        ],
+        temperature=temperature,
+        max_tokens=300,
+    )
+    async with _SEM:
+        resp = await get_client().achat(chat)
+    return resp.choices[0].message.content or ""
+
+
+def parse_json_object(raw: str) -> dict | None:
+    """Строгий разбор: первый JSON-объект из ответа (допускаем ```json-обёртку)."""
+    if not raw:
+        return None
+    s = raw.strip()
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.I)
+    m = re.search(r"\{.*\}", s, re.S)
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+CHOOSE_SYSTEM = (
+    "Ты помощник по внутренним документам компании. Тебе дают вопрос сотрудника и "
+    "пронумерованные пункты документов. Выбери ОДИН пункт, который прямо отвечает на вопрос. "
+    "Если ни один пункт не отвечает на вопрос прямо — верни null. Ничего не придумывай и не пересказывай. "
+    'Ответь строго JSON без пояснений: {"chunk_id": <номер пункта или null>}'
+)
+
+
+async def choose_chunk(question: str, candidates: list[dict], names: list[str] | None = None) -> int | None:
+    """Выбрать пункт из кандидатов [{chunk_id, text, is_kt?}] или None («нет подходящего»)."""
+    safe = [c for c in candidates if not c.get("is_kt")]
+    if not safe:
+        return None
+    allowed = {str(c["chunk_id"]): c["chunk_id"] for c in safe}
+    q, classes = mask_with_classes(question, names)
+    body = "\n\n".join(f"[{c['chunk_id']}]\n{mask_with_classes(c['text'], names)[0]}" for c in safe)
+    user = f"Вопрос: {q}\n\nПункты:\n{body}"
+    classes |= {"question", "kb_chunks"}
+
+    for attempt in range(2):  # один повтор при битом JSON
+        started = time.monotonic()
+        try:
+            raw = await _complete(CHOOSE_SYSTEM, user)
+        except Exception as e:  # noqa: BLE001
+            _log("choose_chunk", classes, started, False, err=type(e).__name__)
+            return None
+        obj = parse_json_object(raw)
+        if obj is None or "chunk_id" not in obj:
+            _log("choose_chunk", classes, started, False, err="bad_json", attempt=attempt)
+            continue
+        cid = obj["chunk_id"]
+        if cid is None or str(cid).strip().lower() in ("null", "none", ""):
+            _log("choose_chunk", classes, started, True, result="none")
+            return None
+        key = str(cid).strip().strip("[]")
+        if key in allowed:
+            _log("choose_chunk", classes, started, True, result="chunk")
+            return allowed[key]
+        # номер не из кандидатов — считаем «нет подходящего»
+        _log("choose_chunk", classes, started, False, err="unknown_id")
+        return None
+    return None
+
+
+ANALYZE_SYSTEM = (
+    "Ты анализируешь ответ нового сотрудника в опросе об адаптации. Определи: "
+    f"topic — одна тема из списка: {', '.join(TOPICS)}; "
+    f"mood — одно из: {', '.join(MOODS)}; "
+    "quote — короткая ДОСЛОВНАЯ цитата из ответа, которая подтверждает тему (скопируй символ в символ). "
+    'Ответь строго JSON без пояснений: {"topic": "...", "mood": "...", "quote": "..."}'
+)
+
+
+async def analyze_answer(text: str, names: list[str] | None = None) -> dict | None:
+    """Разбор свободного ответа → {topic, mood, quote}. None — не отправляли или не разобрали."""
+    if not text or not text.strip():
+        return None
+    if _HEALTH_RE.search(text):
+        log.info("llm_call type=analyze_answer skipped=health")
+        return None
+    masked, classes = mask_with_classes(text, names)
+    classes |= {"survey_answer"}
+    for attempt in range(2):
+        started = time.monotonic()
+        try:
+            raw = await _complete(ANALYZE_SYSTEM, f"Ответ сотрудника: {masked}")
+        except Exception as e:  # noqa: BLE001
+            _log("analyze_answer", classes, started, False, err=type(e).__name__)
+            return None
+        obj = parse_json_object(raw)
+        if not obj:
+            _log("analyze_answer", classes, started, False, err="bad_json", attempt=attempt)
+            continue
+        topic = str(obj.get("topic", "")).strip().lower()
+        mood = str(obj.get("mood", "")).strip().lower()
+        quote = str(obj.get("quote") or "").strip().strip("«»\"")
+        result = {
+            "topic": topic if topic in TOPICS else "другое",
+            "mood": mood if mood in MOODS else "нейтрально",
+            # цитата обязана быть подстрокой (маскированного) текста, иначе выбрасываем
+            "quote": quote if quote and (quote in masked or quote in text) else None,
+        }
+        _log("analyze_answer", classes, started, True)
+        return result
+    return None
