@@ -275,7 +275,7 @@ Makefile             migrate, seed, import, eval
 .env.example
 ```
 
-Переменные окружения: `MAX_BOT_TOKEN`, `MAX_BOT_NAME`, `MINIAPP_URL`, `GIGACHAT_CREDENTIALS`, `GIGACHAT_SCOPE`, `GIGACHAT_MODEL`, `DATABASE_URL`, `PUBLIC_BASE_URL`, `TZ_DEFAULT`.
+Переменные окружения (шаблон — `.env.example`): `MAX_BOT_TOKEN`, `MAX_BOT_NAME`, `MAX_API_BASE_URL`, `MINIAPP_URL`, `GIGACHAT_CREDENTIALS`, `GIGACHAT_SCOPE`, `GIGACHAT_MODEL`, `DATABASE_URL`, `PUBLIC_BASE_URL`, `TZ_DEFAULT`.
 
 ## 7. Запуск и деплой
 
