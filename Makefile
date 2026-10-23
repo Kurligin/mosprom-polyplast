@@ -1,7 +1,7 @@
 # Команды разработки: всё выполняется внутри Docker Compose
 DC := docker compose
 
-.PHONY: up down logs migrate seed shell test psql links import kb eval tunnel
+.PHONY: up down logs migrate seed shell test psql links import kb eval eval-flags tunnel
 
 up:
 	$(DC) up -d --build
@@ -17,6 +17,7 @@ migrate:
 
 seed:
 	$(DC) exec app python -m seed.seed
+	$(DC) exec app python -m seed.surveys_seed
 
 links:
 	$(DC) exec app python -m seed.seed --links
@@ -41,6 +42,10 @@ kb:
 # Оценка качества на эталоне
 eval:
 	$(DC) exec app python -m eval.run --llm --write
+
+# Точность и полнота флагов на синтетических ответах
+eval-flags:
+	$(DC) exec app python -m eval.flags.run
 
 # HTTPS-туннель к Mini App, чтобы открыть её внутри «МАКС»; печатает адрес
 tunnel:

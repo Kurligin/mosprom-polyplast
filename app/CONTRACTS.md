@@ -53,6 +53,20 @@
   - ИИ-разбор — только при согласии `ai_analysis`, через `app.llm.gigachat.analyze_answer`.
 - `signals.service.raise_flag(repo, emp, *, level, topic, quote, source, answer=None) -> Flag`. Создаёт обращение `tickets.service.create_ticket(…, source="flag")` и уведомление в HR-группу.
 
+Уточнения по итогам раунда 2:
+- `start_survey(repo, emp, code, *, force=False) -> str | None` возвращает `mid` или `None`, если опрос уже был или новичок не подключён.
+- `survey_for_step` покрывает шаги 20, 21, 36–40, 45, 47, 53–55, 60–64. Часть из них в xlsx имеет тип `message`, поэтому опросы ищем только через `survey_for_step`, а не по `kind == "survey"`.
+- Новые функции: `survey_history(emp)`, `pending_surveys(emp)`, `reset(emp, code=None)`, `remind_all(session, now=None)`.
+- Опрос пройден, если у него есть `survey_history(emp)[code]["done_at"]`.
+- `dialog_data["survey"]` — текущее прохождение, `dialog_data["surveys"][код]` — история. `dialog_state = "sv:<код>:<вопрос>:<режим>"`.
+- Сигналы:
+  - `raise_flag(…, ticket_id=None)`, `raise_hits(...)`, `employee_notice(repo, emp, flags, now=None)`;
+  - `rules.detect(text, free_text=False)`, `rules.is_sensitive(text)`;
+  - красный флаг → одно обращение (`source="flag"`, `level="red"`, `category`: safety / harassment / health / intent_to_leave);
+  - жёлтый флаг — только запись `Flag`;
+  - `pre_route` сигналов перехватывает свободный текст с красным флагом раньше базы знаний.
+- `SurveyAnswer.topic` — тема вопроса (у текстовых её переписывает ИИ), `mood` — из варианта ответа или оценки.
+
 ## База знаний — `app/kb`
 
 - `ingest.ingest_all(session)` — `docs/*.md`, справочные статьи сценария, черновик статьи «Доступ к корпоративному порталу». CLI: `python -m app.kb.ingest --all` (`make kb`).
