@@ -152,3 +152,23 @@ async def test_message_ids_unique_in_feed(client, world, session, bot):
     assert len(ids) == len(set(ids))
     assert all(datetime.fromisoformat(m["created_at"]).tzinfo is not None for m in data["messages"])
     assert (await session.scalars(select(Message).where(Message.ticket_id == t.id))).first() is not None
+
+
+async def test_reply_to_synthetic_newbie_is_marked(client, world, session, bot):
+    """Синтетика в демо «подключилась», но в «МАКС» ей ничего не уходит: фронт пишет об этом, а не «не подключился»."""
+    world.other.status = "active"
+    await session.flush()
+    repo = SqlRepo(session)
+    t = await service.create_ticket(None, repo, world.other, "Вопрос синтетики", source="hr_command")
+    r = await client.post(f"/api/tickets/{t.id}/reply", headers=auth(world.hr),
+                          json={"text": "Ответ (синтетика)", "add_to_kb": False, "kb_site": None})
+    assert r.status_code == 200
+    assert r.json()["delivered"] is False and r.json()["synthetic"] is True
+    assert (await client.get(f"/api/tickets/{t.id}", headers=auth(world.hr))).json()["synthetic"] is True
+
+    world.other.is_synthetic = False
+    await session.flush()
+    t2 = await service.create_ticket(None, repo, world.other, "Вопрос без бота", source="hr_command")
+    r = await client.post(f"/api/tickets/{t2.id}/reply", headers=auth(world.hr),
+                          json={"text": "Ответ", "add_to_kb": False, "kb_site": None})
+    assert r.json()["delivered"] is False and r.json()["synthetic"] is False

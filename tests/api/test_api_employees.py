@@ -1,6 +1,6 @@
 """Новички, справочники, встречи, база, демо — на реальной БД в транзакции."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -272,3 +272,89 @@ async def test_gate_and_plan(client, world, monkeypatch, tmp_path):
     assert saved.startswith(str(tmp_path / "plans"))
     assert (await client.post(f"/api/employees/{world.emp.id}/plan", headers=auth(world.mgr2),
                               files={"file": ("p.pdf", b"%PDF", "application/pdf")})).status_code == 404
+
+
+async def test_plan_step_time_and_sent(client, world, session, monkeypatch, tmp_path):
+    """«План готов» не значит «отправлен»: карточка знает, когда уйдёт шаг плана и ушёл ли он."""
+    from app.api import deps
+    from app.db.models import Delivery
+    from app.scenario import engine
+
+    monkeypatch.setattr(deps, "UPLOAD_ROOT", tmp_path)
+    c = (await client.get(f"/api/employees/{world.emp.id}", headers=auth(world.hr))).json()
+    assert c["plan_step"]["sent"] is False
+    r = await client.post(f"/api/employees/{world.emp.id}/plan", headers=auth(world.hr),
+                          files={"file": ("План.pdf", b"%PDF-1.4 synthetic", "application/pdf")})
+    assert r.status_code == 200, r.text
+    step = r.json()["plan_step"]
+    assert step["sent"] is False and step["at"]
+
+    plan = await engine.load_plan(session)
+    spec = next(s for s in plan.specs_for(world.emp) if s.gate == "plan_ready")
+    row = plan.by_number[spec.number]
+    session.add(Delivery(employee_id=world.emp.id, step_id=row.id, scheduled_at=datetime.fromisoformat(step["at"]),
+                         status="sent", idempotency_key=f"test-plan-{world.emp.id}"))
+    await session.flush()
+    c = (await client.get(f"/api/employees/{world.emp.id}", headers=auth(world.hr))).json()
+    assert c["plan_step"]["sent"] is True
+
+
+async def test_hr_views_panel_as_manager(client, world, session):
+    """«Посмотреть глазами руководителя» в «МАКС»: HR видит список и карточки руководителя, без опросов и обращений."""
+    session.add(Ticket(employee_id=world.emp.id, source="hr_command", text="Вопрос (синтетика)", status="new"))
+    session.add(Flag(employee_id=world.emp.id, level="red", topic="травля", quote="(синтетика)", source="survey"))
+    await session.flush()
+    hr_row = next(e for e in (await client.get("/api/employees", headers=auth(world.hr))).json()
+                  if e["id"] == world.emp.id)
+    assert hr_row["open_tickets"] == 1 and hr_row["red_flag"] is True
+
+    for who in (world.hr, world.head):
+        r = await client.get(f"/api/employees?view=manager&manager_id={world.mgr.id}", headers=auth(who))
+        assert r.status_code == 200, r.text
+        rows = {e["id"]: e for e in r.json()}
+        assert world.emp.id in rows and world.other.id not in rows
+        row = rows[world.emp.id]
+        assert row["open_tickets"] == 0 and row["red_flag"] is False and row["pending_surveys"] == 0
+
+    card = await client.get(f"/api/employees/{world.emp.id}?view=manager&manager_id={world.mgr.id}",
+                            headers=auth(world.hr))
+    assert card.status_code == 200
+    assert card.json()["tickets"] == [] and card.json()["surveys"] == [] and card.json()["meetings"]
+    assert (await client.get(f"/api/employees/{world.other.id}?view=manager&manager_id={world.mgr.id}",
+                             headers=auth(world.hr))).status_code == 404
+
+    # без manager_id — первый руководитель из базы; список не пустой у живой базы не обязателен
+    assert (await client.get("/api/employees?view=manager", headers=auth(world.hr))).status_code == 200
+    # руководитель так чужих не увидит
+    r = await client.get(f"/api/employees?view=manager&manager_id={world.mgr2.id}", headers=auth(world.mgr))
+    assert {e["id"] for e in r.json()} == {world.emp.id}
+
+
+async def test_head_role_named_hr_lead():
+    from app.api.views import ROLE_LABELS
+    from app.bot.texts import ROLE_NAMES
+
+    assert ROLE_LABELS["head_recruitment"] == "Руководитель HR"
+    assert ROLE_NAMES["head_recruitment"] == "руководитель HR"
+
+
+async def test_create_employee_refreshes_name_masking(client, world, monkeypatch):
+    """ФИО нового человека сразу попадает в маскирование перед LLM: кэш имён сбрасывается после коммита."""
+    from app.privacy import names
+
+    calls = []
+    monkeypatch.setattr(names, "invalidate", lambda: calls.append(1))
+    body = {"full_name": "Маскова Синтия", "position": "", "site": world.site.code, "work_type": "office",
+            "start_date": (date.today() + timedelta(days=3)).isoformat(), "probation_days": 90,
+            "manager_id": world.mgr.id, "recruiter_id": world.rec.id}
+    r = await client.post("/api/employees", headers=auth(world.hr), json=body)
+    assert r.status_code == 200, r.text
+    assert calls
+
+
+async def test_list_marks_test_newbies(client, world, session):
+    """Машину времени можно только тестовым: список отдаёт признак test, живые люди в «Кого перематываем» не попадут."""
+    world.other.is_test = True
+    await session.flush()
+    rows = {e["id"]: e for e in (await client.get("/api/employees", headers=auth(world.hr))).json()}
+    assert rows[world.other.id]["test"] is True and rows[world.emp.id]["test"] is False

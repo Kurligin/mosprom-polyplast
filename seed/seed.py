@@ -1,13 +1,16 @@
 """Демо-данные (все синтетические). Запуск: python -m seed.seed [--links]
 
 Идемпотентно: существующие записи и их коды не меняются.
+У синтетических новичков прошедшие встречи с руководителем отмечаются проведёнными,
+кроме двух самых свежих: на экране руководителя они «пора встретиться».
 --links — только напечатать ссылки привязки, ничего не создавая.
 """
 
 import asyncio
 import random
 import sys
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
@@ -27,8 +30,12 @@ STAFF = [
     ("Тестова Анна Сергеевна (HR, демо)", "hr", None),
     ("Подборова Мария Игоревна (рекрутер, демо)", "recruiter", None),
     ("Начальников Пётр Андреевич (руководитель, демо)", "manager", "GTP"),
-    ("Главная Ольга Викторовна (глава подбора, демо)", "head_recruitment", None),
+    ("Главная Ольга Викторовна (руководитель HR, демо)", "head_recruitment", None),
 ]
+# Прежние ФИО персонала → новые: сид переименовывает, а не заводит второго человека
+RENAMED_STAFF = {
+    "Главная Ольга Викторовна (глава подбора, демо)": "Главная Ольга Викторовна (руководитель HR, демо)",
+}
 
 # Тестовые новички для команды: (ФИО, имя, площадка, офис/производство)
 TEST_EMPLOYEES = [
@@ -48,6 +55,22 @@ WAITING = [
     ("Образцова", "Синтия", "Luzhniki", "office", 2),
     ("Макетов", "Шаблон", "GTP", "production", 4),
 ]
+
+# Синтетические новички дальше по испытательному сроку: у них уже были опросы двух месяцев и итоговый.
+# (фамилия, имя, площадка, офис/производство, сколько дней назад вышел — от даты первого запуска сида)
+# Около 53 и 93 дней: опрос двух месяцев и итоговый пришли пару дней назад, в очереди есть свежие сигналы.
+VETERANS = [
+    ("Пробников", "Тестислав", "GTP", "production", 53),
+    ("Моделин", "Эскиза", "GTP", "production", 72),
+    ("Шаблонов", "Пробор", "GTP", "office", 93),
+    ("Тестерова", "Вымысла", "GTP", "production", 99),
+    ("Условная", "Образца", "GrPP", "office", 61),
+    ("Эскизова", "Примерна", "GrPP", "office", 94),
+    ("Демонстрова", "Модель", "GrPP", "production", 100),
+    ("Вымышленная", "Условна", "Luzhniki", "office", 64),
+    ("Макетов", "Демьян", "Luzhniki", "office", 96),
+]
+KEEP_OVERDUE = 2  # встречи «пора встретиться» для демо экрана руководителя
 
 
 def add_months(d: date, months: int) -> date:
@@ -76,6 +99,11 @@ async def seed() -> None:
 
         # Персонал: ищем по ФИО+роли, код не трогаем
         staff_by_role: dict[str, Staff] = {}
+        for old, new in RENAMED_STAFF.items():
+            st = await s.scalar(select(Staff).where(Staff.full_name == old))
+            if st is not None and await s.scalar(select(Staff.id).where(Staff.full_name == new)) is None:
+                st.full_name = new
+        await s.flush()
         for full_name, role, site_code in STAFF:
             st = await s.scalar(select(Staff).where(Staff.full_name == full_name, Staff.role == role))
             if st is None:
@@ -131,9 +159,64 @@ async def seed() -> None:
                 invite_code=new_code(), status="waiting", address_form="ty", is_synthetic=True,
             ))
 
+        # Дальше по испытательному сроку: подключились, бот ведёт их давно
+        for last, first, code, work_type, ago in VETERANS:
+            full_name = f"{last} {first} [синтетика]"
+            if await s.scalar(select(Employee.id).where(Employee.full_name == full_name, Employee.is_synthetic)):
+                continue
+            start = today - timedelta(days=ago)
+            s.add(Employee(
+                full_name=full_name, first_name=first, site_code=code, work_type=work_type,
+                start_date=start, probation_end=add_months(start, 3),
+                manager_id=manager.id, recruiter_id=recruiter.id,
+                invite_code=new_code(), status="active", address_form=rnd.choice(["ty", "vy"]),
+                is_synthetic=True,
+            ))
+        await s.flush()
+
+        synth = (await s.scalars(select(Employee).where(Employee.is_synthetic, Employee.status == "active",
+                                                        Employee.manager_id.is_not(None))
+                                 .order_by(Employee.id))).all()
+        done, kept = await settle_meetings(s, list(synth), today)
         await s.commit()
 
+    print(f"Встречи синтетических новичков: отмечено проведёнными {done}, ждут отметки {kept} [синтетика]")
     await print_links()
+
+
+async def settle_meetings(session, emps: list[Employee], today: date,
+                          keep_overdue: int = KEEP_OVERDUE) -> tuple[int, int]:
+    """Синтетика: прошедшие встречи с руководителем проведены, кроме keep_overdue самых свежих (по одной у новичка).
+
+    Оставленные — демо «пора встретиться» на экране руководителя. Встречи создаёт `manager.service.ensure_tasks`,
+    отправленные push и отметки руководителя не трогаем. → (сколько отметили сейчас, сколько ждут отметки).
+    Коммит — за вызывающим.
+    """
+    from app.manager.service import ensure_tasks
+
+    past: dict[int, list] = {}
+    for e in emps:
+        if not e.is_synthetic or not e.manager_id:
+            continue
+        tasks = [t for t in await ensure_tasks(session, e)
+                 if t.manager_id == e.manager_id and t.due_date and t.due_date < today]
+        if tasks:
+            past[e.id] = sorted(tasks, key=lambda t: t.due_date)
+    # кто ждёт отметки: самые свежие прошедшие встречи; если отметки уже ждут — те же новички
+    waiting = [ts[-1] for ts in past.values() if ts[-1].status == "pending"]
+    waiting.sort(key=lambda t: (t.due_date, t.id), reverse=True)
+    keep = {t.id for t in waiting[:keep_overdue]}
+    tz = ZoneInfo(settings.tz_default)
+    done = 0
+    for tasks in past.values():
+        for t in tasks:
+            if t.id in keep or t.status != "pending" or t.mid:
+                continue
+            t.status = "done"
+            t.done_at = datetime.combine(t.due_date, time(15, 0), tzinfo=tz).astimezone(UTC)
+            done += 1
+    await session.flush()
+    return done, len(keep)
 
 
 async def print_links() -> None:

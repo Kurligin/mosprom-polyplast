@@ -1,11 +1,20 @@
 import { useState } from 'react'
 import { CalendarCheck, CalendarClock, Check, ClipboardCheck, Users } from 'lucide-react'
 import { api, roleParam, toApiError } from '../api/client'
-import type { Employee } from '../api/types'
-import { Avatar, Cell, Empty, ErrorState, Progress, Screen, Section, SkeletonCard, SkeletonList, dayLabel, fmtDate, useAsync, useToast } from '../components/ui'
+import type { Employee, EmployeeShort } from '../api/types'
+import {
+  Avatar, Cell, Empty, ErrorState, Progress, Screen, Section, SkeletonCard, SkeletonList, dayLabel, employeeToday, fmtDate,
+  useAsync, useToast,
+} from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
 import { IntroSection, PlanSection, ProbationHeader } from './EmployeeCard'
+
+/**
+ * Пора встретиться: дата встречи уже наступила у новичка. Сравниваем даты, а не номер встречи с днём адаптации:
+ * встреча «3-го дня» — на 3-й рабочий день, а день адаптации календарный.
+ */
+const meetingDue = (e: EmployeeShort) => !!e.next_meeting && e.next_meeting.date <= employeeToday(e)
 
 export function ManagerHome() {
   const nav = useNav()
@@ -13,8 +22,8 @@ export function ManagerHome() {
   // сначала те, с кем пора встретиться, потом по дате ближайшей встречи
   const data = raw
     ? [...raw].sort((a, b) => {
-        const ao = a.next_meeting && a.next_meeting.day <= a.day ? 0 : 1
-        const bo = b.next_meeting && b.next_meeting.day <= b.day ? 0 : 1
+        const ao = meetingDue(a) ? 0 : 1
+        const bo = meetingDue(b) ? 0 : 1
         if (ao !== bo) return ao - bo
         return (a.next_meeting?.date ?? '9999').localeCompare(b.next_meeting?.date ?? '9999')
       })
@@ -34,7 +43,7 @@ export function ManagerHome() {
         <section className="section">
           <div className="group">
             {data.map((e) => {
-              const overdue = e.next_meeting && e.next_meeting.day <= e.day
+              const overdue = meetingDue(e)
               return (
                 <button
                   key={e.id}
@@ -123,7 +132,7 @@ export function ManagerEmployee({ id }: { id: number }) {
                   )
                 }
                 title={m.title}
-                meta={`День ${m.day} · ${fmtDate(m.date)}${m.done ? ' · проведена' : ''}`}
+                meta={`${fmtDate(m.date)}${m.done ? ' · проведена' : m.id === next?.id && m.date <= employeeToday(e) ? ' · пора встретиться' : ''}`}
               />
             ))}
           </Section>

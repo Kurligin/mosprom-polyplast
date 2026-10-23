@@ -28,7 +28,8 @@ def _num1(x) -> str:
 
 
 def _pct(x) -> str:
-    return f"{round((x or 0) * 100)}%"
+    """Доля настроения; None — мало ответов с настроением, цифры нет."""
+    return "—" if x is None else f"{round(x * 100)}%"
 
 
 def _plural(n: int, one: str, few: str, many: str) -> str:

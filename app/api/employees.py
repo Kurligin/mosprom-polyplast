@@ -44,23 +44,43 @@ async def employee_card(session: AsyncSession, emp: Employee, staff: Staff) -> d
     return await views.full(emp)
 
 
+View = Annotated[Literal["manager"] | None, Query(description="manager — HR смотрит панель глазами руководителя")]
+
+
+async def viewed_as(session: AsyncSession, staff: Staff, view: str | None, manager_id: int | None) -> Staff:
+    """Чьими глазами отвечаем. HR и руководитель HR с view=manager видят панель руководителя manager_id
+    (по умолчанию — первого руководителя): его новичков, без опросов и обращений. Остальным — как есть."""
+    if view != "manager" or role_of(staff) not in ("hr", "head"):
+        return staff
+    if manager_id is not None:
+        mgr = await session.get(Staff, manager_id)
+    else:
+        mgr = await session.scalar(select(Staff).where(Staff.role == "manager").order_by(Staff.id).limit(1))
+    if mgr is None or mgr.role != "manager":
+        raise HTTPException(404, "Руководитель не найден")
+    return mgr
+
+
 @router.get("/employees")
-async def list_employees(staff: StaffDep, session: SessionDep, mine: int = 0) -> list[dict]:
+async def list_employees(staff: StaffDep, session: SessionDep, mine: int = 0, view: View = None,
+                         manager_id: int | None = None) -> list[dict]:
+    who = await viewed_as(session, staff, view, manager_id)
     q = select(Employee).options(selectinload(Employee.site)).order_by(Employee.start_date.desc(), Employee.id)
-    if role_of(staff) == "manager" or mine:
-        q = q.where(Employee.manager_id == staff.id)
+    if role_of(who) == "manager" or mine:
+        q = q.where(Employee.manager_id == who.id)
     emps = list(await session.scalars(q))
-    views = EmployeeViews(session, role_of(staff))
+    views = EmployeeViews(session, role_of(who))
     await views.prepare(emps)
     return [await views.short(e) for e in emps]
 
 
 @router.get("/employees/{emp_id}")
-async def get_employee(emp_id: int, staff: StaffDep,
-                       session: SessionDep) -> dict:
-    emp = await load_employee(session, emp_id, staff)
+async def get_employee(emp_id: int, staff: StaffDep, session: SessionDep, view: View = None,
+                       manager_id: int | None = None) -> dict:
+    who = await viewed_as(session, staff, view, manager_id)
+    emp = await load_employee(session, emp_id, who)
     await _ensure_meetings(session, emp)
-    return await employee_card(session, emp, staff)
+    return await employee_card(session, emp, who)
 
 
 @router.get("/employees/{emp_id}/intro-photo")
@@ -171,6 +191,9 @@ async def create_employee(body: NewEmployeeInput, staff: HrDep,
         except Exception as e:  # noqa: BLE001 — встречи досоздаст фоновая задача
             log.warning("manager.ensure_tasks(%s): %s", emp.id, e)
     await session.commit()
+    invalidate = optional("app.privacy.names", "invalidate")
+    if invalidate is not None:
+        invalidate()  # ФИО нового человека сразу попадает в маскирование перед LLM
     emp = await load_employee(session, emp.id, staff)
     views = EmployeeViews(session, role_of(staff))
     await views.prepare([emp])
@@ -192,20 +215,25 @@ async def open_gate(emp_id: int, body: GateInput, staff: HrDep,
     return await employee_card(session, emp, staff)
 
 
+# Файл плана: те же форматы — в Mini App (EmployeeCard.tsx, PLAN_EXT)
+PLAN_EXT = (".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg")
+
+
 @router.post("/employees/{emp_id}/plan")
 async def plan_ready(emp_id: int, file: Annotated[UploadFile, File()], staff: StaffDep,
-                     session: SessionDep) -> dict:
+                     session: SessionDep, view: View = None, manager_id: int | None = None) -> dict:
     fn = need("app.scenario.engine", "open_gate", "Движок сценария")
-    emp = await load_employee(session, emp_id, staff)
-    path = await save_upload(file, "plans", (".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg"))
+    who = await viewed_as(session, staff, view, manager_id)
+    emp = await load_employee(session, emp_id, who)
+    path = await save_upload(file, "plans", PLAN_EXT)
     await call(fn, session, emp, "plan_ready", file_path=str(path))
     await session.commit()
-    return await employee_card(session, emp, staff)
+    return await employee_card(session, emp, who)
 
 
 @router.post("/meetings/{task_id}/done")
-async def meeting_done(task_id: int, staff: StaffDep,
-                       session: SessionDep) -> dict:
+async def meeting_done(task_id: int, staff: StaffDep, session: SessionDep, view: View = None,
+                       manager_id: int | None = None) -> dict:
     fn = need("app.manager.service", "mark_done", "Модуль руководителя")
     task = await session.get(ManagerTask, task_id)
     if task is None:
@@ -218,7 +246,7 @@ async def meeting_done(task_id: int, staff: StaffDep,
     except PermissionError as e:
         raise HTTPException(403, str(e) or "Это встреча другого руководителя") from None
     await session.commit()
-    return await employee_card(session, emp, staff)
+    return await employee_card(session, emp, await viewed_as(session, staff, view, manager_id))
 
 
 @router.get("/staff")

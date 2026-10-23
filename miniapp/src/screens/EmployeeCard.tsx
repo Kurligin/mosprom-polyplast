@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Briefcase, Check, Clock, Factory, FileCheck2, Megaphone, MessageSquare, Phone, QrCode, ShieldAlert, UserX } from 'lucide-react'
+import {
+  AlertTriangle, Briefcase, Check, Clock, Factory, FileCheck2, Megaphone, MessageSquare, Phone, QrCode, ShieldAlert, UserX,
+} from 'lucide-react'
 import { api, toApiError } from '../api/client'
 import type { Employee, Step } from '../api/types'
 import InviteSheet from '../components/InviteSheet'
 import {
-  Avatar, Cell, Chip, ErrorState, FilePick, Progress, Screen, Section, SkeletonCard, dayLabel, fmtAgo, fmtDate,
-  plural, useAsync, useToast,
+  Avatar, Cell, Chip, ErrorState, FilePick, Progress, Screen, Section, SkeletonCard, dayLabel, employeeToday, fmtAgo,
+  fmtDate, plural, useAsync, useToast,
 } from '../components/ui'
 import { haptic, openExternal } from '../lib/bridge'
 import { useNav } from '../lib/nav'
@@ -15,6 +17,8 @@ import { EmployeeChips } from './Employees'
 export function ProbationHeader({ e, hideSignals }: { e: Employee; hideSignals?: boolean }) {
   const { name } = useSites()
   const left = Math.max(0, e.probation_days - e.day)
+  // HR завёл выход на выходной: Корсик считает дни от ближайшего рабочего, его и показываем
+  const moved = e.first_day !== e.start_date
   return (
     <>
       <div className="hero">
@@ -35,14 +39,17 @@ export function ProbationHeader({ e, hideSignals }: { e: Employee; hideSignals?:
           <b className="num">{dayLabel(e.day, e.probation_days)}</b>
           <span className="cell-meta num">
             {e.day < 1
-              ? `выход ${fmtDate(e.start_date)}`
+              ? `выход ${fmtDate(e.first_day)}`
               : e.day > e.probation_days
                 ? `день ${e.day}, срок ${e.probation_days}`
                 : `осталось ${left} ${plural(left, ['день', 'дня', 'дней'])}`}
           </span>
         </div>
         <Progress value={e.day / e.probation_days} thick label="Испытательный срок" />
-        <div className="probation-sub">Испытательный срок · первый день {fmtDate(e.start_date)}</div>
+        <div className="probation-sub">
+          Испытательный срок · первый день {fmtDate(e.first_day)}
+          {moved && `, перенесён с ${fmtDate(e.start_date)}`}
+        </div>
       </div>
     </>
   )
@@ -147,20 +154,36 @@ export function IntroSection({ e, demo, canGate, onUpdate }: { e: Employee; demo
   )
 }
 
-/** «План готов»: HR или руководитель прикладывает файл, бот отправляет его новичку */
+/** Форматы файла плана — как PLAN_EXT в app/api/employees.py: другие сервер не примет */
+const PLAN_EXT = ['.pdf', '.doc', '.docx', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg']
+const PLAN_FORMATS = 'PDF, Word, Excel, PowerPoint, JPG или PNG'
+
+/** Когда новичок получит план: файл уходит вместе с шагом сценария, а не в момент «План готов» */
+function planWhen(e: Employee): string {
+  if (e.plan_step.sent) return 'Корсик отправил файл новичку в чат'
+  if (e.synthetic) return 'Новичок синтетический, в чат ему ничего не уходит'
+  if (!e.connected) return 'Новичок ещё не подключился к боту. Корсик отправит план, когда он подключится'
+  const at = e.plan_step.at
+  if (at && at.slice(0, 10) > employeeToday(e)) return `Корсик отправит файл вместе с шагом «Адаптационный план» ${fmtDate(at)}`
+  return 'Корсик отправит файл новичку в ближайшие минуты'
+}
+
+/** «План готов»: HR или руководитель прикладывает файл, бот отправляет его новичку вместе с шагом о плане */
 export function PlanSection({ e, demo, onUpdate }: { e: Employee; demo: boolean; onUpdate: (e: Employee) => void }) {
   const toast = useToast()
   const [file, setFile] = useState<File | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
+  const fileError =
+    file && !PLAN_EXT.some((x) => file.name.toLowerCase().endsWith(x)) ? `Этот формат не подойдёт. Нужен ${PLAN_FORMATS}` : null
 
   const send = async () => {
-    if (!file) return
+    if (!file || fileError) return
     setProgress(0)
     try {
       const next = await api.uploadPlan(e.id, file, { demo, onProgress: setProgress })
       onUpdate(next)
       setFile(null)
-      toast('success', 'План отправлен новичку')
+      toast('success', `План сохранён. ${planWhen(next)}`)
     } catch (err) {
       toast('error', toApiError(err).message)
     } finally {
@@ -171,21 +194,35 @@ export function PlanSection({ e, demo, onUpdate }: { e: Employee; demo: boolean;
   if (e.gates.plan_ready)
     return (
       <Section header="Адаптационный план">
-        <Cell left={<IconBox tone="var(--success)"><FileCheck2 /></IconBox>} title="План готов" meta="Корсик отправил файл новичку в чат" />
+        <Cell
+          left={
+            <IconBox tone={e.plan_step.sent ? 'var(--success)' : 'var(--primary)'}>
+              {e.plan_step.sent ? <FileCheck2 /> : <Clock />}
+            </IconBox>
+          }
+          title="План готов"
+          meta={planWhen(e)}
+        />
       </Section>
     )
   const sending = progress !== null
   return (
     <Section header="Адаптационный план" footer="Корсик отправит файл новичку вместе с сообщением о плане.">
       <FilePick
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+        accept={PLAN_EXT.join(',')}
         file={file}
         onPick={setFile}
         label="Файл плана"
-        hint="PDF, Word, Excel или фото"
+        hint={PLAN_FORMATS}
         disabled={sending}
       />
-      {file && (
+      {fileError && (
+        <p className="inline-error" role="alert" style={{ marginBottom: 12 }}>
+          <AlertTriangle size={15} />
+          {fileError}
+        </p>
+      )}
+      {file && !fileError && (
         <div className="group-action">
           {sending && <Progress value={progress} thick label="Отправка файла" />}
           <button className="btn small" onClick={send} disabled={sending}>

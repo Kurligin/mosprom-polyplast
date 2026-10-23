@@ -134,7 +134,7 @@ async def world(session):
     mgr = Staff(full_name="Начальников Пётр Андреевич (руководитель, синтетика)", role="manager",
                 site_code=site.code, max_user_id=base + 3)
     mgr2 = Staff(full_name="Другой Руководитель (синтетика)", role="manager", max_user_id=base + 4)
-    head = Staff(full_name="Главная Ольга Викторовна (глава подбора, синтетика)", role="head_recruitment",
+    head = Staff(full_name="Главная Ольга Викторовна (руководитель HR, синтетика)", role="head_recruitment",
                  max_user_id=base + 5)
     session.add_all([hr, rec, mgr, mgr2, head])
     await session.flush()

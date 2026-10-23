@@ -19,6 +19,8 @@ const addDays = (d: Date, n: number) => {
   r.setDate(r.getDate() + n)
   return r
 }
+/** Первый рабочий день: выход в выходной переносится на понедельник (праздники демо не учитывает) */
+const firstWorkday = (d: Date) => addDays(d, d.getDay() === 6 ? 2 : d.getDay() === 0 ? 1 : 0)
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
 const hoursAhead = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
 
@@ -132,6 +134,7 @@ const employees: Employee[] = SEED.map(([full_name, position, site, work_type, d
     site,
     work_type,
     start_date: iso(start),
+    first_day: iso(start),
     day,
     probation_days,
     current_step: steps.find((s) => s.status === 'current')?.title ?? null,
@@ -141,6 +144,7 @@ const employees: Employee[] = SEED.map(([full_name, position, site, work_type, d
     connected: flags.connected ?? true,
     next_meeting: meetings.find((m) => !m.done) ?? null,
     synthetic: true,
+    test: id === 1, // первый — «тестовый новичок» команды: его перематывает машина времени
     manager: managerFor(site),
     recruiter: RECRUITERS[i % 2],
     invite_link: inviteLink(`DEMO${id}`),
@@ -153,6 +157,7 @@ const employees: Employee[] = SEED.map(([full_name, position, site, work_type, d
           }
         : null,
     gates: { recruiter_go: !!flags.go, plan_ready: !!flags.plan },
+    plan_step: { at: addDays(start, 2).toISOString(), sent: !!flags.plan && day >= 3 },
     steps,
     surveys: surveysFor(id, day, pending),
     tickets: [],
@@ -256,8 +261,8 @@ function shortTicket(t: Ticket): TicketShort {
 }
 
 function shortEmployee(e: Employee): EmployeeShort {
-  const { manager: _1, recruiter: _2, intro: _3, steps: _4, surveys: _5, tickets: _6, meetings: _7, gates: _8, invite_link: _9, ...rest } = e
-  void _1; void _2; void _3; void _4; void _5; void _6; void _7; void _8; void _9
+  const { manager: _1, recruiter: _2, intro: _3, steps: _4, surveys: _5, tickets: _6, meetings: _7, gates: _8, invite_link: _9, plan_step: _10, ...rest } = e
+  void _1; void _2; void _3; void _4; void _5; void _6; void _7; void _8; void _9; void _10
   return rest
 }
 
@@ -341,7 +346,7 @@ export const mock = {
   createEmployee(input: NewEmployeeInput): NewEmployeeResult {
     const id = Math.max(...employees.map((e) => e.id)) + 1
     const start = new Date(input.start_date)
-    const day = Math.round((today.getTime() - start.getTime()) / 86400_000) + 1
+    const day = Math.round((today.getTime() - firstWorkday(start).getTime()) / 86400_000) + 1
     const manager = MANAGERS.find((m) => m.id === input.manager_id) ?? null
     const recruiter = RECRUITERS.find((r) => r.id === input.recruiter_id) ?? null
     const steps = stepsFor(start, day, input.work_type)
@@ -354,6 +359,7 @@ export const mock = {
       site: input.site,
       work_type: input.work_type,
       start_date: input.start_date,
+      first_day: iso(firstWorkday(start)),
       day,
       probation_days: input.probation_days,
       current_step: steps.find((s) => s.status === 'current')?.title ?? null,
@@ -368,6 +374,7 @@ export const mock = {
       invite_link: inviteLink(code),
       intro: null,
       gates: { recruiter_go: false, plan_ready: false },
+      plan_step: { at: addDays(firstWorkday(start), 2).toISOString(), sent: false },
       steps,
       surveys: [],
       tickets: [],
@@ -427,7 +434,8 @@ export const mock = {
       })
     }
     recount()
-    return { ...structuredClone(t), delivered: employees.find((e) => e.id === t.employee_id)?.connected ?? false, added_to_kb: input.add_to_kb }
+    // все демо-новички синтетические: в «МАКС» ответ не уходит, остаётся в ленте
+    return { ...structuredClone(t), synthetic: true, delivered: false, added_to_kb: input.add_to_kb && !t.is_personal }
   },
   setStatus(id: number, status: TicketStatus): Ticket {
     const t = tickets.find((x) => x.id === id) ?? notFound('Обращение')
@@ -493,7 +501,7 @@ export const mock = {
     }
   },
   report(): ReportResult {
-    return { ok: true, message: 'Сводка ушла главе подбора в «МАКС»' }
+    return { ok: true, message: 'Сводка ушла руководителю HR в «МАКС»' }
   },
   meetingDone(employeeId: number, meetingId: number): Employee {
     const e = employees.find((x) => x.id === employeeId) ?? notFound('Новичок')

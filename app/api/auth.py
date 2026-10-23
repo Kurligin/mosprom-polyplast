@@ -220,7 +220,7 @@ StaffDep = Annotated[Staff, Depends(current_staff)]
 
 
 async def hr_staff(staff: StaffDep) -> Staff:
-    """HR, рекрутер или глава подбора. Руководителю — 403."""
+    """HR, рекрутер или руководитель HR. Руководителю подразделения — 403."""
     if role_of(staff) not in ("hr", "head"):
         raise HTTPException(403, "Раздел доступен только HR")
     return staff

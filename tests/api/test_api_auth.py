@@ -103,7 +103,7 @@ def test_sign_matches_reference():
 async def test_me_with_valid_init_data(client, world):
     r = await client.get("/api/me", headers=auth(world.hr))
     assert r.status_code == 200
-    assert r.json() == {"role": "hr", "name": "Тестова Анна Сергеевна", "id": world.hr.id}
+    assert r.json() == {"role": "hr", "name": "Тестова Анна Сергеевна", "id": world.hr.id, "demo": True}
 
 
 @pytest.mark.asyncio

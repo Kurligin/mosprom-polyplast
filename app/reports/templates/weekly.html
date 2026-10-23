@@ -152,7 +152,7 @@
       <div class="label">Средняя оценка</div>
       {% if k.avg_score is not none %}
       <div class="value num">{{ k.avg_score | num1 }}<small>/10</small></div>
-      <div class="note num">{{ k.respondents }} {{ k.respondents | plural("ответил", "ответили", "ответили") }}</div>
+      <div class="note num">{{ k.score_respondents }} {{ k.score_respondents | plural("оценил", "оценили", "оценили") }}</div>
       {% else %}
       <div class="value">—</div>
       <div class="note">мало ответов</div>
@@ -184,7 +184,11 @@
           <span class="site">{{ s.name }}</span>
           {% if s.low_data %}<span class="tag">мало данных</span>{% endif %}
           <span class="meta num">{{ s.respondents }} из {{ s.newbies }} {{ s.respondents | plural("ответил", "ответили", "ответили") }}</span>
+          {% if s.avg_score is not none %}
           <span class="score num">{{ s.avg_score | num1 }}<small> из 10</small></span>
+          {% else %}
+          <span class="score"><small>мало оценок</small></span>
+          {% endif %}
         </div>
         <div class="row-bar">
           <div class="bar">
@@ -236,6 +240,9 @@
       Площадки, где ответили меньше {{ r.threshold }} новичков, объединены.
       {% else %}
       Срез по площадке показываем, когда ответят {{ r.threshold }} и больше новичков.
+      {% endif %}
+      {% if r.mood_rows | selectattr("avg_score", "none") | list %}
+      Среднюю оценку показываем, когда её поставят {{ r.threshold }} и больше.
       {% endif %}
     </div>
     <div class="brand">Группа ПОЛИПЛАСТИК</div>

@@ -6,8 +6,12 @@
 
 Источник текстов — 120 синтетических ответов Ивана (ветка ideas/ivan, docs/ideas/07-survey-answers-synth.jsonl,
 копия — eval/flags/survey-synth.jsonl). Ответы раскладываются по синтетическим новичкам их площадки
-(сначала make seed), даты — за последние 6 недель. К каждому новичку добавляются ответы кнопками
-(опрос 3-го дня, чек 2-й недели, адаптационный план), чтобы у сводки были оценки и порог «5 разных новичков».
+(сначала make seed), до которых этот опрос уже дошёл по сценарию: опрос 3-го дня — на 3-й рабочий день,
+итоговый — в последний день испытательного и т. д. (`SURVEY_TIMING`). Ответ — в день опроса, вскоре после него.
+Новичок отвечает на вопрос один раз; если подходящих новичков нет, ответ пропускается. Красные и негативные
+ответы раскладываются первыми, чтобы при нехватке новичков пропадали спокойные, а не сигналы.
+К каждому новичку добавляются ответы кнопками на опросы, которые до него дошли (3-й день, 2-я неделя,
+план, два месяца, итоговый), чтобы у сводки были оценки и порог «5 разных новичков».
 Флаги — словарём app/signals/rules.py и кнопками-триггерами из config/surveys.yaml.
 В HR-группу ничего не отправляется.
 """
@@ -18,22 +22,39 @@ import argparse
 import asyncio
 import json
 import random
-from collections import defaultdict
-from datetime import UTC, date, datetime, time, timedelta
+from collections import Counter, defaultdict
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
 
+from app.config import settings
 from app.db.models import Employee, Flag, SurveyAnswer, Ticket
 from app.db.session import async_session, engine
+from app.scenario.models import TimingRule
+from app.scenario.schedule import add_months, step_date
 from app.signals import rules
 from app.signals.service import TICKET_CATEGORY
 from app.surveys import config as C
 from app.surveys import store
 
 SYNTH = Path(__file__).resolve().parents[1] / "eval" / "flags" / "survey-synth.jsonl"
-WINDOW_DAYS = 42
 MOOD = {"negative": "negative", "neutral": "neutral", "positive": "positive"}
+
+# Когда приходит опрос — как шаги сценария (config/surveys.yaml → номера шагов, время — колонка ТЗ):
+# day1 — wd1@12:00, day3 — wd3@17:30, week2 — через 2 недели, plan — первый день 2-го месяца,
+# month2 — через 1 месяц 3 недели, final — последний день испытательного. Даты — scenario.schedule.step_date.
+SURVEY_TIMING = {
+    "day1": TimingRule(kind="workday", n=1, time="12:00"),
+    "day3": TimingRule(kind="workday", n=3, time="17:30"),
+    "week2": TimingRule(kind="calendar_offset", weeks=2, time="10:00"),
+    "plan": TimingRule(kind="month_start", month=2, time="09:00"),
+    "month2": TimingRule(kind="calendar_offset", months=1, weeks=3, time="09:01"),
+    "final": TimingRule(kind="probation_end", offset_days=0, time="09:01"),
+}
+BASE_SURVEYS = ("day3", "week2", "plan", "month2", "final")  # ответы кнопками у каждого, до кого дошёл опрос
 
 # Подсказка кластера у Ивана → тема из app.llm.gigachat.TOPICS
 TOPIC = {
@@ -119,17 +140,68 @@ def _option(sv: C.Survey, key: str, value: str | None) -> C.Option | None:
     return next((o for o in q.options if o.label == value), None)
 
 
-def _when(rnd: random.Random, start: date, today: date, *, day: int | None = None) -> datetime | None:
-    """Дата ответа: день адаптации day (если уже наступил) или случайный день в окне 6 недель."""
-    lo = max(start, today - timedelta(days=WINDOW_DAYS))
-    if day is not None:
-        d = start + timedelta(days=day - 1)
-        if d > today or d < lo:
-            return None
-    else:
-        span = (today - lo).days
-        d = lo + timedelta(days=rnd.randint(0, max(span, 0)))
-    return datetime.combine(d, time(rnd.randint(6, 15), rnd.randint(0, 59)), tzinfo=UTC)
+def survey_at(code: str, emp) -> datetime:
+    """Когда опрос code приходит новичку по сценарию (часовой пояс по умолчанию, как у синтетики)."""
+    rule = SURVEY_TIMING[code]
+    end = emp.probation_end or (add_months(emp.start_date, 3) - timedelta(days=1))
+    d = step_date(rule, SimpleNamespace(start_date=emp.start_date, probation_end=end))
+    h, m = (rule.time or "10:00").split(":")
+    return datetime.combine(d, time(int(h), int(m)), tzinfo=ZoneInfo(settings.tz_default))
+
+
+def answer_at(code: str, emp, now: datetime, rnd: random.Random) -> datetime | None:
+    """Когда новичок ответил: через 5–90 минут после опроса, не позже now. None — опрос до него ещё не дошёл."""
+    sent = survey_at(code, emp)
+    if sent > now:
+        return None
+    return min(sent + timedelta(minutes=rnd.randint(5, 90)), now)
+
+
+def _priority(row: dict) -> int:
+    """Красные сигналы — первыми, потом негатив, потом остальное."""
+    if any(h.level == "red" for h in rules.detect(row["text"])):
+        return 0
+    return 1 if row.get("label") == "negative" else 2
+
+
+def assign_free(rows: list[dict], by_site: dict[str, list], now: datetime, rnd: random.Random, *,
+                skip: set[tuple[int, str]] | frozenset = frozenset()) -> tuple[list[tuple], int]:
+    """Свободные ответы Ивана → новичкам их площадки, до которых этот опрос уже дошёл.
+
+    Новичок отвечает на вопрос один раз; нагрузка — поровну. skip — (id новичка, опрос), которые новичок
+    не прошёл. → ([(новичок, строка, (опрос, вопрос, вариант, оценка), когда)], сколько строк пропущено).
+    """
+    targets = [(row, _target(row, row["site"], rnd)) for row in rows]  # rnd — в порядке файла, как раньше
+    order = sorted(range(len(rows)), key=lambda i: _priority(rows[i]))
+    taken: set[tuple[int, str]] = set()
+    load: Counter[int] = Counter()
+    placed, skipped = [], 0
+    for i in order:
+        row, (code, key, value, score) = targets[i]
+        hosts = [e for e in by_site.get(row["site"], [])
+                 if (e.id, key) not in taken and (e.id, code) not in skip and survey_at(code, e) <= now]
+        if not hosts:
+            skipped += 1
+            continue
+        e = min(hosts, key=lambda x: (load[x.id], x.id))
+        taken.add((e.id, key))
+        load[e.id] += 1
+        placed.append((e, row, (code, key, value, score), answer_at(code, e, now, rnd)))
+    return placed, skipped
+
+
+def base_plan(emps: list, now: datetime, rnd: random.Random, *,
+              skip: set[tuple[int, str]] | frozenset = frozenset()) -> list[tuple]:
+    """Опросы, которые дошли до новичка и на которые он ответил кнопками: [(новичок, опрос, когда)]."""
+    out = []
+    for e in emps:
+        for code in BASE_SURVEYS:
+            if (e.id, code) in skip:
+                continue
+            when = answer_at(code, e, now, rnd)
+            if when is not None:
+                out.append((e, code, when))
+    return out
 
 
 def _profile(rnd: random.Random, site: str) -> str:
@@ -162,7 +234,7 @@ def _mood(opt: C.Option | None, score: int | None, label: str | None = None) -> 
     return opt.mood if opt else None
 
 
-async def _reset(s) -> None:
+async def _reset(s, emps: list[Employee]) -> None:
     synth_ids = select(SurveyAnswer.id).where(SurveyAnswer.is_synthetic)
     ticket_ids = (await s.scalars(select(Flag.ticket_id).where(Flag.answer_id.in_(synth_ids),
                                                                Flag.ticket_id.is_not(None)))).all()
@@ -170,6 +242,10 @@ async def _reset(s) -> None:
     if ticket_ids:
         await s.execute(delete(Ticket).where(Ticket.id.in_(ticket_ids)))
     await s.execute(delete(SurveyAnswer).where(SurveyAnswer.is_synthetic))
+    # «непройденные опросы» прошлого запуска: у синтетики они только от сида, бот им не пишет
+    for e in emps:
+        if e.dialog_data and ("survey" in e.dialog_data or "surveys" in e.dialog_data):
+            e.dialog_data = {k: v for k, v in e.dialog_data.items() if k not in ("survey", "surveys")}
     await s.flush()
 
 
@@ -184,7 +260,6 @@ def _ticket_status(created: datetime, now: datetime) -> tuple[str, datetime | No
 
 async def seed(reset: bool = False, thin: str | None = None) -> None:
     rnd = random.Random(7)
-    today = date.today()
     now = datetime.now(UTC)
     surveys = C.load()
     rows = [json.loads(line) for line in SYNTH.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -202,7 +277,7 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
             print(f"Синтетические ответы уже есть ({have}). Пересоздать: python -m seed.surveys_seed --reset")
             return
         if reset:
-            await _reset(s)
+            await _reset(s, list(emps))
 
         by_site: dict[str, list[Employee]] = defaultdict(list)
         for e in emps:
@@ -228,32 +303,28 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
                 ans.created_at = when
             return ans
 
-        # 1. Ответы кнопками: 3-й день, 2-я неделя, адаптационный план — по дню адаптации
-        profiles = {e.id: _profile(rnd, e.site_code) for e in emps}
-        for site, people in by_site.items():
-            for e in people:
-                for code, day in (("day3", 3), ("week2", 14), ("plan", 32)):
-                    when = _when(rnd, e.start_date, today, day=day)
-                    if when is None:
-                        continue
-                    sv = surveys[code]
-                    for q, value, score in _base_answers(sv, profiles[e.id], rnd, site):
-                        opt = _option(sv, q.key, value)
-                        put(e, sv, q, value=value, score=score, mood=_mood(opt, score), when=when)
+        # Двое синтетических новичков не прошли чек 2-й недели (шаг 4): их ответов на него нет
+        stuck = [x for e_list in by_site.values() for x in e_list if survey_at("week2", x) <= now][:2]
+        skip = {(e.id, "week2") for e in stuck}
 
-        # 2. Свободные ответы Ивана — по новичкам их площадки, по кругу
-        turn: dict[str, int] = defaultdict(int)
+        # 1. Ответы кнопками на опросы, которые уже дошли до новичка, — в день опроса
+        profiles = {e.id: _profile(rnd, e.site_code) for e in emps}
+        people = [e for site_people in by_site.values() for e in site_people]
+        for e, code, when in base_plan(people, now, rnd, skip=skip):
+            sv = surveys[code]
+            for q, value, score in _base_answers(sv, profiles[e.id], rnd, e.site_code):
+                opt = _option(sv, q.key, value)
+                put(e, sv, q, value=value, score=score, mood=_mood(opt, score), when=when)
+
+        # 2. Свободные ответы Ивана — новичкам их площадки, до которых опрос уже дошёл
         texts: list[tuple[Employee, SurveyAnswer, str]] = []
-        for row in rows:
-            people = by_site.get(row["site"]) or emps
-            e = people[turn[row["site"]] % len(people)]
-            turn[row["site"]] += 1
-            code, key, value, score = _target(row, e.site_code, rnd)
+        placed, skipped = assign_free(rows, by_site, now, rnd, skip=skip)
+        for e, row, (code, key, value, score), when in placed:
             sv = surveys[code]
             q = sv.question(key)
             topic = TOPIC.get(row["cluster_hint"].split(":")[0].strip(), "другое")
             ans = put(e, sv, q, value=value, score=score, mood=_mood(None, score, row["label"]),
-                      text=row["text"], topic=topic, when=_when(rnd, e.start_date, today))
+                      text=row["text"], topic=topic, when=when)
             texts.append((e, ans, row["text"]))
 
         await s.flush()
@@ -275,17 +346,22 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
                 pending_flags.append((e, ans, h.level, h.topic, text, "survey"))
 
         n_red = n_yellow = 0
+        # красные из одного текста — одно обращение, как у signals.service.raise_hits
+        tickets: dict[tuple[int, str], Ticket] = {}
         for e, ans, level, topic, quote, source in pending_flags:
             created = ans.created_at or now
             flag = Flag(employee_id=e.id, level=level, topic=topic, quote=quote[:1000], source=source,
                         answer_id=ans.id, created_at=created, status="new")
             if level == "red":
                 status, first, closed = _ticket_status(created, now)
-                ticket = Ticket(employee_id=e.id, source="flag", category=TICKET_CATEGORY.get(topic, topic),
-                                text=quote[:1000], status=status, assignee_id=e.recruiter_id, created_at=created,
-                                first_response_at=first, closed_at=closed)
-                s.add(ticket)
-                await s.flush()
+                ticket = tickets.get((ans.id, quote))
+                if ticket is None:
+                    ticket = Ticket(employee_id=e.id, source="flag", category=TICKET_CATEGORY.get(topic, topic),
+                                    text=quote[:1000], status=status, assignee_id=e.recruiter_id,
+                                    created_at=created, first_response_at=first, closed_at=closed)
+                    s.add(ticket)
+                    await s.flush()
+                    tickets[(ans.id, quote)] = ticket
                 flag.ticket_id = ticket.id
                 flag.status = "resolved" if status == "closed" else "new"
                 n_red += 1
@@ -295,8 +371,8 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
             s.add(flag)
 
         # 4. Двое синтетических новичков не прошли чек 2-й недели — для «непройденных опросов» в Mini App
-        for e in [x for x in emps if (today - x.start_date).days >= 14][:2]:
-            started = datetime.combine(e.start_date + timedelta(days=14), time(7, 0), tzinfo=UTC)
+        for e in stuck:
+            started = survey_at("week2", e)
             data = dict(e.dialog_data or {})
             data["survey"] = {"code": "week2", "q": 3, "mid": None, "started_at": started.isoformat(),
                               "reminded": 2, "done": False, "sel": [], "answer_id": None, "wait": None}
@@ -313,8 +389,8 @@ async def seed(reset: bool = False, thin: str | None = None) -> None:
             .where(SurveyAnswer.is_synthetic, SurveyAnswer.created_at >= since)
             .group_by(Employee.site_code))).all()
         total = await s.scalar(select(func.count()).select_from(SurveyAnswer).where(SurveyAnswer.is_synthetic))
-    print(f"Синтетические ответы: {total} (из них {len(texts)} свободных), флаги: красных {n_red}, "
-          f"жёлтых {n_yellow} [синтетика]")
+    print(f"Синтетические ответы: {total} (из них {len(texts)} свободных, ещё {skipped} не к кому положить), "
+          f"флаги: красных {n_red}, жёлтых {n_yellow} [синтетика]")
     for site, people, n in sorted(rows_by_site):
         mark = "" if people >= 5 else "  ← мало данных"
         print(f"  {site:<9} за 4 недели: {people} новичков, {n} ответов{mark}")

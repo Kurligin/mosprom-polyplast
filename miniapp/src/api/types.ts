@@ -5,6 +5,7 @@ export type Role = 'hr' | 'manager' | 'head'
 export interface Me {
   role: Role
   name: string
+  demo?: boolean // демо-кнопки на сервере (DEMO_ENABLED); нет поля — узнаём по ответу демо-эндпоинта
 }
 
 /** Код площадки: GTP, Luzhniki, GrPP и новые из xlsx сценария */
@@ -41,7 +42,9 @@ export interface EmployeeShort {
   position: string
   site: SiteCode
   work_type: WorkType
-  start_date: string // YYYY-MM-DD
+  start_date: string // YYYY-MM-DD, как завёл HR
+  /** первый рабочий день: выход в выходной переносится на понедельник, от него считается «день N» */
+  first_day: string // YYYY-MM-DD
   day: number // день адаптации, с 1
   probation_days: number
   current_step: string | null
@@ -51,6 +54,7 @@ export interface EmployeeShort {
   connected: boolean // подключился ли к боту в «МАКС»
   next_meeting: Meeting | null
   synthetic: boolean
+  test?: boolean // тестовый новичок команды: только его можно перематывать машиной времени
 }
 
 export interface Step {
@@ -91,6 +95,12 @@ export interface Gates {
 
 export type GateName = keyof Gates
 
+/** Шаг сценария «Адаптационный план»: файл уходит вместе с ним, а не в момент «План готов» */
+export interface PlanStep {
+  at: string | null // ISO: когда шаг уходит по сценарию; null — шага плана для новичка нет
+  sent: boolean // шаг уже ушёл новичку
+}
+
 /** Карточка новичка */
 export interface Employee extends EmployeeShort {
   manager: Contact | null
@@ -98,6 +108,7 @@ export interface Employee extends EmployeeShort {
   invite_link: string | null
   intro: Intro | null
   gates: Gates
+  plan_step: PlanStep
   steps: Step[]
   surveys: SurveyItem[]
   tickets: TicketShort[]
@@ -159,8 +170,10 @@ export interface Message {
 export interface Ticket extends TicketShort {
   assignee: string | null
   messages: Message[]
+  is_personal?: boolean // личный вопрос: ответ в базу не добавляется
+  synthetic?: boolean // демо-новичок: в «МАКС» ему ничего не уходит
   delivered?: boolean // ответ на reply: ушло ли сообщение новичку в «МАКС»
-  added_to_kb?: boolean
+  added_to_kb?: boolean // ответ на reply: создан черновик в базе
 }
 
 export interface ReplyInput {

@@ -10,6 +10,15 @@ import { CategoryIcon } from './Tickets'
 
 const STATUS_LABEL = { open: 'Открыто', in_progress: 'В работе', closed: 'Закрыто' } as const
 
+/** Что сказать после ответа: ушёл ли он в «МАКС» и создан ли черновик в базе (по ответу сервера) */
+function replyResult(t: Ticket): ['success' | 'warning', string] {
+  const kb = t.added_to_kb ? ' Черновик ждёт подтверждения в базе.' : ''
+  // delivered: false — ответ сохранён в ленте, но в «МАКС» не ушёл
+  if (t.delivered === false && t.synthetic) return ['success', `Ответ сохранён в ленте. Новичок синтетический, в «МАКС» ему ничего не уходит.${kb}`]
+  if (t.delivered === false) return ['warning', `Ответ сохранён, но новичок ещё не подключился к боту. Свяжитесь с ним сами.${kb}`]
+  return ['success', t.added_to_kb ? 'Ответ отправлен. Черновик ждёт подтверждения в базе' : 'Ответ отправлен новичку в чат']
+}
+
 export default function TicketView({ id }: { id: number }) {
   const nav = useNav()
   const toast = useToast()
@@ -29,15 +38,14 @@ export default function TicketView({ id }: { id: number }) {
     if (sc) sc.scrollTop = sc.scrollHeight
   }, [t?.messages.length])
 
-  const run = async (fn: () => Promise<Ticket>, ok: string, onFail?: () => void) => {
+  const run = async (fn: () => Promise<Ticket>, ok: string | ((t: Ticket) => ['success' | 'warning', string]), onFail?: () => void) => {
     setBusy(true)
     try {
       const next = await fn()
       setData(next)
       nav.refreshBadge()
-      // delivered: false — ответ сохранён в ленте, но в «МАКС» не ушёл (новичок не подключён)
-      if (next.delivered === false) toast('warning', 'Ответ сохранён, но новичок ещё не подключился к боту. Свяжитесь с ним сами')
-      else toast('success', ok)
+      const [kind, text] = typeof ok === 'string' ? (['success', ok] as const) : ok(next)
+      toast(kind, text)
       return true
     } catch (e) {
       toast('error', toApiError(e).message)
@@ -52,12 +60,12 @@ export default function TicketView({ id }: { id: number }) {
     const v = text.trim()
     if (!v || !t) return
     haptic.tap()
-    const kb = toKb
+    const kb = toKb && !t.is_personal
     setText('')
     setToKb(false)
     run(
       () => api.reply(t.id, { text: v, add_to_kb: kb, kb_site: kb ? kbSite : null }, { demo }),
-      kb ? 'Ответ отправлен. Черновик ждёт подтверждения в базе' : 'Ответ отправлен новичку в чат',
+      replyResult,
       // не теряем текст, если отправить не получилось
       () => { setText(v); setToKb(kb) },
     )
@@ -76,7 +84,8 @@ export default function TicketView({ id }: { id: number }) {
             <Check size={18} /> Закрыть
           </button>
         </div>
-        <div className="composer-kb">
+        {/* личный вопрос в базу не добавляется: переключатель не показываем */}
+        {!t.is_personal && <div className="composer-kb">
           <BookOpen size={18} color="var(--text-secondary)" />
           <label>{toKb ? 'Ответ в базу для' : 'Добавить ответ в базу'}</label>
           {toKb && (
@@ -88,7 +97,7 @@ export default function TicketView({ id }: { id: number }) {
             </select>
           )}
           <Switch checked={toKb} onChange={setToKb} label="Добавить ответ в базу" />
-        </div>
+        </div>}
         <div className="composer-input">
           <textarea
             rows={1}

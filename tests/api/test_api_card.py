@@ -217,3 +217,21 @@ async def test_intro_photo_outside_roots_or_token(client, world, monkeypatch, tm
 async def test_intro_photo_without_intro(client, world):
     r = await client.get(f"/api/employees/{world.emp.id}/intro-photo", headers=auth(world.hr))
     assert r.status_code == 404
+
+
+# --- день выхода: выходной переносится на рабочий -----------------------------------
+
+async def test_first_day_moves_from_weekend(client, world, session):
+    from app.scenario.workcal import next_workday
+
+    today = datetime.now(MSK).date()
+    sunday = today + timedelta(days=(6 - today.weekday()) or 7)
+    world.emp.start_date = sunday
+    world.emp.probation_end = sunday + timedelta(days=90)
+    await session.flush()
+    c = await _card(client, world)
+    assert c["start_date"] == sunday.isoformat()
+    assert c["first_day"] == next_workday(sunday).isoformat() != sunday.isoformat()
+    short = next(e for e in (await client.get("/api/employees", headers=auth(world.hr))).json()
+                 if e["id"] == world.emp.id)
+    assert short["first_day"] == c["first_day"]

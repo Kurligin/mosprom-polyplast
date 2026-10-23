@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Корсик 2.0", lifespan=lifespan)
 # Лимит тела запроса (загрузки): 413 до чтения файла целиком
-from app.api.deps import BodySizeLimit  # noqa: E402
+from app.api.deps import BodySizeLimit
 
 app.add_middleware(BodySizeLimit)
 app.include_router(api_router)

@@ -23,7 +23,8 @@ router = APIRouter()
 
 @router.get("/me")
 async def me(staff: StaffDep) -> dict:
-    return {"role": role_of(staff), "name": clean_name(staff.full_name) or staff.full_name, "id": staff.id}
+    return {"role": role_of(staff), "name": clean_name(staff.full_name) or staff.full_name, "id": staff.id,
+            "demo": settings.demo_enabled}
 
 
 def _site(s: Site) -> dict:
@@ -121,5 +122,5 @@ async def demo_report(staff: HrDep, session: SessionDep) -> dict:
     ok = bool(await call(send, session))
     await session.commit()
     if ok:
-        return {"ok": True, "message": "Сводка отправлена главе подбора в «МАКС»"}
-    return {"ok": False, "message": "Сводку не отправили: глава подбора ещё не подключился к боту или бот выключен"}
+        return {"ok": True, "message": "Сводка отправлена руководителю HR в «МАКС»"}
+    return {"ok": False, "message": "Сводку не отправили: руководитель HR ещё не подключился к боту или бот выключен"}

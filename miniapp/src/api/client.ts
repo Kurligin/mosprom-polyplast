@@ -18,6 +18,17 @@ import type {
 const params = new URLSearchParams(location.search)
 export const roleParam = params.get('role')
 
+/**
+ * «Посмотреть глазами руководителя» (Ещё → Режим, ?role=manager). Внутри «МАКС» initData — от HR,
+ * поэтому просим бэкенд ответить как руководитель: view=manager. Бэкенд отдаёт список и карточки
+ * руководителя без опросов и обращений; настоящему руководителю параметр ничего не меняет.
+ */
+export const viewAsManager = roleParam === 'manager'
+
+/** Демо-кнопки на сервере: true / false из /api/me, null — сервер не сказал (узнаем по 404 демо-эндпоинта) */
+export let demoEnabled: boolean | null = null
+const withView = (path: string) => (viewAsManager ? `${path}${path.includes('?') ? '&' : '?'}view=manager` : path)
+
 /** Демо принудительно: VITE_USE_MOCKS=1 при сборке или ?mocks=1 в адресе */
 export const FORCE_MOCKS =
   import.meta.env.VITE_USE_MOCKS === '1' || params.get('mocks') === '1' || (import.meta.env.DEV && params.get('mocks') === 'worst')
@@ -194,6 +205,7 @@ function normEmployee<T extends EmployeeShort>(raw: T): T {
   const out = {
     ...e,
     position: e.position ?? '',
+    first_day: e.first_day ?? e.start_date,
     current_step: e.current_step ?? null,
     pending_surveys: e.pending_surveys ?? 0,
     open_tickets: e.open_tickets ?? 0,
@@ -211,6 +223,7 @@ function normEmployee<T extends EmployeeShort>(raw: T): T {
     full.invite_link = e.invite_link ?? null
     full.intro = e.intro ?? (introText ? { text: introText, photo_url: null, at: null } : null)
     full.gates = { recruiter_go: !!e.gates?.recruiter_go, plan_ready: !!e.gates?.plan_ready }
+    full.plan_step = { at: e.plan_step?.at ?? null, sent: !!e.plan_step?.sent }
     full.steps = e.steps ?? []
     full.surveys = e.surveys ?? []
     full.tickets = e.tickets ?? []
@@ -284,13 +297,17 @@ export function loadSites(force = false): Promise<Site[]> {
 
 export const api = {
   me: () =>
-    get<Me>('/me', () => mock.me(roleParam)).then((me): Me =>
-      roleParam === 'manager' || roleParam === 'hr' ? { ...me, role: roleParam } : me,
-    ),
+    get<Me>('/me', () => mock.me(roleParam)).then((me): Me => {
+      if (typeof me.demo === 'boolean') demoEnabled = me.demo
+      if (viewAsManager) return { ...me, role: 'manager' }
+      // режим HR вручную — только в разработке: руководителю в «МАКС» бэкенд всё равно ответит 403
+      if (roleParam === 'hr' && !isInMax()) return { ...me, role: 'hr' }
+      return me
+    }),
 
   employees: (opts: { mine?: boolean } = {}) =>
-    get<EmployeeShort[]>(`/employees${opts.mine ? '?mine=1' : ''}`, () => mock.employees(opts.mine)).then(normEmployees),
-  employee: (id: number) => get<Employee>(`/employees/${id}`, () => mock.employee(id)).then(normEmployee),
+    get<EmployeeShort[]>(withView(`/employees${opts.mine ? '?mine=1' : ''}`), () => mock.employees(opts.mine)).then(normEmployees),
+  employee: (id: number) => get<Employee>(withView(`/employees/${id}`), () => mock.employee(id)).then(normEmployee),
   createEmployee: (input: NewEmployeeInput, o?: Opts) =>
     post<NewEmployeeResult>('/employees', input, () => mock.createEmployee(input), o),
   openGate: (id: number, gate: GateName, o?: Opts) =>
@@ -298,10 +315,10 @@ export const api = {
   uploadPlan: (id: number, file: File, o?: Opts & { onProgress?: (p: number) => void }) => {
     const form = new FormData()
     form.append('file', file)
-    return upload<Employee>(`/employees/${id}/plan`, form, () => mock.planReady(id), o).then(normEmployee)
+    return upload<Employee>(withView(`/employees/${id}/plan`), form, () => mock.planReady(id), o).then(normEmployee)
   },
   meetingDone: (employeeId: number, meetingId: number, o?: Opts) =>
-    post<Employee>(`/meetings/${meetingId}/done`, {}, () => mock.meetingDone(employeeId, meetingId), o).then(normEmployee),
+    post<Employee>(withView(`/meetings/${meetingId}/done`), {}, () => mock.meetingDone(employeeId, meetingId), o).then(normEmployee),
 
   sites: () => loadSites(),
   createSite: (input: Site, o?: Opts) => post<Site>('/sites', input, () => mock.createSite(input), o),

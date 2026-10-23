@@ -55,7 +55,7 @@ class Site(Base):
 
 
 class Staff(Base):
-    """Персонал: HR, рекрутер, руководитель, глава подбора."""
+    """Персонал: HR, рекрутер, руководитель, руководитель HR (head_recruitment)."""
 
     __tablename__ = "staff"
 

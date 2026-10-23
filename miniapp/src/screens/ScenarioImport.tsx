@@ -88,7 +88,8 @@ export default function ScenarioImport() {
   const [phase, setPhase] = useState<Phase>({ kind: 'form' })
   const [error, setError] = useState<string | null>(null)
 
-  const fileError = file && !/\.xlsx?$/i.test(file.name) ? 'Нужен файл Excel (.xlsx)' : null
+  // сервер принимает только .xlsx: старый .xls нужно пересохранить в Excel
+  const fileError = file && !/\.xlsx$/i.test(file.name) ? 'Нужен файл Excel (.xlsx). Старый .xls пересохраните в Excel как .xlsx' : null
 
   const send = async () => {
     if (!file || fileError) return
@@ -171,7 +172,7 @@ export default function ScenarioImport() {
 
       <Section header="Файл" footer="Повторная загрузка обновит шаги, а не задвоит их. Новые площадки из файла попросим подтвердить.">
         <FilePick
-          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           file={file}
           onPick={(f) => { setFile(f); setError(null) }}
           label="Выбрать файл"

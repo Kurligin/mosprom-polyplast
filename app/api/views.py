@@ -46,7 +46,7 @@ CONTEXT_WINDOW = timedelta(minutes=20)
 CONTEXT_LIMIT = 4
 MEETING_TITLES = {3: "Встреча на 3-й день", 30: "Встреча на 30-й день", 60: "Встреча на 60-й день"}
 FINAL_MEETING = "Итоговая встреча"
-ROLE_LABELS = {"hr": "HR", "recruiter": "Рекрутер", "manager": "Руководитель", "head_recruitment": "Глава подбора"}
+ROLE_LABELS = {"hr": "HR", "recruiter": "Рекрутер", "manager": "Руководитель", "head_recruitment": "Руководитель HR"}
 _SOURCE_RE = re.compile(r"^\s*Источник:\s*(.+?)\s*$", re.MULTILINE)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PHOTO_ROOTS = (PROJECT_ROOT / "data", PROJECT_ROOT / "assets")  # откуда можно отдавать фото файлом
@@ -347,6 +347,7 @@ async def ticket_json(session: AsyncSession, t: Ticket) -> dict:
     data["assignee"] = tickets.short_name(assignee.full_name) if assignee else None
     data["messages"] = await ticket_messages(session, t, emp)
     data["is_personal"] = bool(t.is_personal)
+    data["synthetic"] = bool(emp.is_synthetic)  # демо-новичок: в «МАКС» ему ничего не уходит
     return data
 
 
@@ -544,6 +545,8 @@ class EmployeeViews:
             "site": emp.site_code,
             "work_type": emp.work_type,
             "start_date": emp.start_date.isoformat(),
+            # день выхода как у движка: HR указал выходной — первый день в понедельник, от него и «день N»
+            "first_day": _first_day(emp).isoformat(),
             "day": tickets.employee_day(emp),
             "probation_days": tickets.probation_days(emp),
             "current_step": current_step(self.steps(emp, tl)),
@@ -553,7 +556,33 @@ class EmployeeViews:
             "connected": connected(emp),
             "next_meeting": next((m for m in meetings if not m["done"]), None),
             "synthetic": bool(emp.is_synthetic),
+            "test": bool(emp.is_test),  # тестовый новичок команды: только его можно перематывать в демо
         }
+
+    async def plan_step(self, emp) -> dict:
+        """Шаг «Адаптационный план» (отмашка plan_ready): {"at": когда уйдёт по сценарию, "sent": ушёл ли}.
+
+        «План готов» только запоминает файл: шаг уходит в своё время и только подключившемуся новичку.
+        at — None, если шага плана для этого новичка в сценарии нет.
+        """
+        out: dict = {"at": None, "sent": False}
+        ctx_fn = optional("app.scenario.engine", "employee_ctx")
+        plan_for = optional("app.scenario.schedule", "plan_for")
+        if self.plan is None or ctx_fn is None or plan_for is None:
+            return out
+        try:
+            due = [p for p in plan_for(ctx_fn(emp, _tz(emp).key), self.plan.specs_for(emp))
+                   if p.gate == "plan_ready"]
+            step_ids = [self.plan.by_number[p.step_number].id for p in due]
+        except Exception as e:  # noqa: BLE001 — без сценария карточка всё равно открывается
+            log.warning("План адаптации (%s): %s", emp.id, e)
+            return out
+        if not due:
+            return out
+        sent = await self.s.scalar(select(func.count()).select_from(Delivery).where(
+            Delivery.employee_id == emp.id, Delivery.step_id.in_(step_ids), Delivery.status == "sent"))
+        out.update(at=iso(min(p.due_at for p in due)), sent=bool(sent))
+        return out
 
     async def full(self, emp) -> dict:
         tl = await self.timeline(emp, limit=5)
@@ -573,6 +602,7 @@ class EmployeeViews:
             "meetings": self.meetings(emp),
             "invite_link": invite_link(emp.invite_code),
             "gates": gates_of(emp),
+            "plan_step": await self.plan_step(emp),
             "status": emp.status,
         })
         return data

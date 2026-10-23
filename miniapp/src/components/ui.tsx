@@ -542,6 +542,15 @@ export function plural(n: number, forms: [string, string, string]) {
   if (b === 1) return forms[0]
   return forms[2]
 }
+/**
+ * «Сегодня» новичка, YYYY-MM-DD: первый рабочий день + (день адаптации − 1).
+ * Учитывает и выход в выходной, и машину времени в демо: бэкенд считает day с ней.
+ */
+export function employeeToday(e: { first_day: string; day: number }) {
+  const d = new Date(`${e.first_day}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + e.day - 1)
+  return d.toISOString().slice(0, 10)
+}
 export function dayLabel(day: number, total: number) {
   if (day < 1) return day === 0 ? 'выходит завтра' : `до выхода ${1 - day} ${plural(1 - day, ['день', 'дня', 'дней'])}`
   if (day > total) return 'срок закончился'
