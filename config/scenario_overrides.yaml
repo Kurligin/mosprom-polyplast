@@ -1,0 +1,10 @@
+# Поправки к импорту сценария Корсика (app/scenario/importer.py).
+# Ключ — порядковый номер шага (StepSpec.number, 1..68), значение — поля шага.
+# timing — правило TimingRule целиком: kind + параметры (+ time «HH:MM»).
+# Сейчас все 68 времён разбираются правилами, поправки не нужны.
+# Пример:
+#   62:
+#     timing: {kind: probation_end, offset_days: 0, time: "09:01"}
+#   33:
+#     office_only: true
+steps: {}
