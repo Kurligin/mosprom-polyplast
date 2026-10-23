@@ -411,12 +411,19 @@ def chunk_file(path: Path, title: str, is_kt: bool = False) -> list[Chunk]:
     suffix = path.suffix.lower()
     short = title
     if suffix == ".pdf":
-        pages = _pdf_pages(path)
+        try:
+            pages = _pdf_pages(path)
+        except Exception as e:  # pdfminer бросает свои исключения, а API ждёт ValueError (400)
+            raise ValueError("PDF не открывается: файл повреждён или это не PDF.") from e
         if not any(t.strip() for _, t in pages):
             raise ValueError("В PDF нет текстового слоя (скан). Загрузите PDF с текстом.")
         return chunk_pages(pages, "doc", short, is_kt)
     if suffix == ".pptx":
-        return chunk_slides(slides_to_md(_pptx_slides(path)), "doc", short, is_kt)
+        try:
+            slides = _pptx_slides(path)
+        except Exception as e:  # битый архив: PackageNotFoundError, BadZipFile
+            raise ValueError("PPTX не открывается: файл повреждён или это не PPTX.") from e
+        return chunk_slides(slides_to_md(slides), "doc", short, is_kt)
     if suffix in (".md", ".txt"):
         return chunk_markdown(path.read_text(encoding="utf-8"), "doc", short, is_kt)
     raise ValueError(f"Формат {suffix or 'без расширения'} не поддерживается: нужен PDF или PPTX.")

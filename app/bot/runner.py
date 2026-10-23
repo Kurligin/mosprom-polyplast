@@ -55,6 +55,14 @@ async def process_update(ctx: BotCtx, upd: dict) -> None:
             raise
 
 
+def _error_pause(e: Exception) -> float:
+    """Пауза перед повтором /updates: на 429 — сколько просит «МАКС» (Retry-After), иначе ERROR_PAUSE."""
+    retry_after = getattr(e, "retry_after", None)
+    if getattr(e, "is_rate_limited", False) and retry_after:
+        return min(float(retry_after), 60.0)
+    return ERROR_PAUSE
+
+
 MARKER_KEY = "max_updates_marker"
 
 
@@ -103,7 +111,7 @@ async def run_bot() -> None:
                 raise
             except Exception as e:  # noqa: BLE001 — сеть/5xx: пауза и повтор
                 log.warning("GET /updates: %s", e)
-                await asyncio.sleep(ERROR_PAUSE)
+                await asyncio.sleep(_error_pause(e))
                 continue
             updates = data.get("updates") or []
             for upd in updates:

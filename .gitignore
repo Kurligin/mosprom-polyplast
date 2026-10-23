@@ -11,3 +11,6 @@ miniapp/dist/
 *.egg-info/
 data/uploads/
 eval/.llm_cache.json
+.coverage
+.coverage.*
+htmlcov/

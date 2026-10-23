@@ -131,3 +131,125 @@ def test_scenario_articles():
     keys = [a.key for a in arts.values()]
     assert len(keys) == len(set(keys))
     assert all(len(k) <= 64 for k in keys)
+
+
+# --- битые и пустые файлы HR ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name, data", [
+    ("broken.pdf", b"%PDF-1.4 synthetic, not a real pdf"),
+    ("renamed.pdf", "Это текстовый файл, переименованный в .pdf".encode()),
+    ("broken.pptx", b"PK\x03\x04 not a zip"),
+    ("renamed.pptx", b"plain text"),
+], ids=["pdf-garbage", "text-as-pdf", "pptx-bad-zip", "text-as-pptx"])
+def test_broken_file_is_value_error(tmp_path, name, data):
+    """Битый файл — ValueError с понятным текстом (API ответит 400), а не исключение pdfminer / python-pptx (500)."""
+    p = tmp_path / name
+    p.write_bytes(data)
+    with pytest.raises(ValueError, match="повреждён"):
+        chunk_file(p, "Битый файл")
+
+
+def _pptx(path: Path, slides: list[tuple[str, str]]) -> Path:
+    """Презентация: (заголовок, текст) на слайд; пустые строки — пустой слайд."""
+    from pptx import Presentation
+
+    prs = Presentation()
+    for title, body in slides:
+        s = prs.slides.add_slide(prs.slide_layouts[1])
+        if title:
+            s.shapes.title.text = title
+        if body:
+            s.placeholders[1].text = body
+    prs.save(path)
+    return path
+
+
+def test_pptx_empty_slides_are_skipped(tmp_path):
+    p = _pptx(tmp_path / "memo.pptx", [("", ""), ("Пропуск", "Пропуск выдают в бюро пропусков (синтетика)."),
+                                      ("", "")])
+    chunks = chunk_file(p, "Памятка (тест)")
+    assert [c.source_label for c in chunks] == ["Памятка (тест), слайд 2"], "номер слайда — как в файле"
+    assert chunks[0].text == "Пропуск\n\nПропуск выдают в бюро пропусков (синтетика)."
+
+
+def test_pptx_only_empty_slides_rejected(tmp_path):
+    import asyncio
+
+    from app.kb.ingest import ingest_file
+
+    p = _pptx(tmp_path / "empty.pptx", [("", ""), ("", "")])
+    assert chunk_file(p, "Пустая") == []
+    with pytest.raises(ValueError, match="Не удалось выделить текст"):
+        asyncio.run(ingest_file(None, p, title="Пустая"))  # до БД не доходит
+
+
+def test_pptx_table_and_group_text(tmp_path):
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    prs = Presentation()
+    s = prs.slides.add_slide(prs.slide_layouts[5])
+    s.shapes.title.text = "Контакты"
+    table = s.shapes.add_table(2, 2, Inches(1), Inches(2), Inches(6), Inches(1)).table
+    table.cell(0, 0).text, table.cell(0, 1).text = "Охрана труда", "доб. 101 (синтетика)"
+    table.cell(1, 0).text = "Бухгалтерия"
+    group = s.shapes.add_group_shape()
+    group.shapes.add_textbox(Inches(1), Inches(4), Inches(4), Inches(1)).text_frame.text = "Пропуск — в бюро"
+    p = tmp_path / "contacts.pptx"
+    prs.save(p)
+
+    (chunk,) = chunk_file(p, "Контакты (тест)")
+    assert "Охрана труда | доб. 101 (синтетика)" in chunk.text
+    assert "Бухгалтерия" in chunk.text and "Пропуск — в бюро" in chunk.text
+
+
+# --- справочные статьи сценария (синтетические шаги) ------------------------------------------
+
+
+def test_scenario_articles_from_synthetic_steps():
+    from app.kb.ingest import scenario_articles
+    from app.scenario.models import Button, StepSpec
+
+    steps = [
+        StepSpec(number=5, code="1.5", topic="Документы", site_tags=["GTP"], text="Возьми с собой документы.",
+                 comment="мусор | Необходимые документы: паспорт, СНИЛС (синтетика) | ещё"),
+        StepSpec(number=6, code="1.5", topic="Документы", site_tags=["GrPP"], text="Документы без примечания."),
+        StepSpec(number=7, code="2.1", topic="О корпоративном транспорте", text="Автобус ходит от метро. Рассказать?"),
+        StepSpec(number=8, code="3.1", topic="Доступы", text="Привет!\n\nВ первый день выдадут ноутбук. Всё ясно?",
+                 buttons=[Button(label="Да"), Button(label="Нет, не выдали", reply="Напиши руководителю.")]),
+        StepSpec(number=9, code="3.2", topic="Обед", text="Где обедать?",
+                 buttons=[Button(label="Нет", reply="Хорошо. Если ты передумаешь, ты всегда можешь нажать /Food.")]),
+        StepSpec(number=10, code="3.3", topic="Контакты", text="Вот справочник сотрудников."),
+        StepSpec(number=11, code="3.4", topic="Миссия", text="Наша миссия (синтетика)."),
+        StepSpec(number=12, code="4.1", topic="О спортивном зале", site_tags=["GTP"], text="Зал на 2 этаже. Пойдёшь?"),
+        StepSpec(number=13, code="4.2", topic="План", text="Твой план готов.", directives=["# Приложить адаптационный план"]),
+        StepSpec(number=14, code="4.3", text="Как мы проводим корпоративные мероприятия: летом и зимой."),
+        StepSpec(number=15, code="4.4", text="Поделюсь фактами о своей организации: нам 30 лет."),
+        StepSpec(number=16, code="4.5", text="Остались вопросы? Напиши /HR, и тебе ответят. Удачи!"),
+        StepSpec(number=17, code="4.6", text="С днём рождения!"),
+    ]
+    arts = {(a.slug, tuple(a.site_codes)): a for a in scenario_articles(steps)}
+    assert arts[("documents", ("GTP",))].text == ("Возьми с собой документы.\n\n"
+                                                  "Необходимые документы: паспорт, СНИЛС (синтетика)")
+    assert arts[("documents", ("GrPP",))].text == "Документы без примечания."
+    assert arts[("transport", ())].text == "Автобус ходит от метро."
+    assert arts[("access", ())].text == "В первый день выдадут ноутбук.\n\nНапиши руководителю."
+    assert arts[("food", ())].text == "Ты всегда можешь нажать /Food."
+    assert arts[("directory", ())].title == "Справочник контактов сотрудников"
+    assert arts[("mission", ())].text == "Наша миссия (синтетика)."
+    assert arts[("gym", ("GTP",))].text == "Зал на 2 этаже."
+    assert ("adaptation-plan", ()) in arts and ("events", ()) in arts and ("facts", ()) in arts
+    assert arts[("contact-hr", ())].text == "Напиши /HR, и тебе ответят."
+    assert all("рождения" not in a.text for a in arts.values()), "поздравления в базу не идут"
+    assert arts[("gym", ("GTP",))].key == "scenario:gym@GTP"
+    assert arts[("mission", ())].label == "Памятка Корсика «Миссия компании»"
+    assert arts[("gym", ("GTP",))].source == "сценарий, шаг 12"
+
+
+def test_scenario_articles_without_xlsx(tmp_path, caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="app.kb.ingest"):
+        assert load_scenario_articles(tmp_path / "nope.xlsx") == []
+    assert "не найден" in caplog.text

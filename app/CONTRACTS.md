@@ -37,7 +37,7 @@
 
 ## Сценарий — `app/scenario`
 
-- `store.import_xlsx(session, path) -> ImportReport`. Пишет шаги в `scenario_steps` (ключ шага стабильный, повторный импорт обновляет шаги) и возвращает новые теги площадок. CLI: `python -m app.scenario.store <xlsx>` (`make import`).
+- `store.import_xlsx(session, path) -> ImportReport`. Пишет шаги в `scenario_steps` (ключ шага стабильный, повторный импорт обновляет шаги) и возвращает новые теги площадок. `ValueError` — файл не открывается или в нём нет шагов (пустой импорт выключил бы весь сценарий); API отвечает 400. CLI: `python -m app.scenario.store <xlsx>` (`make import`).
 - `engine.tick()` — задача `scenario_tick` раз в минуту:
   - наступившие шаги → `deliveries` (ключ идемпотентности) → отправка;
   - шаг-опрос → `app.surveys.engine.start_survey`.
@@ -104,7 +104,7 @@
 
 Уточнения по итогам раунда 2:
 - `ingest_*` и `index_hr_answer` не коммитят — коммитит вызывающий код.
-- `ingest_file` бросает `ValueError`, если формат не PDF/PPTX/MD или у PDF нет текстового слоя. API отвечает на это 400.
+- `ingest_file` бросает `ValueError`, если формат не PDF/PPTX/MD, файл битый или у PDF нет текстового слоя. API отвечает на это 400 и удаляет непринятый файл.
 - У `Hit` есть дополнительные поля: `sim`, `fts_rank`, `vec_rank`, `chunk_key`, `kind` (doc | scenario | article | hr_answer), `title`, `path`, `point_no`, `focus`, `is_draft`. У `search` дополнительные параметры: `qvec=`, `pool=`.
 - Форматы `chunk_key`: `pvtr:6.5.2`, `pvtr:разд3`, `pvtr:6.4.2/24` (строка длинного пункта), `scenario:documents@GTP`, `doc<id>:<п>`, `hr:<id>`.
 - `KbDocument.doc_type`: `scenario` — статьи сценария, `article` — черновик HR.

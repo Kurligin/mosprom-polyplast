@@ -47,6 +47,7 @@ async def upload_document(file: Annotated[UploadFile, File()], staff: HrDep, ses
                                    site_codes=sites, uploaded_by=staff.id)
     except ValueError as e:
         await session.rollback()
+        path.unlink(missing_ok=True)  # непринятый файл на диске не храним
         raise HTTPException(400, f"Не удалось разобрать файл: {e}") from None
     await session.commit()
     return document_json(doc, int(n_chunks))
@@ -107,6 +108,7 @@ async def import_scenario(file: Annotated[UploadFile, File()], staff: HrDep,
         report = await call(importer, session, path)
     except ValueError as e:
         await session.rollback()
+        path.unlink(missing_ok=True)
         raise HTTPException(400, f"Не удалось разобрать сценарий: {e}") from None
     await session.commit()
     r = _report_dict(report)

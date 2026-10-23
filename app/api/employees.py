@@ -118,11 +118,14 @@ async def _ensure_meetings(session: AsyncSession, emp: Employee) -> None:
     if ensure is None or not emp.manager_id:
         return
     try:
-        await call(ensure, session, emp, None)
-        await session.commit()
+        # SAVEPOINT: при гонке откатывается только запись встреч. Откат всей сессии сбрасывал загруженные
+        # поля новичка и сотрудника, и карточка падала с 500 (PendingRollbackError / MissingGreenlet).
+        async with session.begin_nested():
+            await call(ensure, session, emp, None)
     except Exception as e:  # noqa: BLE001 — гонка с фоновой задачей: карточка всё равно покажет встречи
         log.warning("manager.ensure_tasks(%s): %s", emp.id, e)
-        await session.rollback()
+        return
+    await session.commit()
 
 
 class NewEmployeeInput(BaseModel):

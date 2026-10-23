@@ -408,8 +408,19 @@ async def import_specs(session: AsyncSession, specs: list[StepSpec]) -> ImportRe
 
 
 async def import_xlsx(session: AsyncSession, path: str | Path) -> ImportReport:
-    """xlsx → upsert в scenario_steps. Коммит делает вызывающий код."""
-    return await import_specs(session, parse_xlsx(path))
+    """xlsx → upsert в scenario_steps. Коммит делает вызывающий код.
+
+    ValueError — файл не открывается или в нём нет шагов: импорт пустого списка выключил бы весь сценарий.
+    """
+    try:
+        specs = parse_xlsx(path)
+    except ValueError:
+        raise
+    except Exception as e:  # битый архив: BadZipFile, InvalidFileException
+        raise ValueError("файл не открывается: он повреждён или это не таблица Excel") from e
+    if not specs:
+        raise ValueError("в файле нет шагов сценария, загрузите таблицу сценария Корсика")
+    return await import_specs(session, specs)
 
 
 # --- площадки -------------------------------------------------------------------

@@ -84,10 +84,11 @@ class MaxApi:
             code, message = "", resp.text[:300]
             try:
                 body = resp.json()
+            except ValueError:
+                body = None  # тело не JSON — оставляем сырой текст
+            if isinstance(body, dict):  # прокси может ответить JSON-строкой или массивом
                 code = str(body.get("code") or body.get("error") or "")
                 message = str(body.get("message") or "")
-            except ValueError:
-                pass  # тело не JSON — оставляем сырой текст
             retry_after = None
             if resp.headers.get("Retry-After"):
                 try:

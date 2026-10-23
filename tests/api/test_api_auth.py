@@ -186,3 +186,63 @@ async def test_manager_sees_only_own_without_signals(client, world, session):
 
     hr_view = (await client.get(f"/api/employees/{world.emp.id}", headers=auth(world.hr))).json()
     assert hr_view["red_flag"] is True
+
+
+# --- подписанные, но негодные данные запуска ---
+
+def _signed(data: dict[str, str]) -> str:
+    raw = "&".join(f"{k}={quote(v, safe='')}" for k, v in data.items())
+    return f"{raw}&hash={sign(data, TOKEN)}"
+
+
+NOW = int(time.time())
+USER = json.dumps({"id": 42, "first_name": "Тест"}, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("data, error", [
+    ({"user": USER}, "нет даты входа"),
+    ({"auth_date": "вчера", "user": USER}, "нет даты входа"),
+    ({"auth_date": str(NOW + 3600), "user": USER}, "неверная дата входа"),
+    ({"auth_date": str(NOW), "user": "{не json"}, "неверные данные пользователя"),
+    ({"auth_date": str(NOW)}, "нет пользователя"),
+    ({"auth_date": str(NOW), "user": json.dumps({"id": "42"})}, "нет пользователя"),
+    ({"auth_date": str(NOW), "user": json.dumps([42])}, "нет пользователя"),
+], ids=["no-date", "bad-date", "future", "user-not-json", "no-user", "id-not-int", "user-list"])
+def test_signed_but_invalid_rejected(data, error):
+    """Подпись сходится, но данные негодные: вход не пускаем (подпись проверяется раньше разбора)."""
+    with pytest.raises(InitDataError, match=error):
+        validate_init_data(_signed(data), TOKEN)
+
+
+def test_small_clock_skew_allowed():
+    assert validate_init_data(_signed({"auth_date": str(NOW + 60), "user": USER}), TOKEN)["user"]["id"] == 42
+
+
+@pytest.mark.parametrize("raw, error", [
+    ("auth_date=1&junk&hash=abc", "неверный формат"),
+    ("WebAppData=a&WebAppData=b", "нет данных запуска"),
+    ("auth_date=1&hash=", "нет подписи"),
+    ("auth_date=1&hash=a&hash=b", "повтор"),
+], ids=["part-without-eq", "two-webappdata", "empty-hash", "two-hashes"])
+def test_malformed_init_data(raw, error):
+    with pytest.raises(InitDataError, match=error):
+        validate_init_data(raw, TOKEN)
+
+
+def test_server_without_token_rejects_everything():
+    with pytest.raises(InitDataError, match="не задан токен"):
+        validate_init_data(init_data(42), "")
+
+
+@pytest.mark.asyncio
+async def test_dev_bypass_without_staff_401(client, world, monkeypatch):
+    """Обход для разработки, а в базе нет сотрудника нужной роли — 401 с подсказкой, а не чужая роль."""
+    from app.api import auth as auth_mod
+
+    async def nobody(session, role):
+        return None
+
+    monkeypatch.setattr(settings, "dev_allow_no_init_data", True)
+    monkeypatch.setattr(auth_mod, "_dev_staff", nobody)
+    r = await client.get("/api/me")
+    assert r.status_code == 401 and "make seed" in r.json()["detail"]

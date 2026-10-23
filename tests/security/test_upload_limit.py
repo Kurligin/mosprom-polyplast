@@ -128,8 +128,7 @@ async def test_main_app_has_body_limit():
     """Ограничитель подключён к приложению (app/main.py)."""
     from app.main import app
 
-    if not any(m.cls is BodySizeLimit for m in app.user_middleware):
-        pytest.skip("BodySizeLimit ещё не подключён в app/main.py: app.add_middleware(BodySizeLimit)")
+    assert any(m.cls is BodySizeLimit for m in app.user_middleware), "app.add_middleware(BodySizeLimit) в app/main.py"
     headers = {"content-type": f"multipart/form-data; boundary={BOUNDARY.decode()}",
                "content-length": str(MAX_BODY + 1)}
     status, _, pulled = await _run(app, headers, _multipart_chunks(MAX_BODY + 1))

@@ -1,0 +1,4 @@
+# SQLAlchemy async выполняет запросы в greenlet: без этой строки coverage теряет код после await к БД
+# (например, app/api/chats.py показывал 61% вместо 100%).
+[run]
+concurrency = greenlet, thread
