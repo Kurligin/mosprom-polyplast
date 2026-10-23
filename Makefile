@@ -1,7 +1,7 @@
 # Команды разработки: всё выполняется внутри Docker Compose
 DC := docker compose
 
-.PHONY: up down logs migrate seed shell test psql links import kb eval eval-flags
+.PHONY: up down logs migrate seed shell test cov psql links import kb eval eval-flags
 
 up:
 	$(DC) up -d --build
@@ -28,6 +28,10 @@ shell:
 
 test:
 	$(DC) exec app pytest -q
+
+# Покрытие кода тестами
+cov:
+	$(DC) exec app pytest -q --cov=app --cov-report=term-missing:skip-covered
 
 psql:
 	$(DC) exec postgres psql -U korsik -d korsik
