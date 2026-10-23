@@ -45,5 +45,5 @@ eval:
 # HTTPS-туннель к Mini App, чтобы открыть её внутри «МАКС»; печатает адрес
 tunnel:
 	$(DC) --profile tunnel up -d tunnel
-	@sleep 6; $(DC) logs tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1
+	@sleep 6; $(DC) logs tunnel 2>&1 | grep -o 'https://[a-z0-9]*\.lhr\.life' | tail -1
 
