@@ -184,6 +184,7 @@ def _load_plugins() -> list[str]:
 
 def _patch(mp: pytest.MonkeyPatch, factory, run: J.Journey) -> None:
     import app.db.session as db_session
+    from app.config import settings
     from app.kb import embed as kb_embed
     from app.kb import search as kb_search
     from app.kb import service as kb_service
@@ -191,6 +192,9 @@ def _patch(mp: pytest.MonkeyPatch, factory, run: J.Journey) -> None:
     from app.scenario import engine
     from app.signals import service as signals
 
+    # путь настоящего сотрудника по кодам приглашения, как на проде (DEMO_ENABLED=false):
+    # без подсказки демо-режима при первом входе и без меню ролей
+    mp.setattr(settings, "demo_enabled", False)
     # вся работа с БД вне обработчиков (тик, задачи, кэш вложений) — в тестовую базу
     mp.setattr(db_session, "async_session", factory)
     # ИИ-разбор ответов опросов уходит в LLM в фоне — в e2e выключен
