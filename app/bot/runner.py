@@ -9,7 +9,7 @@ from app.bot import runtime
 from app.bot.api import UPDATE_TYPES, MaxApi
 from app.bot.handlers import BotCtx, handle_update
 from app.bot.sender import Sender
-from app.bot.texts import COMMANDS
+from app.bot.texts import bot_commands
 from app.config import settings
 
 log = logging.getLogger("korsik.bot")
@@ -29,7 +29,7 @@ async def _startup(api: MaxApi) -> None:
     except Exception as e:  # noqa: BLE001
         log.warning("Не удалось проверить подписки: %s", e)
     try:
-        await api.set_commands(COMMANDS)
+        await api.set_commands(bot_commands(settings.demo_enabled))
         log.info("Меню команд обновлено")
     except Exception as e:  # noqa: BLE001
         log.warning("Не удалось выставить меню команд: %s", e)

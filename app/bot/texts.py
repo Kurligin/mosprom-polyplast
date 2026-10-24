@@ -19,6 +19,12 @@ COMMANDS = [
     {"name": "hr", "description": "Написать HR"},
     {"name": "food", "description": "Где пообедать"},
 ]
+DEMO_COMMAND = {"name": "demo", "description": "Демо: сменить роль"}
+
+
+def bot_commands(demo: bool) -> list[dict]:
+    """Меню команд: /demo только при включённом демо-режиме (DEMO_ENABLED)."""
+    return [*COMMANDS, DEMO_COMMAND] if demo else list(COMMANDS)
 
 # --- привязка ---
 
@@ -146,3 +152,26 @@ HR_GROUP_STOPPED = "{name} ({site}) отключил бота."
 def tv(employee, pair: tuple[str, str]) -> str:
     """Текст на «ты» или на «вы» по выбору новичка (до выбора — на «вы»)."""
     return pair[0] if getattr(employee, "address_form", None) == "ty" else pair[1]
+
+# --- демо-режим: смена роли без кодов (/demo, только DEMO_ENABLED=true) ---
+
+DEMO_MENU = "Демо-режим. Выберите, кем вы будете:"
+DEMO_NOW = "Сейчас вы: {role}."
+DEMO_ROLES = {
+    "emp:GTP": "Новичок GTP",
+    "emp:Luzhniki": "Новичок Лужники",
+    "staff:hr": "HR",
+    "staff:recruiter": "Рекрутер",
+    "staff:manager": "Руководитель",
+    "staff:head_recruitment": "Руководитель HR",
+}
+DEMO_SHIFT = "Перемотать день…"
+DEMO_RESET = "Сбросить мой прогресс"
+DEMO_BACK = "Назад"
+DEMO_SHIFT_ASK = "Куда перемотать время?"
+DEMO_SHIFT_LABELS = {"-2": "До выхода", "1": "1", "3": "3", "14": "14", "60": "60", "end": "Конец"}
+DEMO_OFF = "Демо-режим выключен"
+DEMO_REAL = "Этот аккаунт подключён как настоящий сотрудник. Демо-роли для него недоступны."
+DEMO_NO_PERSON = "Не нашёл демо-роль «{role}». Похоже, демо-данные не загружены (make seed)."
+DEMO_ONLY_TEST = "Это работает только у тестового новичка. Сначала выберите «Новичок GTP» или «Новичок Лужники»."
+DEMO_STALE = "Эта кнопка устарела, наберите /demo ещё раз."

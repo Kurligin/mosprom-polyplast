@@ -169,7 +169,8 @@ class FakeApi:
         self.closed = True
 
 
-async def test_startup_drops_webhooks_and_sets_menu():
+async def test_startup_drops_webhooks_and_sets_menu(monkeypatch):
+    monkeypatch.setattr(settings, "demo_enabled", False)
     api = FakeApi()
     api.subs = [{"url": "https://old-hook.test/a"}, {"time": 1}]
     await runner._startup(api)
@@ -295,3 +296,14 @@ async def test_updates_pause_respects_retry_after():
     assert _error_pause(MaxApiError(429, "too.many.requests")) == ERROR_PAUSE
     assert _error_pause(MaxApiError(502, "bad.gateway")) == ERROR_PAUSE
     assert _error_pause(OSError("сеть")) == ERROR_PAUSE
+
+
+async def test_startup_menu_has_demo_only_in_demo_mode(monkeypatch):
+    monkeypatch.setattr(settings, "demo_enabled", True)
+    api = FakeApi()
+    api.subs = []
+    await runner._startup(api)
+    cmds = next(c[1] for c in api.calls if c[0] == "set_commands")
+    assert {"name": "demo", "description": "Демо: сменить роль"} in cmds
+    assert cmds[:len(COMMANDS)] == COMMANDS
+    assert all(c["name"] != "demo" for c in COMMANDS)

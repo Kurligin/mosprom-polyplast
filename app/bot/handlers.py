@@ -249,12 +249,7 @@ async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int 
         emp.chat_id = chat_id
         _sync_test_name(emp, user)
         await repo.flush()  # привязка в БД до первого сообщения: ошибка не оставит отправленное приветствие
-        if not _onboarded(emp):
-            await start_onboarding(ctx, repo, emp)
-        else:
-            if emp.status == "stopped":
-                emp.status = "active"
-            await _say(ctx, repo, emp, T.tv(emp, T.WELCOME_BACK))
+        await after_employee_bound(ctx, repo, emp)
         return True
 
     staff = await repo.staff_by_bind(code)
@@ -270,6 +265,16 @@ async def bind_by_code(ctx: BotCtx, repo, code: str, user_id: int, chat_id: int 
         await greet_staff(ctx, repo, staff)
         return True
     return False
+
+
+async def after_employee_bound(ctx: BotCtx, repo, emp) -> None:
+    """Новичок только что привязан (по коду или в демо): знакомство или «С возвращением»."""
+    if not _onboarded(emp):
+        await start_onboarding(ctx, repo, emp)
+    else:
+        if emp.status == "stopped":
+            emp.status = "active"
+        await _say(ctx, repo, emp, T.tv(emp, T.WELCOME_BACK))
 
 
 async def _free_for_staff(ctx: BotCtx, repo, staff, user_id: int, chat_id: int | None) -> bool:
@@ -291,13 +296,17 @@ async def _free_for_staff(ctx: BotCtx, repo, staff, user_id: int, chat_id: int |
     return True
 
 
-async def greet_staff(ctx: BotCtx, repo, staff) -> None:
+def staff_greeting(ctx: BotCtx, staff) -> tuple[str, list[dict] | None]:
     role = T.ROLE_NAMES.get(staff.role, staff.role)
     text = T.STAFF_BOUND.format(role=role) + "\n\n" + T.STAFF_HINT
     atts = None
     if ctx.miniapp_url and ctx.bot_name:
         atts = keyboard([open_app(T.OPEN_PANEL, ctx.bot_name.lstrip("@"))])
-    await _say(ctx, repo, staff, text, atts, is_staff=True)
+    return text, atts
+
+
+async def greet_staff(ctx: BotCtx, repo, staff) -> None:
+    await _say(ctx, repo, staff, *staff_greeting(ctx, staff), is_staff=True)
 
 
 # --- обращения к HR ---
@@ -373,6 +382,12 @@ async def handle_start(ctx: BotCtx, repo, user_id: int, chat_id: int | None, cod
             await ctx.sender.send(repo, T.CODE_NOT_FOUND, chat_id=chat_id, user_id=user_id)
         return
     if not await _resume_bound(ctx, repo, user_id, chat_id, user):
+        if settings.demo_enabled:
+            # демо: судьи и команда не вводят коды, сразу выбирают роль
+            from app.bot import demo
+
+            await demo.show_menu(ctx, repo, user_id, chat_id)
+            return
         await ctx.sender.send(repo, T.ASK_CODE, chat_id=chat_id, user_id=user_id)
 
 
@@ -425,6 +440,12 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
 
     if cmd == "/start":
         await handle_start(ctx, repo, user_id, chat_id, arg.strip(), sender)
+        return
+    if cmd == "/demo" and settings.demo_enabled:
+        # без демо-режима /demo — обычная неизвестная команда
+        from app.bot import demo
+
+        await demo.show_menu(ctx, repo, user_id, chat_id)
         return
 
     if emp is None and staff is None:
@@ -559,6 +580,12 @@ async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
                   chat_id=(msg.get("recipient") or {}).get("chat_id"),
                   user_id=(cbd.get("user") or {}).get("user_id"))
     try:
+        if payload.startswith("dm:"):
+            # демо-меню: работает и до привязки, сама кнопка выбирает, кем стать
+            from app.bot import demo
+
+            await demo.on_callback(cb)
+            return
         emp = await repo.employee_by_user(cb.user_id)
         staff = None if emp else await repo.staff_by_user(cb.user_id)
         if emp is not None and payload.startswith(STAFF_BUTTONS):

@@ -4,10 +4,22 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Consent, Employee, Message, Setting, Staff, Ticket
+from app.db.models import (
+    Consent,
+    Delivery,
+    Employee,
+    Flag,
+    ManagerTask,
+    Message,
+    QuestionLog,
+    Setting,
+    Staff,
+    SurveyAnswer,
+    Ticket,
+)
 
 
 class SqlRepo:
@@ -31,6 +43,38 @@ class SqlRepo:
 
     async def staff_by_user(self, max_user_id: int):
         return (await self.s.execute(select(Staff).where(Staff.max_user_id == max_user_id))).scalar_one_or_none()
+
+    # --- демо-режим (/demo) ---
+
+    async def demo_employee(self, site_code: str):
+        """Тестовый новичок площадки (is_test) — роль «Новичок …» в демо-меню."""
+        return (await self.s.execute(
+            select(Employee).where(Employee.is_test, Employee.site_code == site_code)
+            .order_by(Employee.id).limit(1).with_for_update(key_share=True))).scalar_one_or_none()
+
+    async def demo_staff(self, role: str, full_name: str):
+        """Демо-сотрудник из сида: роль и ФИО ровно как в seed.seed.STAFF."""
+        return (await self.s.execute(
+            select(Staff).where(Staff.role == role, Staff.full_name == full_name)
+            .order_by(Staff.id).limit(1))).scalar_one_or_none()
+
+    async def reset_progress(self, emp) -> None:
+        """Стереть всё, что тестовый новичок успел пройти. Привязку к аккаунту не трогаем."""
+        for model in (Flag, QuestionLog, Message, ManagerTask, SurveyAnswer, Delivery, Ticket, Consent):
+            await self.s.execute(delete(model).where(model.employee_id == emp.id))
+        emp.address_form = None
+        emp.dialog_state = None
+        emp.dialog_data = {}
+        emp.pending_question_id = None
+        emp.time_shift_hours = 0
+        emp.status = "waiting"
+        await self.s.flush()
+
+    async def time_travel(self, emp, to: str) -> dict:
+        """Та же машина времени, что у кнопок Mini App (POST /api/demo/shift)."""
+        from app.scenario.engine import time_travel
+
+        return await time_travel(self.s, emp, to) or {}
 
     # --- запись ---
 

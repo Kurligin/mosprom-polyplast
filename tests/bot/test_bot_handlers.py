@@ -9,7 +9,10 @@ from tests.bot.conftest import ev_cb, ev_started, ev_text
 pytestmark = pytest.mark.asyncio
 
 
-async def test_start_without_code_asks_code(ctx, repo, api):
+async def test_start_without_code_asks_code(ctx, repo, api, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "demo_enabled", False)  # в демо вместо просьбы о коде — меню ролей
     await handle_update(ctx, repo, ev_started(payload=None))
     assert api.sent[-1]["text"] == T.ASK_CODE
 
