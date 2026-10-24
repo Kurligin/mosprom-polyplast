@@ -244,6 +244,100 @@
       opacity: 0;
     }
 
+    /* Голосовой ввод: микрофон в поле и запись */
+    #lw .field {
+      padding-right: 66px;
+    }
+    #ib-mic {
+      position: absolute;
+      right: 6px;
+      top: 6px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      transform-origin: 50% 50%;
+    }
+    #ib-mic-on {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      opacity: 0;
+    }
+    #rec {
+      position: absolute;
+      left: 22px;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+    }
+    #rec-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .rec-t {
+      position: relative;
+      width: 58px;
+      height: 34px;
+      line-height: 34px;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+    .rec-t span {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+    #rt1,
+    #rt2 {
+      opacity: 0;
+    }
+    .wv {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 32px;
+    }
+    .wv i {
+      display: block;
+      width: 4px;
+      border-radius: 2px;
+      background: var(--blue-600);
+      transform-origin: 50% 50%;
+    }
+    .b.voice {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 22px 12px 12px;
+    }
+    .vplay {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #ffffff;
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .voice .wv i {
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .vdur {
+      font-size: 24px;
+      font-variant-numeric: tabular-nums;
+      opacity: 0.85;
+    }
+
     .feed {
       position: absolute;
       left: 0;
@@ -991,6 +1085,7 @@
     <h2 class="cap" id="cB"><span class="w">Знакомство</span> <span class="w hl">одним</span> <span class="w hl">сообщением:</span> <span class="w">ты</span> <span class="w">или</span> <span class="w">вы</span> <span class="w">и</span> <span class="w">согласия</span></h2>
     <h2 class="cap" id="c1"><span class="w">Шаги</span> <span class="w">адаптации</span> <span class="w">приходят</span> <span class="w hl">сами,</span> <span class="w hl">по</span> <span class="w hl">расписанию</span></h2>
     <h2 class="cap" id="cT"><span class="w">В</span> <span class="w">первый</span> <span class="w">день</span> <span class="w">бот</span> <span class="w hl">зовёт</span> <span class="w">новичка</span> <span class="w">в</span> <span class="w">чат</span> <span class="w">команды</span></h2>
+    <h2 class="cap" id="cV"><span class="w">Руки</span> <span class="w">заняты?</span> <span class="w">Вопрос</span> <span class="w hl">можно</span> <span class="w hl">надиктовать</span></h2>
     <h2 class="cap" id="c2"><span class="w">Свой</span> <span class="w">вопрос:</span> <span class="w">ответ</span> <span class="w hl">пунктом</span> <span class="w hl">документа,</span> <span class="w">без</span> <span class="w">HR</span></h2>
     <h2 class="cap" id="c3"><span class="w">Ответа</span> <span class="w">нет</span> <span class="w">в</span> <span class="w">документах:</span> <span class="w">вопрос</span> <span class="w hl">сразу</span> <span class="w hl">у</span> <span class="w hl">HR</span></h2>
     <h2 class="cap" id="c3b"><span class="w">HR</span> <span class="w">отвечает</span> <span class="w">из</span> <span class="w">панели,</span> <span class="w">ответ</span> <span class="w hl">попадает</span> <span class="w hl">в</span> <span class="w hl">базу</span></h2>
@@ -1032,7 +1127,11 @@
             <div class="kbd" id="l2k"><span>Покажи карту</span></div>
             <div class="b bot" id="lt">Вот чат твоей команды. Вступай по кнопке ниже: там коллеги, мастер смены и все новости участка.</div>
             <div class="kbd" id="ltk"><span>Газтрубпласт | новички</span></div>
-            <div class="b me" id="l3">Когда зарплата?</div>
+            <div class="b me voice" id="l3"><span class="vplay"><svg width="22" height="22" viewBox="0 0 24 24" fill="#226aaf" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5z" /></svg></span><span class="wv" id="l3w"></span><span class="vdur">0:02</span></div>
+            <div class="mw" id="lv">
+              <div class="ost"><div class="b bot">Слушаю…</div></div>
+              <div class="ost"><div class="b bot">🎙 «Когда зарплата?»</div></div>
+            </div>
             <div class="slot">
               <div class="b bot typing" id="l4t"><i></i><i></i><i></i></div>
               <div class="b bot card" id="l4">Нашёл в документах компании. Смотри:<div class="quote"><div class="bar" style="width: 96%"></div><div class="bar" style="width: 88%"></div><div class="bar" style="width: 56%"></div></div><span class="src"><span class="sweep" id="l4s"></span><span class="t">Источник: ПВТР, п. 6.5.2, стр. 15</span></span></div>
@@ -1075,7 +1174,9 @@
         <div class="inputbar" data-layout-allow-occlusion>
           <div class="field">
             <span class="ph" id="ib-ph">Сообщение</span>
-            <span class="ibtext" id="ibt"><span class="ibm" id="ibm1"></span><span class="ibm" id="ibm2"></span><span class="ibm" id="ibm5"></span><span class="ibm" id="ibm3"></span><span class="ibm" id="ibm4"></span><span id="ib-caret"></span></span>
+            <span id="rec"><span id="rec-dot"></span><span class="rec-t"><span id="rt0">0:00</span><span id="rt1">0:01</span><span id="rt2">0:02</span></span><span class="wv" id="recw"></span></span>
+            <span class="ibtext" id="ibt"><span class="ibm" id="ibm2"></span><span class="ibm" id="ibm5"></span><span class="ibm" id="ibm3"></span><span class="ibm" id="ibm4"></span><span id="ib-caret"></span></span>
+            <span id="ib-mic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg><span id="ib-mic-on"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg></span></span>
           </div>
           <div class="send" id="ib-send">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg>
@@ -1161,7 +1262,7 @@
           <div class="inputbar" data-layout-allow-occlusion><div class="field"><span class="ph">Сообщение</span></div><div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div></div>
 
           <div id="sheet-scrim" data-layout-allow-occlusion></div>
-          <div id="sheet" data-layout-allow-occlusion data-layout-allow-overflow>
+          <div id="sheet" data-layout-allow-occlusion data-layout-allow-overflow data-layout-allow-overlap>
             <div class="grab"></div>
             <div class="sh-top"><span class="chip">Панель HR</span><span>Обращение #4</span></div>
             <p class="sh-title">Бот не нашёл ответ</p>
@@ -1213,7 +1314,6 @@
   <script>
     // Буквы для строки ввода новичка: каждая отдельным span, показываем по таймлайну
     const MSG = {
-      1: "Когда зарплата?",
       2: "Можно ли приходить с собакой?",
       5: "Мне не начислили сверхурочные за субботу",
       3: "Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка",
@@ -1228,6 +1328,18 @@
         box.appendChild(s);
       }
     }
+    // Волна голосового: фиксированные высоты, чтобы кадр был детерминирован
+    const WAVE = [10, 18, 26, 14, 30, 22, 12, 24, 32, 16, 20, 28, 12, 22, 30, 18, 10, 24, 16, 12];
+    function wave(id, n) {
+      const box = document.getElementById(id);
+      for (let i = 0; i < n; i++) {
+        const b = document.createElement("i");
+        b.style.height = WAVE[i % WAVE.length] + "px";
+        box.appendChild(b);
+      }
+    }
+    wave("l3w", 20);
+    wave("recw", 14);
 
     document.fonts.ready.then(() => {
       const tl = gsap.timeline({ paused: true });
@@ -1245,7 +1357,7 @@
 
       // Сообщения, которые меняются на месте: высота каждого состояния
       const M = {};
-      for (const id of ["lo", "lsv", "mw"]) {
+      for (const id of ["lo", "lv", "lsv", "mw"]) {
         const w = $("#" + id);
         const sts = Array.from(w.querySelectorAll(":scope > .ost"));
         const h = sts.map((s) => s.offsetHeight);
@@ -1258,7 +1370,7 @@
       for (const f of FEEDS) VH[f] = $("#" + f).parentElement.clientHeight;
       const feedOf = {};
       const put = (f, ids) => ids.forEach((id) => (feedOf[id] = f));
-      put("la", ["lo", "ld1", "l1", "l2k", "ltk", "l3", "l4t", "l4k", "l5", "l6t", "l6", "l7", "ld2", "l11", "l12t", "l12", "ld3", "lsv", "l8", "l9t", "l9", "l10"]);
+      put("la", ["lo", "ld1", "l1", "l2k", "ltk", "l3", "lv", "l4t", "l4k", "l5", "l6t", "l6", "l7", "ld2", "l11", "l12t", "l12", "ld3", "lsv", "l8", "l9t", "l9", "l10"]);
       put("lb", ["lb1", "lb2t", "lb2k"]);
       put("ta", ["t0", "t1", "t2"]);
       put("ra", ["r0", "r1k", "r2k", "r3k"]);
@@ -1313,7 +1425,9 @@
         const chs = document.querySelectorAll("#ibm" + n + " .c");
         const span = (tPress - 0.1 - t0) / chs.length;
         chs.forEach((c) => (c.style.display = "inline"));
-        const room = $("#ibt").parentElement.clientWidth - 44 - 8;
+        const fld = $("#ibt").parentElement;
+        const fs = getComputedStyle(fld);
+        const room = fld.clientWidth - parseFloat(fs.paddingLeft) - parseFloat(fs.paddingRight) - 8;
         const rights = Array.from(chs).map((c) => c.offsetLeft + c.offsetWidth);
         chs.forEach((c) => (c.style.display = ""));
         let shift = 0;
@@ -1361,6 +1475,29 @@
         tl.fromTo(m.sts[k], { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out", immediateRender: false }, t + 0.12);
         tl.fromTo(m.w, { height: m.h[k - 1] }, { height: m.h[k], duration: 0.4, ease: "power2.inOut", immediateRender: false }, t);
         scrollY(feedOf[id], yState(id, k), t, 0.4);
+      }
+      // голосовой ввод: зажать микрофон, запись в поле, отпустить
+      function voiceRec(t0, t1) {
+        tl.fromTo("#ib-mic", { scale: 1 }, { scale: 0.86, duration: 0.1, ease: "power2.in" }, t0);
+        tl.fromTo("#ib-mic", { scale: 0.86 }, { scale: 1.08, duration: 0.25, ease: "back.out(2)", immediateRender: false }, t0 + 0.1);
+        tl.fromTo("#ib-mic-on", { opacity: 0 }, { opacity: 1, duration: 0.15, immediateRender: false }, t0 + 0.05);
+        const pulses = Math.max(1, Math.floor((t1 - t0 - 0.2) / 0.6));
+        tl.fromTo("#ib-mic-on", { boxShadow: "0 0 0 0px rgba(34,106,175,0.45)" }, { boxShadow: "0 0 0 6px rgba(34,106,175,0)", duration: 0.6, ease: "power1.out", repeat: pulses - 1, immediateRender: false }, t0 + 0.2);
+        tl.fromTo("#ib-ph", { opacity: 1 }, { opacity: 0, duration: 0.1, immediateRender: false }, t0);
+        tl.fromTo("#rec", { opacity: 0, x: 12 }, { opacity: 1, x: 0, duration: 0.2, ease: "power2.out", immediateRender: false }, t0 + 0.05);
+        const blinks = Math.max(1, Math.floor((t1 - t0) / 0.35));
+        tl.fromTo("#rec-dot", { opacity: 1 }, { opacity: 0.25, duration: 0.35, ease: "sine.inOut", yoyo: true, repeat: blinks - 1, immediateRender: false }, t0 + 0.1);
+        const reps = Math.max(1, Math.floor((t1 - t0 - 0.2) / 0.4) * 2 - 1);
+        tl.fromTo("#recw i", { scaleY: 0.35 }, { scaleY: 1, duration: 0.2, ease: "sine.inOut", yoyo: true, repeat: reps, stagger: 0.05 }, t0 + 0.1);
+        const step = Math.min(0.5, (t1 - t0) / 2.8);
+        tl.fromTo("#rt0", { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, t0 + step);
+        tl.fromTo("#rt1", { opacity: 0 }, { opacity: 1, duration: 0.05, immediateRender: false }, t0 + step);
+        tl.fromTo("#rt1", { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, t0 + 2 * step);
+        tl.fromTo("#rt2", { opacity: 0 }, { opacity: 1, duration: 0.05, immediateRender: false }, t0 + 2 * step);
+        tl.fromTo("#ib-mic", { scale: 1.08 }, { scale: 1, duration: 0.2, ease: "power2.out", immediateRender: false }, t1);
+        tl.fromTo("#ib-mic-on", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, t1);
+        tl.fromTo("#rec", { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t1);
+        tl.fromTo("#ib-ph", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, t1 + 0.1);
       }
       // смена экрана справа и подписи над ним
       function screen(from, to, lFrom, lTo, t) {
@@ -1426,119 +1563,123 @@
       scrollTo("t2", 20.95);
       bubbleIn("#t2", 21.0);
 
-      // D · свой вопрос: ответ пунктом документа
+      // D · голосовой вопрос: надиктовал, бот распознал и ответил пунктом документа
       screen("#s-team", "#s-hrg", "#rl2", "#rl3", 22.8);
-      cap("#c2", 23.1, 27.9);
-      userType(1, 23.0, 23.85, 24.0);
-      scrollTo("l3", 23.95);
-      sendIn("#l3", 24.0);
-      scrollTo("l4t", 24.45);
-      typing("#l4t", 24.5, 25.5);
-      scrollTo("l4k", 25.45);
-      cardIn("#l4", 25.55);
-      bubbleIn("#l4k", 25.8);
-      sweep("#l4s", 26.2);
+      cap("#cV", 23.1, 25.55);
+      voiceRec(22.95, 24.35);
+      scrollTo("l3", 24.35);
+      sendIn("#l3", 24.4);
+      tl.fromTo("#l3w i", { scaleY: 0.2 }, { scaleY: 1, duration: 0.35, stagger: 0.025, ease: "power2.out" }, 24.55);
+      morphIn("lv", 24.95);
+      morphTo("lv", 1, 25.75);
+      cap("#c2", 25.8, 29.9);
+      scrollTo("l4t", 26.2);
+      typing("#l4t", 26.25, 27.05);
+      scrollTo("l4k", 27.0);
+      cardIn("#l4", 27.1);
+      bubbleIn("#l4k", 27.35);
+      sweep("#l4s", 27.75);
 
       // E · нет в документах: вопрос у HR, ответ в базу
-      cap("#c3", 28.1, 32.3);
-      userType(2, 27.8, 28.95, 29.1);
-      scrollTo("l5", 29.05);
-      sendIn("#l5", 29.1);
-      scrollTo("l6t", 29.55);
-      typing("#l6t", 29.6, 30.4);
-      scrollTo("l6", 30.35);
-      cardIn("#l6", 30.45);
-      tl.fromTo("#rd", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 30.55);
-      scrollTo("r1k", 30.6);
-      tl.fromTo("#r1", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 30.65);
-      bubbleIn("#r1k", 30.85);
-      press("#r1-open", 32.0);
-      tl.fromTo("#sheet-scrim", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 32.2);
-      tl.fromTo("#sheet", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 32.2);
-      cap("#c3b", 32.5, 36.6);
-      tl.fromTo(".sh-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.1, stagger: 0.1, ease: "power1.out" }, 33.0);
-      tl.fromTo("#sh-track-on", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.inOut", immediateRender: false }, 34.2);
-      tl.fromTo("#sh-knob", { x: 0 }, { x: 28, duration: 0.35, ease: "power3.inOut" }, 34.2);
-      tl.fromTo("#sh-send", { scale: 1 }, { scale: 0.88, duration: 0.11, ease: "power2.in", yoyo: true, repeat: 1 }, 34.7);
-      tl.fromTo("#sheet", { yPercent: 0 }, { yPercent: 105, duration: 0.45, ease: "power3.in", immediateRender: false }, 34.95);
-      tl.fromTo("#sheet-scrim", { opacity: 1 }, { opacity: 0, duration: 0.35, ease: "power2.in", immediateRender: false }, 35.0);
-      swapStatus("#r1", 35.35);
-      scrollTo("l7", 35.35);
-      bubbleIn("#l7", 35.4);
+      cap("#c3", 30.1, 34.3);
+      userType(2, 29.8, 30.95, 31.1);
+      scrollTo("l5", 31.05);
+      sendIn("#l5", 31.1);
+      scrollTo("l6t", 31.55);
+      typing("#l6t", 31.6, 32.4);
+      scrollTo("l6", 32.35);
+      cardIn("#l6", 32.45);
+      tl.fromTo("#rd", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 32.55);
+      scrollTo("r1k", 32.6);
+      tl.fromTo("#r1", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 32.65);
+      bubbleIn("#r1k", 32.85);
+      press("#r1-open", 34);
+      tl.fromTo("#sheet-scrim", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 34.2);
+      tl.fromTo("#sheet", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 34.2);
+      cap("#c3b", 34.5, 38.6);
+      tl.fromTo(".sh-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.1, stagger: 0.1, ease: "power1.out" }, 35);
+      tl.fromTo("#sh-track-on", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.inOut", immediateRender: false }, 36.2);
+      tl.fromTo("#sh-knob", { x: 0 }, { x: 28, duration: 0.35, ease: "power3.inOut" }, 36.2);
+      tl.fromTo("#sh-send", { scale: 1 }, { scale: 0.88, duration: 0.11, ease: "power2.in", yoyo: true, repeat: 1 }, 36.7);
+      tl.fromTo("#sheet", { yPercent: 0 }, { yPercent: 105, duration: 0.45, ease: "power3.in", immediateRender: false }, 36.95);
+      tl.fromTo("#sheet-scrim", { opacity: 1 }, { opacity: 0, duration: 0.35, ease: "power2.in", immediateRender: false }, 37);
+      swapStatus("#r1", 37.35);
+      scrollTo("l7", 37.35);
+      bubbleIn("#l7", 37.4);
 
       // E2 · личный вопрос: сразу HR, без ИИ
-      cap("#c7", 36.8, 42.4);
-      scrollTo("ld2", 36.55);
-      bubbleIn("#ld2", 36.6);
-      userType(5, 36.9, 38.2, 38.35);
-      scrollTo("l11", 38.3);
-      sendIn("#l11", 38.35);
-      scrollTo("l12t", 38.8);
-      typing("#l12t", 38.85, 39.35);
-      scrollTo("l12", 39.3);
-      cardIn("#l12", 39.4);
-      scrollTo("r2k", 39.55);
-      tl.fromTo("#r2", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 39.6);
-      bubbleIn("#r2k", 39.8);
+      cap("#c7", 38.8, 44.4);
+      scrollTo("ld2", 38.55);
+      bubbleIn("#ld2", 38.6);
+      userType(5, 38.9, 40.2, 40.35);
+      scrollTo("l11", 40.3);
+      sendIn("#l11", 40.35);
+      scrollTo("l12t", 40.8);
+      typing("#l12t", 40.85, 41.35);
+      scrollTo("l12", 41.3);
+      cardIn("#l12", 41.4);
+      scrollTo("r2k", 41.55);
+      tl.fromTo("#r2", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 41.6);
+      bubbleIn("#r2k", 41.8);
 
       // F · третий день: опрос и напоминание руководителю
-      screen("#s-hrg", "#s-mgr", "#rl3", "#rl4", 42.4);
-      cap("#cS", 42.6, 49.0);
-      scrollTo("ld3", 42.55);
-      bubbleIn("#ld3", 42.6);
-      bubbleIn("#md", 42.7);
-      morphIn("mw", 43.1);
-      morphIn("lsv", 43.0);
-      press("#sv1b", 45.2);
-      morphTo("lsv", 1, 45.4);
-      press("#m1b", 46.8);
-      morphTo("mw", 1, 47.0);
+      screen("#s-hrg", "#s-mgr", "#rl3", "#rl4", 44.4);
+      cap("#cS", 44.6, 51);
+      scrollTo("ld3", 44.55);
+      bubbleIn("#ld3", 44.6);
+      bubbleIn("#md", 44.7);
+      morphIn("mw", 45.1);
+      morphIn("lsv", 45);
+      press("#sv1b", 47.2);
+      morphTo("lsv", 1, 47.4);
+      press("#m1b", 48.8);
+      morphTo("mw", 1, 49);
 
       // G · тревожный сигнал
-      screen("#s-mgr", "#s-hrg", "#rl4", "#rl3", 48.9);
-      cap("#c4", 49.2, 57.2);
-      userType(3, 49.1, 50.6, 50.75);
-      scrollTo("l8", 50.7);
-      sendIn("#l8", 50.75);
-      scrollTo("r3k", 51.1);
-      tl.fromTo("#r3", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 51.15);
-      bubbleIn("#r3k", 51.35);
-      tl.fromTo("#r3", { boxShadow: "0 0 0 0 rgba(198,40,40,0)" }, { boxShadow: "0 0 0 10px rgba(198,40,40,0.18)", duration: 0.5, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, 51.7);
-      scrollTo("l9t", 51.25);
-      typing("#l9t", 51.3, 52.05);
-      scrollTo("l9", 52.0);
-      cardIn("#l9", 52.1);
-      press("#r3-take", 53.4);
-      swapStatus("#r3", 53.6);
-      scrollTo("l10", 54.95);
-      bubbleIn("#l10", 55.0);
+      screen("#s-mgr", "#s-hrg", "#rl4", "#rl3", 50.9);
+      cap("#c4", 51.2, 59.2);
+      userType(3, 51.1, 52.6, 52.75);
+      scrollTo("l8", 52.7);
+      sendIn("#l8", 52.75);
+      scrollTo("r3k", 53.1);
+      tl.fromTo("#r3", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 53.15);
+      bubbleIn("#r3k", 53.35);
+      tl.fromTo("#r3", { boxShadow: "0 0 0 0 rgba(198,40,40,0)" }, { boxShadow: "0 0 0 10px rgba(198,40,40,0.18)", duration: 0.5, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, 53.7);
+      scrollTo("l9t", 53.25);
+      typing("#l9t", 53.3, 54.05);
+      scrollTo("l9", 54);
+      cardIn("#l9", 54.1);
+      press("#r3-take", 55.4);
+      swapStatus("#r3", 55.6);
+      scrollTo("l10", 56.95);
+      bubbleIn("#l10", 57);
 
       // H · следующему новичку бот отвечает сам
-      cap("#c5", 57.4, 63.2);
-      tl.fromTo("#la", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 57.2);
-      tl.fromTo("#lb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 57.45);
+      cap("#c5", 59.4, 65.2);
+      tl.fromTo("#la", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 59.2);
+      tl.fromTo("#lb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 59.45);
       tl.set(["#lb1", "#lb2", "#lb2k"], { opacity: 0 }, 0);
-      userType(4, 57.8, 58.85, 59.0);
-      sendIn("#lb1", 59.0);
-      scrollTo("lb2t", 59.45);
-      typing("#lb2t", 59.5, 60.15);
-      scrollTo("lb2k", 60.1);
-      cardIn("#lb2", 60.25);
-      bubbleIn("#lb2k", 60.5);
-      sweep("#lb2s", 60.9);
-      tl.fromTo("#rw-in", { opacity: 1 }, { opacity: 0.55, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 59.5);
+      userType(4, 59.8, 60.85, 61);
+      sendIn("#lb1", 61);
+      scrollTo("lb2t", 61.45);
+      typing("#lb2t", 61.5, 62.15);
+      scrollTo("lb2k", 62.1);
+      cardIn("#lb2", 62.25);
+      bubbleIn("#lb2k", 62.5);
+      sweep("#lb2s", 62.9);
+      tl.fromTo("#rw-in", { opacity: 1 }, { opacity: 0.55, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 61.5);
 
       // I · руководитель HR: зоны риска
-      tl.fromTo("#rw-in", { opacity: 0.55 }, { opacity: 1, duration: 0.5, ease: "power2.inOut", immediateRender: false }, 63.1);
-      screen("#s-hrg", "#s-an", "#rl3", "#rl5", 63.2);
-      cap("#cH", 63.4, 71.8);
-      tl.fromTo("#lw-in", { opacity: 1 }, { opacity: 0.5, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 63.2);
-      tl.fromTo(".an-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: "power3.out" }, 63.8);
-      tl.fromTo("#an1", { boxShadow: "inset 0 0 0 0 rgba(34,106,175,0)" }, { boxShadow: "inset 0 0 0 2px rgba(34,106,175,0.6)", duration: 0.5, ease: "power2.out", immediateRender: false }, 65.2);
+      tl.fromTo("#rw-in", { opacity: 0.55 }, { opacity: 1, duration: 0.5, ease: "power2.inOut", immediateRender: false }, 65.1);
+      screen("#s-hrg", "#s-an", "#rl3", "#rl5", 65.2);
+      cap("#cH", 65.4, 73.8);
+      tl.fromTo("#lw-in", { opacity: 1 }, { opacity: 0.5, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 65.2);
+      tl.fromTo(".an-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: "power3.out" }, 65.8);
+      tl.fromTo("#an1", { boxShadow: "inset 0 0 0 0 rgba(34,106,175,0)" }, { boxShadow: "inset 0 0 0 2px rgba(34,106,175,0.6)", duration: 0.5, ease: "power2.out", immediateRender: false }, 67.2);
 
       // J · итог
-      cap("#c6", 72.0, null);
-      tl.fromTo("#lw-in", { opacity: 0.5 }, { opacity: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 72.0);
+      cap("#c6", 74, null);
+      tl.fromTo("#lw-in", { opacity: 0.5 }, { opacity: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 74);
 
       window.__timelines["split"] = tl;
     });
