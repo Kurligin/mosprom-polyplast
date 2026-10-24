@@ -89,8 +89,12 @@ async def attachment(path: str | Path, kind: str | None = None, *, repo=None, se
     RuntimeError — бот не запущен; MaxApiError — ошибка загрузки.
     """
     p = Path(path)
-    kind = kind or kind_for(p)
-    data = p.read_bytes()
+    return await attachment_bytes(p.read_bytes(), p.name, kind or kind_for(p), repo=repo, sender=sender)
+
+
+async def attachment_bytes(data: bytes, name: str, kind: str | None = None, *, repo=None, sender=None) -> dict:
+    """То же, что attachment(), для файла в памяти (картинка, нарисованная на лету). Кэш — по содержимому."""
+    kind = kind or kind_for(name)
     key = CACHE_PREFIX + _sha256(data)[:48]
     cached = await _cache_get(repo, key)
     if isinstance(cached, dict) and cached.get("token") and cached.get("kind") == kind:
@@ -99,13 +103,13 @@ async def attachment(path: str | Path, kind: str | None = None, *, repo=None, se
     sender = sender or _sender()
     if sender is None:
         raise RuntimeError("Бот не запущен: файл не загрузить")
-    ctype = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
-    uploaded = await sender.call(None, sender.api.upload, kind, p.name, data, ctype)
+    ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    uploaded = await sender.call(None, sender.api.upload, kind, name, data, ctype)
     token = _token(kind, uploaded)
     if not token:
         raise MaxApiError(500, "upload.no_token", str(uploaded)[:200])
-    await _cache_set(repo, key, {"kind": kind, "token": token, "name": p.name})
-    log.info("Загружен %s (%s)", p.name, kind)
+    await _cache_set(repo, key, {"kind": kind, "token": token, "name": name})
+    log.info("Загружен %s (%s)", name, kind)
     return {"type": kind, "payload": {"token": token}}
 
 

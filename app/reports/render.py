@@ -62,12 +62,17 @@ async def _get_browser():
 
 
 async def render_png(report: dict) -> bytes:
+    return await screenshot(render_html(report), WIDTH, HEIGHT)
+
+
+async def screenshot(html: str, width: int, height: int) -> bytes:
+    """HTML → PNG width × height в общем Chromium (сводка, карточка «Пути новичка»)."""
     browser = await _get_browser()
-    page = await browser.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=1)
+    page = await browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
     try:
-        await page.set_content(render_html(report), wait_until="load")
+        await page.set_content(html, wait_until="load")
         await page.evaluate("document.fonts.ready")
-        return await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": WIDTH, "height": HEIGHT})
+        return await page.screenshot(type="png", clip={"x": 0, "y": 0, "width": width, "height": height})
     finally:
         await page.close()
 
