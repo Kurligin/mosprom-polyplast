@@ -645,26 +645,26 @@
 
       // Лента плавно подтягивается к новому сообщению
       function scrollTo(feed, id, t) {
-        tl.fromTo("#" + feed, { y: pos[feed] }, { y: T[id], duration: 0.7, ease: "power2.inOut", immediateRender: false }, t);
+        tl.fromTo("#" + feed, { y: pos[feed] }, { y: T[id], duration: 0.8, ease: "power2.inOut", immediateRender: false }, t);
         pos[feed] = T[id];
       }
       // Подпись: слова мягко проявляются из размытия, уходят всей строкой
       function capIn(id, t) {
-        tl.fromTo(`${id} .w`, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.4, stagger: 0.06, ease: "power2.out" }, t);
+        tl.fromTo(`${id} .w`, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, stagger: 0.06, ease: "power1.out" }, t);
       }
       function capOut(id, t) {
         tl.fromTo(`${id} .w`, { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.28, ease: "power2.in", immediateRender: false }, t);
       }
       // Пузырь: приходит медленно, с длинным хвостом
       function bubbleIn(id, t) {
-        tl.fromTo(id, { opacity: 0, y: 26, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "expo.out" }, t);
+        tl.fromTo(id, { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: "power3.out" }, t);
       }
       function cardIn(id, t) {
-        tl.fromTo(id, { opacity: 0, y: 16, scale: 0.97, filter: "blur(5px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.7, ease: "expo.out" }, t);
+        tl.fromTo(id, { opacity: 0, y: 14, scale: 0.98, filter: "blur(4px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.8, ease: "power3.out" }, t);
       }
       // «печатает…»: точки плавно качаются, статус в шапке меняется
       function typing(id, t0, t1) {
-        tl.fromTo(id, { opacity: 0, y: 14, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "expo.out" }, t0);
+        tl.fromTo(id, { opacity: 0, y: 14, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out" }, t0);
         tl.fromTo("#st-typing", { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power1.inOut", immediateRender: false }, t0);
         tl.fromTo("#st-bot", { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "power1.inOut", immediateRender: false }, t0);
         const reps = Math.max(1, Math.floor((t1 - t0 - 0.2) / 0.6) * 2 - 1);
@@ -684,7 +684,7 @@
           tl.fromTo("#st-fill", { scaleX: fillAt }, { scaleX: to, duration: 0.7, ease: "power2.inOut", immediateRender: false }, t - 0.5);
           fillAt = to;
         }
-        tl.fromTo(`#n${n} .on`, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.6)" }, t);
+        tl.fromTo(`#n${n} .on`, { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" }, t);
         tl.fromTo(`#n${n} .lbl`, { color: "#545f72" }, { color: "#0b1b3f", duration: 0.3, immediateRender: false }, t);
       }
 
@@ -695,9 +695,9 @@
 
 
       // 0 · появление
-      tl.fromTo("#c-win-in", { opacity: 0, y: 60, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 1.1, ease: "expo.out" }, 0);
+      tl.fromTo("#c-win-in", { opacity: 0, y: 60, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 1.1, ease: "power3.out" }, 0);
       tl.fromTo("#c-kicker", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out" }, 0.1);
-      tl.fromTo("#c-steps", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.7, ease: "expo.out" }, 0.3);
+      tl.fromTo("#c-steps", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.3);
 
       // 1 · вопрос новичка
       capIn("#cap1", 0.4);
@@ -731,7 +731,7 @@
       step(3, 9.55);
 
       // 5 · HR отвечает, ответ в базу
-      tl.fromTo("#c-hr", { opacity: 0, y: 30, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.8, ease: "expo.out", immediateRender: false }, 10.1);
+      tl.fromTo("#c-hr", { opacity: 0, y: 30, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.8, ease: "power3.out", immediateRender: false }, 10.1);
       capOut("#cap4", 10.3);
       capIn("#cap5", 10.55);
       tl.fromTo(".hr-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.12, stagger: 0.11, ease: "power1.out", immediateRender: false }, 10.8);
