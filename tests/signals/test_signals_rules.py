@@ -105,3 +105,14 @@ def test_free_text_threat_with_question_mark_still_flagged():
     assert cats("Хочу узнать, угрожает ли что-то при работе на станке?", free_text=True) == set()
     # для остальных тем «?» без «я» — по-прежнему вопрос
     assert cats("Боюсь, кожух на станке обязателен?", free_text=True) == set()
+
+
+def test_free_text_threat_phrasings_from_review():
+    """Жалобы, которые раньше проходили мимо: побои без «меня», «обещают уволить», «если не выйду»."""
+    assert "threats" in cats("бригадир бьёт, боюсь сказать", free_text=True)
+    assert "threats" in cats("задерживают зарплату, обещают уволить, если пожалуюсь", free_text=True)
+    assert "threats" in cats("угрожают уволить, если не выйду в выходной", free_text=True)
+    # без лишних тревог
+    assert cats("Во сколько я выйду на смену в первый день?", free_text=True) == set()
+    assert cats("Мне обещали премию за переработку", free_text=True) == set()
+    assert cats("Меня бьёт током от станка", free_text=True) != {"threats"}
