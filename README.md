@@ -348,6 +348,7 @@ flowchart TB
 | [eval](eval) | Эталон вопросов, оценка качества, маршрут сотрудника |
 | [tests](tests) | Автотесты, включая сквозной |
 | [deploy](deploy), `docker-compose*.yml` | Запуск локально и на сервере |
+| [presentation](presentation) | Презентация: готовый сайт, выкладывается на веб-сервер как есть |
 | [media](media) | Картинки для этого README, исходник анимации на HyperFrames в `media/anim` |
 | [plan.md](plan.md), [dev-plan.md](dev-plan.md) | Что делаем и план разработки |
 
