@@ -47,6 +47,14 @@ class MaxApiError(Exception):
         return self.status == 429
 
 
+class DownloadTooLarge(Exception):
+    """Вложение больше допустимого размера: дальше не качаем."""
+
+    def __init__(self, size: int):
+        super().__init__(f"{size} байт")
+        self.size = size
+
+
 def make_ssl_context(ca_bundle_file: str | None) -> ssl.SSLContext:
     """certifi + сертификаты НУЦ Минцифры: platform-api2.max.ru подписан российским CA."""
     ctx = ssl.create_default_context(cafile=certifi.where())
@@ -185,6 +193,31 @@ class MaxApi:
         if kind == "image":
             return uploaded
         return {"token": info.get("token") or uploaded.get("token")}
+
+    async def download(self, url: str, *, max_bytes: int) -> bytes:
+        """Скачать вложение по `payload.url` (голосовое) в память, не больше max_bytes.
+
+        Тот же клиент (SSL, таймауты), но токен бота уходит только на хост API: ссылка вложения ведёт
+        на CDN «МАКС», ему токен не нужен. Больше лимита — DownloadTooLarge, HTTP-ошибка — MaxApiError.
+        """
+        request = self._client.build_request("GET", url)
+        if request.url.host != self._client.base_url.host:
+            request.headers.pop("Authorization", None)
+        resp = await self._client.send(request, stream=True, follow_redirects=True)
+        try:
+            if resp.status_code >= 400:
+                raise MaxApiError(resp.status_code, "download.failed", "")
+            size = resp.headers.get("Content-Length")
+            if size and size.isdigit() and int(size) > max_bytes:
+                raise DownloadTooLarge(int(size))
+            buf = bytearray()
+            async for chunk in resp.aiter_bytes():
+                buf.extend(chunk)
+                if len(buf) > max_bytes:
+                    raise DownloadTooLarge(len(buf))
+            return bytes(buf)
+        finally:
+            await resp.aclose()
 
     async def send_action(self, chat_id: int, action: str = "typing_on") -> dict:
         """POST /chats/{chatId}/actions: «печатает…» (typing_on), «отправляет фото» и т. п."""

@@ -102,6 +102,9 @@ async def run_bot() -> None:
     runtime.set_ctx(ctx)  # планировщик и API отправляют сообщения через тот же контекст
     try:
         await _startup(api)
+        from app.bot import voice
+
+        voice.warm_up_in_background()  # модель распознавания голосовых: в фоне, бот не ждёт
         marker = await _load_marker()
         log.info("Long polling запущен")
         while True:

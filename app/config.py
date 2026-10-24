@@ -46,5 +46,18 @@ class Settings(BaseSettings):
     # База знаний
     embedding_model: str = "BAAI/bge-m3"
 
+    # Голосовые сообщения: распознавание только локально (faster-whisper на CPU), аудио наружу не уходит.
+    # Модель кэшируется в томе /models (HF_HOME), как bge-m3. Замер на сервере (8 vCPU Broadwell, int8,
+    # 4 потока, фраза 7 с): small ≈ 5–6 с, medium ≈ 13 с, large-v3-turbo ≈ 20 с (точнее всех).
+    # Нужна точность важнее скорости — VOICE_MODEL=large-v3-turbo.
+    voice_enabled: bool = True
+    voice_model: str = "small"
+    voice_device: str = "cpu"
+    voice_threads: int = 4
+    voice_beam_size: int = 5
+    voice_max_seconds: int = 60       # дольше — просим записать покороче
+    voice_max_bytes: int = 10 * 1024 * 1024
+    voice_timeout: float = 90.0       # скачивание + распознавание, секунд
+
 
 settings = Settings()

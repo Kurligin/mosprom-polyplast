@@ -29,6 +29,11 @@ pdfplumber>=0.11
 python-pptx>=1.0
 pillow>=10
 
+# Голосовые: локальное распознавание речи на CPU (CTranslate2). PyAV несёт свой ffmpeg — системный не нужен.
+# av ниже 19: в 19.0 убран аргумент metadata_errors, на нём падает decode_audio faster-whisper 1.2.1
+faster-whisper==1.2.1
+av==18.1.0
+
 # Картинка еженедельной сводки: HTML → PNG
 playwright>=1.47
 

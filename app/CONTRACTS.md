@@ -34,6 +34,7 @@
 - **Фоновые задачи:** `@app.jobs.job(name, seconds=… | cron={…})`. Время в cron — московское. Задача сама открывает сессию и коммитит.
 - **Время:** в БД UTC (`timestamptz`). Часовой пояс площадки — `Site.tz`. Машина времени — `Employee.time_shift_hours`; «сейчас» для новичка = `now + shift`.
 - **Клавиатуры:** `app.bot.keyboards`: `keyboard(row, …)`, `callback(text, payload)`, `link(text, url)`, `open_app(text, web_app)`. Mini App открывается кнопкой `open_app(…, settings.max_bot_name)`.
+- **Голосовые — `app/bot/voice.py`:** голосовое без текста (вложение `audio` с `payload.url`) от привязанного новичка или сотрудника при `VOICE_ENABLED` → сразу «Слушаю…», дальше фоновая задача: `MaxApi.download` (в память, до `VOICE_MAX_BYTES`, токен бота только на хост API), faster-whisper локально в отдельном потоке (до `VOICE_MAX_SECONDS`, общий таймаут `VOICE_TIMEOUT`), правка «Слушаю…» на «🎙 «текст»» и то же событие с текстом вместо вложения через `runner.process_update` (своя сессия и коммит). Модули получают распознанный текст как набранный (`body["voice"] = True`). Ошибка или пусто — «Не разобрал, напиши текстом», длиннее лимита — «запиши покороче». В журнал сообщений голосовое пишется как «[голосовое]», распознанный текст — отдельной строкой. Выключено или пакета `faster-whisper` нет — как раньше (`NON_TEXT`).
 - **Вложения:** `app.bot.uploads.attachment(path, kind) -> dict` — готовый элемент `attachments` (`image` | `file`); токен кэшируется в `Setting`.
 
 ## Сценарий — `app/scenario`

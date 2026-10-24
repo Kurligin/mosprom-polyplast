@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.bot import hooks
 from app.bot import texts as T
+from app.bot import voice as voice_mod
 from app.bot.hooks import Callback
 from app.bot.keyboards import callback, keyboard, open_app
 from app.config import settings
@@ -45,6 +46,8 @@ CANCEL_COMMANDS = ("/cancel", "/отмена")
 HELP_COMMANDS = ("/help", "/помощь", "/menu")
 # кнопки сотрудника: аккаунт тестового новичка в демо бывает привязан и как HR — эти нажатия от имени сотрудника
 STAFF_BUTTONS = ("tk:", "mg:", "ch:hr")
+# голосовое в журнале сообщений; распознанный текст запишется отдельной строкой, как обычное сообщение
+VOICE_LOG = "[голосовое]"
 
 
 @dataclass
@@ -474,9 +477,14 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
 
     emp = await repo.employee_by_user(user_id)
     staff = None if emp else await repo.staff_by_user(user_id)
+    voice = (emp is not None or staff is not None) and voice_mod.is_voice(body, text)
     if emp is not None or staff is not None:
         await repo.add_message(employee_id=getattr(emp, "id", None), staff_id=getattr(staff, "id", None),
-                               chat_id=chat_id, direction="in", text=text, mid=mid)
+                               chat_id=chat_id, direction="in", text=VOICE_LOG if voice else text, mid=mid)
+    if voice:
+        # «Слушаю…» сразу, распознавание в фоне; текст потом придёт сюда же как обычное сообщение
+        await voice_mod.start(ctx, repo, emp or staff, upd, chat_id=chat_id, is_staff=emp is None)
+        return
 
     cmd, _, arg = text.partition(" ")
     cmd = cmd.lower().split("@")[0] if cmd.startswith("/") else ""

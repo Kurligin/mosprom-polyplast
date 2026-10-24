@@ -147,10 +147,13 @@ class Sender:
             log.warning("Не удалось ответить на callback: %s", e)
             return None
 
-    async def edit(self, mid: str, text: str, *, attachments: list[dict] | None = None, key: Any = None) -> bool:
-        """Изменить отправленное сообщение. False — не получилось (сообщение удалено, старое и т. п.)."""
+    async def edit(self, mid: str, text: str, *, attachments: list[dict] | None = None, key: Any = None,
+                   fmt: str | None = "markdown") -> bool:
+        """Изменить отправленное сообщение. False — не получилось (сообщение удалено, старое и т. п.).
+
+        fmt=None — без разметки, когда в тексте чужие слова (распознанное голосовое)."""
         try:
-            await self.call(key, self.api.edit_message, mid, text, attachments=attachments)
+            await self.call(key, self.api.edit_message, mid, text, attachments=attachments, fmt=fmt)
             return True
         except MaxApiError as e:
             log.warning("Не удалось изменить сообщение %s: %s", mid, e)
