@@ -1,0 +1,622 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Exo 2";
+      src: url("assets/fonts/Exo2.ttf") format("truetype");
+      font-weight: 100 900;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      font-family: Inter, sans-serif;
+      color: #ffffff;
+      --navy-900: #020e31;
+      --navy-800: #00173e;
+      --blue-700: #005593;
+      --blue-600: #226aaf;
+      --blue-300: #6ac0f3;
+      --muted: #b1bcce;
+      --ink: #162133;
+      --ink-2: #566173;
+      --fill: #e9f1fa;
+    }
+    #c-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(900px 700px at 88% 110%, rgba(34, 106, 175, 0.5), transparent 70%),
+        radial-gradient(700px 500px at 20% -20%, rgba(72, 132, 195, 0.18), transparent 70%),
+        linear-gradient(115deg, #020e31 0%, #00173e 60%, #062a5c 100%);
+    }
+    #c-rings {
+      position: absolute;
+      left: 1260px;
+      top: 560px;
+      width: 900px;
+      height: 900px;
+    }
+
+    /* Подписи слева */
+    #c-kicker {
+      position: absolute;
+      left: 200px;
+      top: 196px;
+      font-family: "Exo 2", sans-serif;
+      font-weight: 600;
+      font-size: 28px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--blue-300);
+    }
+    .cap {
+      position: absolute;
+      left: 200px;
+      top: 262px;
+      width: 770px;
+      font-family: "Exo 2", sans-serif;
+      font-weight: 300;
+      font-size: 70px;
+      line-height: 1.1;
+      letter-spacing: -0.005em;
+      color: #ffffff;
+    }
+    .cap .w {
+      display: inline-block;
+    }
+    .cap .hl {
+      color: var(--blue-300);
+      font-weight: 500;
+    }
+
+    /* Карточка HR слева */
+    #c-hr {
+      position: absolute;
+      left: 200px;
+      top: 556px;
+      width: 720px;
+      background: #ffffff;
+      border-radius: 28px;
+      padding: 26px 30px 24px;
+      color: var(--ink);
+      box-shadow: 0 30px 70px rgba(0, 8, 30, 0.5);
+    }
+    .hr-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--ink-2);
+    }
+    .hr-chip {
+      color: var(--blue-700);
+      background: var(--fill);
+      border-radius: 999px;
+      padding: 6px 14px;
+    }
+    .hr-q {
+      margin-top: 14px;
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .hr-meta {
+      margin-top: 4px;
+      font-size: 26px;
+      color: #505a6b;
+      color: var(--ink-2);
+    }
+    .hr-reply {
+      margin-top: 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+    }
+    .hr-input {
+      flex: 1;
+      min-height: 112px;
+      border: 2px solid #d5dde8;
+      border-radius: 20px;
+      padding: 14px 18px;
+      font-size: 29px;
+      line-height: 1.35;
+      color: var(--ink);
+    }
+    .hr-input .tw {
+      display: inline-block;
+    }
+    #hr-send {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .hr-kb {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 28px;
+    }
+    .hr-kb span.t {
+      flex: 1;
+    }
+    #hr-track {
+      position: relative;
+      width: 64px;
+      height: 38px;
+      border-radius: 999px;
+      background: #d5dde8;
+    }
+    #hr-track-on {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--blue-600);
+    }
+    #hr-knob {
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Окно чата */
+    #c-win {
+      position: absolute;
+      left: 1000px;
+      top: 110px;
+      width: 720px;
+      height: 860px;
+    }
+    #c-win-in {
+      position: absolute;
+      inset: 0;
+      border-radius: 40px;
+      background: #eef2f7;
+      overflow: hidden;
+      box-shadow: 0 40px 90px rgba(0, 8, 30, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+    .head {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 104px;
+      background: #ffffff;
+      border-bottom: 2px solid #e1e6ed;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 30px;
+      color: var(--ink);
+    }
+    .ava {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+    }
+    .who b {
+      display: block;
+      font-size: 30px;
+      font-weight: 700;
+    }
+    .status {
+      position: relative;
+      width: 440px;
+      height: 34px;
+      font-size: 26px;
+    }
+    .status span {
+      position: absolute;
+      left: 0;
+      top: 0;
+      white-space: nowrap;
+    }
+    #st-bot {
+      color: var(--ink-2);
+    }
+    #st-typing {
+      color: var(--blue-600);
+      font-weight: 600;
+      opacity: 0;
+    }
+    .viewport {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 106px;
+      bottom: 0;
+      overflow: hidden;
+    }
+    .feed {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: 30px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .b {
+      max-width: 600px;
+      padding: 20px 26px;
+      border-radius: 30px;
+      font-size: 34px;
+      line-height: 1.36;
+    }
+    .me {
+      align-self: flex-end;
+      background: var(--blue-600);
+      color: #ffffff;
+      border-bottom-right-radius: 10px;
+      transform-origin: 100% 100%;
+    }
+    .bot {
+      align-self: flex-start;
+      background: #ffffff;
+      color: var(--ink);
+      border-bottom-left-radius: 10px;
+      box-shadow: 0 2px 2px rgba(0, 0, 0, 0.04);
+      transform-origin: 0% 100%;
+    }
+    .slot {
+      position: relative;
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .typing {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: flex;
+      gap: 10px;
+      padding: 26px 28px;
+      transform-origin: 0% 100%;
+    }
+    .typing i {
+      display: block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #9aa6b8;
+    }
+    .card {
+      width: 640px;
+      max-width: 640px;
+    }
+    .quote {
+      margin-top: 14px;
+      padding-left: 18px;
+      border-left: 5px solid var(--blue-600);
+    }
+    .bar {
+      height: 14px;
+      border-radius: 7px;
+      background: #d9e1ec;
+      margin: 12px 0;
+    }
+    .quote p {
+      font-size: 32px;
+      line-height: 1.36;
+      color: var(--ink);
+    }
+    .src {
+      position: relative;
+      display: inline-block;
+      margin-top: 14px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: var(--fill);
+      color: var(--blue-700);
+      font-weight: 600;
+      font-size: 29px;
+      overflow: hidden;
+    }
+    .sweep {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 60%;
+      background: linear-gradient(90deg, transparent, rgba(106, 192, 243, 0.55), transparent);
+    }
+    .src .t {
+      position: relative;
+    }
+    .btn {
+      margin-top: 10px;
+      width: 640px;
+      text-align: center;
+      font-size: 30px;
+      font-weight: 600;
+      color: var(--blue-700);
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 16px 0;
+    }
+    .sign {
+      display: block;
+      font-weight: 700;
+      color: var(--blue-700);
+    }
+    #fb-chip {
+      align-self: center;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--ink-2);
+      background: #dfe6ef;
+      border-radius: 999px;
+      padding: 8px 18px;
+    }
+
+    /* Финальная строка */
+    #c-final {
+      position: absolute;
+      left: 200px;
+      top: 360px;
+      width: 820px;
+    }
+    #c-final h1 {
+      font-family: "Exo 2", sans-serif;
+      font-weight: 300;
+      font-size: 112px;
+      line-height: 1.02;
+      letter-spacing: -0.01em;
+    }
+    #c-final h1 .w {
+      display: inline-block;
+    }
+    #c-final h1 .hl {
+      color: var(--blue-300);
+      font-weight: 500;
+    }
+    #c-final p {
+      margin-top: 28px;
+      font-size: 34px;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+  </style>
+
+  <div id="root" data-composition-id="chat" data-width="1920" data-height="1080">
+    <div id="c-bg"></div>
+    <svg id="c-rings" viewBox="0 0 900 900" aria-hidden="true" data-layout-ignore>
+      <g fill="none">
+        <circle cx="450" cy="450" r="430" stroke="rgba(106,192,243,0.10)" stroke-width="3" />
+        <g id="c-dash">
+          <circle cx="450" cy="450" r="392" stroke="rgba(106,192,243,0.16)" stroke-width="22" stroke-dasharray="5 15" />
+        </g>
+        <circle cx="450" cy="450" r="352" stroke="rgba(72,132,195,0.28)" stroke-width="4" />
+        <circle cx="450" cy="450" r="310" stroke="rgba(34,106,175,0.42)" stroke-width="40" />
+        <circle cx="450" cy="450" r="266" stroke="rgba(106,192,243,0.16)" stroke-width="3" />
+      </g>
+    </svg>
+
+    <p id="c-kicker">Корсик 2.0 · адаптация в «МАКС»</p>
+
+    <h2 class="cap" id="cap1"><span class="w">Новичок</span> <span class="w">спрашивает</span> <span class="w hl">своими</span> <span class="w hl">словами</span></h2>
+    <h2 class="cap" id="cap2"><span class="w">Корсик</span> <span class="w">ищет</span> <span class="w">в</span> <span class="w hl">документах</span></h2>
+    <h2 class="cap" id="cap3"><span class="w">Отвечает</span> <span class="w hl">дословным</span> <span class="w hl">пунктом</span> <span class="w">с</span> <span class="w">источником</span></h2>
+    <h2 class="cap" id="cap4"><span class="w">Ответа</span> <span class="w">нет?</span> <span class="w">Корсик</span> <span style="white-space: nowrap"><span class="w hl">не</span> <span class="w hl">выдумывает</span></span></h2>
+    <h2 class="cap" id="cap5"><span class="w">HR</span> <span class="w">отвечает,</span> <span class="w">и</span> <span class="w">ответ</span> <span class="w">попадает</span> <span class="w hl">в</span> <span class="w hl">базу</span></h2>
+    <h2 class="cap" id="cap6"><span class="w">Следующему</span> <span class="w">новичку</span> <span class="w">Корсик</span> <span class="w hl">ответит</span> <span class="w hl">сам</span></h2>
+
+    <div id="c-hr">
+      <div class="hr-top"><span class="hr-chip">HR-группа</span><span style="color:#505a6b">Обращение #4 · нет в документах</span></div>
+      <p class="hr-q">«Можно ли приходить с собакой?»</p>
+      <p class="hr-meta">Смирнов Иван · GTP · день 3</p>
+      <div class="hr-reply">
+        <div class="hr-input">
+          <span class="tw">На</span> <span class="tw">территорию</span> <span class="tw">завода</span> <span class="tw">с</span> <span class="tw">животными</span> <span class="tw">нельзя,</span> <span class="tw">это</span> <span class="tw">правило</span> <span class="tw">охраны.</span>
+        </div>
+        <div id="hr-send">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg>
+        </div>
+      </div>
+      <div class="hr-kb">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#566173" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" /><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" /></svg>
+        <span class="t">Добавить ответ в базу</span>
+        <div id="hr-track"><div id="hr-track-on"></div><div id="hr-knob"></div></div>
+      </div>
+    </div>
+
+    <div id="c-win">
+      <div id="c-win-in">
+        <div class="head" data-layout-allow-occlusion>
+          <div class="ava">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><circle cx="6" cy="9" r="2.2" /><circle cx="10" cy="5.2" r="2.2" /><circle cx="14" cy="5.2" r="2.2" /><circle cx="18" cy="9" r="2.2" /><path d="M12 10.5c-3 0-6 3.6-6 6.2 0 1.8 1.3 2.6 3 2.6 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-.8 3-2.6 0-2.6-3-6.2-6-6.2z" /></svg>
+          </div>
+          <div class="who">
+            <b>Корсик</b>
+            <div class="status"><span id="st-bot">бот · Группа ПОЛИПЛАСТИК</span><span id="st-typing">печатает…</span></div>
+          </div>
+        </div>
+
+        <div class="viewport" data-layout-allow-overflow>
+          <div class="feed" id="fa">
+            <div class="b me" id="a1">Когда зарплата?</div>
+            <div class="slot">
+              <div class="b bot typing" id="a2"><i></i><i></i><i></i></div>
+              <div class="b bot card" id="a3">
+                Нашёл в документах компании. Смотри:
+                <div class="quote"><div class="bar" style="width: 96%"></div><div class="bar" style="width: 90%"></div><div class="bar" style="width: 58%"></div></div>
+                <span class="src" id="a3-src"><span class="sweep" id="a3-sweep"></span><span class="t">Источник: ПВТР, п. 6.5.2, стр. 15</span></span>
+              </div>
+              <div class="btn" id="a3-btn">Связаться с HR</div>
+            </div>
+            <div class="b me" id="a4">Можно ли приходить с собакой?</div>
+            <div class="slot">
+              <div class="b bot typing" id="a5"><i></i><i></i><i></i></div>
+              <div class="b bot" id="a6">Честно, не знаю. В документах ответа не нашёл, поэтому передал вопрос HR. Ответ придёт сюда.</div>
+            </div>
+            <div class="b bot" id="a7"><span class="sign">Анна (HR)</span>На территорию завода с животными нельзя, это правило охраны.</div>
+          </div>
+
+          <div class="feed" id="fb">
+            <div id="fb-chip">Неделю спустя · другой новичок</div>
+            <div class="b me" id="b1">А с собакой на завод можно?</div>
+            <div class="slot">
+              <div class="b bot typing" id="b2"><i></i><i></i><i></i></div>
+              <div class="b bot card" id="b3">
+                HR уже отвечали на такой вопрос:
+                <div class="quote"><p>На территорию завода с животными нельзя, это правило охраны.</p></div>
+                <span class="src" id="b3-src"><span class="sweep" id="b3-sweep"></span><span class="t">Источник: Ответ HR от 24.10.2026</span></span>
+              </div>
+              <div class="btn" id="b3-btn">Связаться с HR</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="c-final">
+      <h1><span class="w">ИИ</span> <span class="w">не</span> <span class="w">пишет</span> <span class="w hl">норму</span></h1>
+      <p id="c-final-sub">Ответ только из документов компании или от HR.</p>
+    </div>
+  </div>
+
+  <script>
+    // Ленту чата прижимаем к низу окна, как в мессенджере: для этого меряем высоты сообщений
+    // после загрузки шрифтов и только потом строим таймлайн.
+    document.fonts.ready.then(() => {
+      const tl = gsap.timeline({ paused: true });
+      const S = 0.067; // шаг между словами
+      const PAD = 30;
+      const $ = (q) => document.querySelector(q);
+      const VH = $("#fa").parentElement.clientHeight;
+      function bottomIn(feed, el) {
+        let y = 0;
+        let n = el;
+        while (n && n !== feed) {
+          y += n.offsetTop;
+          n = n.offsetParent;
+        }
+        return y + el.offsetHeight;
+      }
+      // Положение ленты, при котором сообщение стоит внизу окна
+      const T = {};
+      for (const id of ["a1", "a2", "a3-btn", "a4", "a5", "a6", "a7"]) T[id] = VH - PAD - bottomIn($("#fa"), $("#" + id));
+      for (const id of ["b1", "b2", "b3-btn"]) T[id] = VH - PAD - bottomIn($("#fb"), $("#" + id));
+
+      const pos = { fa: T.a1, fb: T.b1 };
+      function scrollTo(feed, id, t) {
+        tl.fromTo("#" + feed, { y: pos[feed] }, { y: T[id], duration: 0.45, ease: "power3.out", immediateRender: false }, t);
+        pos[feed] = T[id];
+      }
+
+      // Фон: кольцо трубы медленно вращается весь ролик (3° в секунду)
+      tl.fromTo("#c-dash", { rotation: 0, svgOrigin: "450 450" }, { rotation: 69, duration: 23, ease: "none" }, 0);
+
+      function capIn(id, t) {
+        tl.fromTo(`${id} .w`, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.13, stagger: S, ease: "power2.out" }, t);
+      }
+      function capOut(id, t) {
+        tl.fromTo(`${id} .w`, { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.16, ease: "power2.in", immediateRender: false }, t);
+      }
+      function bubbleIn(id, t) {
+        tl.fromTo(id, { opacity: 0, y: 18, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "expo.out" }, t);
+      }
+      function typing(id, t0, t1) {
+        tl.fromTo(id, { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.3, ease: "expo.out" }, t0);
+        tl.fromTo("#st-typing", { opacity: 0 }, { opacity: 1, duration: 0.15, immediateRender: false }, t0);
+        tl.fromTo("#st-bot", { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t0);
+        const reps = Math.max(1, Math.floor((t1 - t0 - 0.2) / 0.44) * 2 - 1);
+        tl.fromTo(`${id} i`, { y: 0 }, { y: -9, duration: 0.22, ease: "sine.inOut", yoyo: true, repeat: reps, stagger: 0.11 }, t0 + 0.1);
+        tl.fromTo(id, { opacity: 1 }, { opacity: 0, duration: 0.12, immediateRender: false }, t1);
+        tl.fromTo("#st-typing", { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t1);
+        tl.fromTo("#st-bot", { opacity: 0 }, { opacity: 1, duration: 0.15, immediateRender: false }, t1);
+      }
+      function cardIn(id, t) {
+        tl.fromTo(id, { opacity: 0, scale: 0.94, filter: "blur(6px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.45, ease: "expo.out" }, t);
+      }
+      function sweep(id, t) {
+        tl.fromTo(id, { xPercent: -110 }, { xPercent: 210, duration: 0.7, ease: "power2.inOut" }, t);
+      }
+
+      // Начальные состояния
+      tl.set("#fa", { y: T.a1 }, 0);
+      tl.set("#fb", { y: T.b1, opacity: 0 }, 0);
+      tl.set(["#c-hr", "#c-final h1 .w", "#c-final-sub", "#hr-track-on", ".hr-input .tw"], { opacity: 0 }, 0);
+
+      // 0 · окно чата и надзаголовок
+      tl.fromTo("#c-win-in", { opacity: 0, y: 70 }, { opacity: 1, y: 0, duration: 0.9, ease: "expo.out" }, 0);
+      tl.fromTo("#c-kicker", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power2.out" }, 0.15);
+
+      // 1 · вопрос новичка
+      capIn("#cap1", 0.4);
+      bubbleIn("#a1", 0.9);
+
+      // 2 · ищет в документах
+      scrollTo("fa", "a2", 1.6);
+      typing("#a2", 1.6, 4.5);
+      capOut("#cap1", 2.7);
+      capIn("#cap2", 2.85);
+
+      // 3 · ответ дословным пунктом с источником
+      scrollTo("fa", "a3-btn", 4.5);
+      cardIn("#a3", 4.55);
+      bubbleIn("#a3-btn", 4.75);
+      capOut("#cap2", 4.9);
+      capIn("#cap3", 5.05);
+      sweep("#a3-sweep", 5.5);
+
+      // 4 · вопрос вне документов: честное «не знаю»
+      capOut("#cap3", 7.6);
+      capIn("#cap4", 7.75);
+      scrollTo("fa", "a4", 7.85);
+      bubbleIn("#a4", 7.9);
+      scrollTo("fa", "a5", 8.4);
+      typing("#a5", 8.4, 9.4);
+      scrollTo("fa", "a6", 9.4);
+      cardIn("#a6", 9.45);
+
+      // 5 · HR отвечает, ответ в базу
+      tl.fromTo("#c-hr", { opacity: 0, x: 50, filter: "blur(10px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.55, ease: "expo.out", immediateRender: false }, 10.1);
+      capOut("#cap4", 10.3);
+      capIn("#cap5", 10.45);
+      tl.fromTo(".hr-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.06, stagger: 0.1, ease: "none", immediateRender: false }, 10.7);
+      tl.fromTo("#hr-track-on", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, 11.8);
+      tl.fromTo("#hr-knob", { x: 0 }, { x: 26, duration: 0.3, ease: "back.out(1.4)" }, 11.8);
+      tl.fromTo("#hr-send", { scale: 1 }, { scale: 0.88, duration: 0.1, ease: "power2.in", yoyo: true, repeat: 1 }, 12.2);
+      scrollTo("fa", "a7", 12.4);
+      bubbleIn("#a7", 12.45);
+
+      // 6 · следующему новичку бот отвечает сам
+      capOut("#cap5", 14.7);
+      tl.fromTo("#c-hr", { opacity: 1, x: 0 }, { opacity: 0, x: -40, duration: 0.3, ease: "power3.in", immediateRender: false }, 14.7);
+      tl.fromTo("#fa", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power2.in", immediateRender: false }, 14.75);
+      tl.fromTo("#fb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power2.out", immediateRender: false }, 14.95);
+      capIn("#cap6", 15.05);
+      bubbleIn("#b1", 15.4);
+      scrollTo("fb", "b2", 16.0);
+      typing("#b2", 16.0, 16.7);
+      scrollTo("fb", "b3-btn", 16.7);
+      cardIn("#b3", 16.75);
+      bubbleIn("#b3-btn", 16.95);
+      sweep("#b3-sweep", 17.2);
+
+      // 7 · финальная строка
+      capOut("#cap6", 19.3);
+      tl.fromTo("#c-win-in", { opacity: 1 }, { opacity: 0.4, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 19.3);
+      tl.fromTo("#c-final h1 .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, stagger: 0.1, ease: "power2.out", immediateRender: false }, 19.5);
+      tl.fromTo("#c-final-sub", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power2.out", immediateRender: false }, 19.95);
+
+      window.__timelines["chat"] = tl;
+    });
+  </script>
+</template>

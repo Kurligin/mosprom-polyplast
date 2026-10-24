@@ -14,3 +14,7 @@ eval/.llm_cache.json
 .coverage
 .coverage.*
 htmlcov/
+
+# HyperFrames: рендеры и служебные снимки
+media/anim/renders/
+media/anim/.hyperframes/
