@@ -214,7 +214,12 @@ async def _onboarding_callback(cb: Callback, emp) -> None:
         await repo.add_consent(emp.id, "ai_analysis", p == "ob:ai_yes", T.CONSENT_TEXT_VERSION)
         emp.status = "active"
         _set_state(emp, None, onboarded=True)
-        await cb.replace(onboarding_done_text(emp), employee=emp)
+        # «Путь новичка»: знакомство — первая веха (фора на старте), строка и карточка в этом же сообщении
+        line = _path_line(emp, "intro")
+        text = onboarding_done_text(emp) + (f"\n\n{line}" if line else "")
+        await cb.replace(text, employee=emp)
+        if line:  # карточка — правкой этого же сообщения, когда загрузится
+            await _path_after(ctx, repo, emp, "intro", cb.mid, text)
         after = hooks.single("onboarded")
         if after is not None:
             await after(ctx, repo, emp)
@@ -224,6 +229,39 @@ async def _onboarding_callback(cb: Callback, emp) -> None:
     else:
         # знакомство уже пройдено (двойной тап): сообщение не трогаем, иначе старый снимок затрёт приветствие
         await cb.toast(T.ALREADY_DONE)
+
+
+def _path_line(emp, code: str) -> str | None:
+    """Строка о вехе (app/path). Модуль выключен или сломался — None."""
+    try:
+        from app.path import service as path
+
+        return path.line_for(emp, code)
+    except Exception:  # путь новичка не ломает знакомство
+        log.exception("Путь новичка: веха %s", code)
+        return None
+
+
+async def _path_after(ctx: BotCtx, repo, emp, code: str, mid: str | None, text: str) -> None:
+    """Карточка пути правкой уже показанного сообщения. Ошибки — в лог."""
+    try:
+        from app.path import service as path
+
+        await path.after_shown(repo, emp, code, sender=ctx.sender, mid=mid, text=text, atts=[],
+                               chat_id=emp.chat_id)
+    except Exception:
+        log.exception("Путь новичка: карточка вехи %s", code)
+
+
+def _path_hello(emp) -> str | None:
+    """«Пройдено N из 7 вех.» для приветствия на /start."""
+    try:
+        from app.path import service as path
+
+        return path.hello_line(path.path_state(emp)) if path.eligible(emp) else None
+    except Exception:
+        log.exception("Путь новичка: приветствие")
+        return None
 
 
 # --- привязка ---
@@ -408,7 +446,8 @@ async def _resume_bound(ctx: BotCtx, repo, user_id: int, chat_id: int | None, us
             emp.status = "active"
             await _say(ctx, repo, emp, T.tv(emp, T.WELCOME_BACK))
         else:
-            await _say(ctx, repo, emp, T.tv(emp, T.HELLO_AGAIN))
+            line = _path_hello(emp)
+            await _say(ctx, repo, emp, T.tv(emp, T.HELLO_AGAIN) + (f"\n\n{line}" if line else ""))
         return True
     staff = await repo.staff_by_user(user_id)
     if staff is not None:

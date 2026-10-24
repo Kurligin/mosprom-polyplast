@@ -338,6 +338,69 @@ def _atts(st: dict, mid: str | None, kb: list[dict]) -> list[dict]:
     return ([img] if img and mid and mid == st.get("img_mid") else []) + list(kb or [])
 
 
+# --- «Путь новичка»: веха в том же сообщении, где «спасибо» ------------------------------
+
+def _has_next_button(kb: list[dict] | None) -> bool:
+    """В клавиатуре есть «Дальше» / «Готово» (действие n): опрос ещё не показал своё «спасибо»."""
+    return any(str(b.get("payload") or "").split(":")[3:4] == ["n"]
+               for a in kb or [] if a.get("type") == "inline_keyboard"
+               for row in (a.get("payload") or {}).get("buttons") or [] for b in row)
+
+
+def _path_extra(emp, st: dict, kb: list[dict] | None) -> dict | None:
+    """Опрос пройден и это его последний вид («спасибо»): строка о вехе. Ждём текст или есть «Готово» — нет.
+
+    Строка одна и та же при любых ответах. Запоминаем в st["path"] вместе с карточкой, когда она встанет:
+    повторный показ того же «спасибо» не считает и не рисует заново.
+    """
+    if not st.get("done") or st.get("wait") or _has_next_button(kb):
+        return None
+    extra = st.get("path")
+    if isinstance(extra, dict):
+        return extra
+    try:
+        from app.path import service as path
+
+        line = path.line_for(emp, st["code"])
+    except Exception:  # путь новичка не ломает опрос
+        log.exception("Путь новичка: опрос %s", st.get("code"))
+        line = None
+    if line is None:
+        return None
+    st["path"] = {"line": line, "att": None}
+    return st["path"]
+
+
+def _with_path(extra: dict | None, text: str, atts: list[dict]) -> tuple[str, list[dict]]:
+    """Строка о вехе в конце текста; карточка, если уже загружена, вместо картинки шага."""
+    if not extra:
+        return text, atts
+    text = _join(text, extra.get("line"))
+    if extra.get("att"):
+        atts = [extra["att"], *(a for a in atts if a.get("type") != "image")]
+    return text, atts
+
+
+async def _path_after(repo, sender, emp, st: dict, extra: dict | None, mid: str | None, text: str,
+                      atts: list[dict]) -> None:
+    """«Спасибо» уже у новичка: дописываем карточку правкой того же сообщения, на последней вехе — HR-группе.
+
+    Карточка уже стоит (повторный показ) — только проверка HR (она сама не шлёт дважды).
+    """
+    if not extra:
+        return
+    try:
+        from app.path import service as path
+
+        att = await path.after_shown(repo, emp, st["code"], sender=sender, mid=mid, text=text, atts=atts,
+                                     chat_id=getattr(emp, "chat_id", None), with_card=not extra.get("att"))
+    except Exception:  # путь новичка не ломает опрос
+        log.exception("Путь новичка: карточка опроса %s", st.get("code"))
+        return
+    if att:
+        st["path"] = {**extra, "att": att}  # новый dict: JSONB заметит изменение
+
+
 # --- запуск ----------------------------------------------------------------------------
 
 async def start_survey(repo, emp, code: str, *, force: bool = False) -> str | None:
@@ -415,13 +478,19 @@ def reset(emp, code: str | None = None) -> None:
 # --- кнопки ----------------------------------------------------------------------------
 
 async def _show(cb, emp, st: dict, text: str, kb: list[dict]) -> None:
-    # режим ожидания текста — вместе с видом: «Продолжить опрос» вернёт и вопрос, и ожидание ответа
+    # режим ожидания текста — вместе с видом: «Продолжить опрос» вернёт и вопрос, и ожидание ответа.
+    # В виде — текст без строки о вехе: из него собираются следующие правки (_ack_prefix).
     st["view"] = {"text": text, "kb": kb, "wait": st.get("wait")}
     history = {}
     if st.get("_done_at"):
         history["done_at"] = st.pop("_done_at")
-    _save(emp, st, **history)
-    await cb.replace(text, _atts(st, cb.mid, kb), employee=emp)
+    # копия: ответ на кнопку и карточка делают flush, и правки st после него иначе не дошли бы до JSONB
+    _save(emp, dict(st), **history)
+    extra = _path_extra(emp, st, kb)  # done_at уже в истории: веха засчитана
+    shown, atts = _with_path(extra, text, _atts(st, cb.mid, kb))
+    await cb.replace(shown, atts, employee=emp)
+    await _path_after(cb.repo, getattr(cb.ctx, "sender", None), emp, st, extra, cb.mid, shown, atts)
+    _save(emp, st)
 
 
 async def handle_callback(cb, person) -> None:
@@ -687,12 +756,18 @@ async def handle_text(ctx, repo, emp, text: str, msg: dict) -> bool | None:
 
     # ответ Корсика из ТЗ остался выше в старом сообщении, здесь только подтверждение и следующий вопрос
     text_out, kb = _advance(emp, sv, st, prefix=ack)
-    mids = await ctx.sender.send(repo, text_out, chat_id=emp.chat_id, user_id=emp.max_user_id,
-                                 attachments=kb or None, employee=emp)
+    history = {"done_at": st.pop("_done_at")} if st.get("_done_at") else {}
+    # опрос пройден — в истории до подсчёта «Пути новичка». Копия: отправка ниже делает flush,
+    # и mid нового сообщения в том же объекте st иначе не дошёл бы до JSONB
+    _save(emp, dict(st), **history)
+    extra = _path_extra(emp, st, kb)
+    shown, atts = _with_path(extra, text_out, list(kb or []))
+    mids = await ctx.sender.send(repo, shown, chat_id=emp.chat_id, user_id=emp.max_user_id,
+                                 attachments=atts or None, employee=emp)
     st["mid"] = mids[-1] if mids else None
     st["view"] = {"text": text_out, "kb": kb, "wait": st.get("wait")}
-    history = {"done_at": st.pop("_done_at")} if st.get("_done_at") else {}
-    _save(emp, st, **history)
+    await _path_after(repo, ctx.sender, emp, st, extra, st["mid"], shown, atts)
+    _save(emp, st)
 
 
 # --- напоминания -----------------------------------------------------------------------
