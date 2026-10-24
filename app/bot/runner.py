@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from app.bot import runtime
@@ -133,5 +134,10 @@ async def run_bot() -> None:
         log.info("Бот остановлен")
         raise
     finally:
+        # голосовые в работе: даём доделать, иначе «Слушаю…» повиснет (маркер уже сохранён)
+        from app.bot import voice
+
+        with contextlib.suppress(BaseException):
+            await asyncio.wait_for(voice.drain(), timeout=15)
         runtime.set_ctx(None)
         await api.close()

@@ -43,6 +43,13 @@ _lock = threading.Lock()
 # Один поток: распознавания идут по очереди, модель занимает voice_threads ядер, а не все
 _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="voice")
 _tasks: set[asyncio.Task] = set()
+_broken = False      # пакет стоит, но не импортируется: голосовые как раньше
+_queued = 0          # голосовых ждут или идут в распознавании
+MAX_QUEUE = 3        # больше — сразу «напиши текстом», чтобы очередь не росла
+
+
+class VoiceBusy(Exception):
+    """Распознавания и так в очереди: это голосовое не берём."""
 
 
 class VoiceTooLong(Exception):
@@ -65,7 +72,8 @@ def available() -> bool:
 
 def is_voice(body: dict, text: str) -> bool:
     """Голосовое без текста, распознавание включено и есть чем. Иначе бот ведёт себя как раньше."""
-    return bool(settings.voice_enabled and not text and audio_attachment(body) and available())
+    return bool(settings.voice_enabled and not text and audio_attachment(body) and available()
+                and not _broken)
 
 
 # --- распознавание ------------------------------------------------------------------------
@@ -100,16 +108,24 @@ def warm_up_in_background() -> None:
         return
 
     def _run():
+        global _broken
         try:
             get_model()
+        except ImportError:  # пакет битый (av, ctranslate2): голосовые как раньше, а не «Не разобрал»
+            _broken = True
+            log.exception("faster-whisper не импортируется: голосовые не распознаются")
         except Exception:  # без модели голосовое получит «Не разобрал, напиши текстом»
             log.exception("Не удалось загрузить модель распознавания %s", settings.voice_model)
 
     threading.Thread(target=_run, name="voice-warmup", daemon=True).start()
 
 
-def transcribe_sync(data: bytes) -> str:
-    """Аудио (ogg/opus, mp3, m4a, wav: PyAV, системный ffmpeg не нужен) → текст. VoiceTooLong — дольше лимита."""
+def transcribe_sync(data: bytes, deadline: float | None = None) -> str:
+    """Аудио (ogg/opus, mp3, m4a, wav: PyAV, системный ffmpeg не нужен) → текст. VoiceTooLong — дольше лимита.
+
+    deadline (time.monotonic) уже прошёл, пока ждали поток, — не распознаём: ответ всё равно не дождались."""
+    if deadline is not None and time.monotonic() > deadline:
+        raise TimeoutError("голосовое ждало очереди дольше таймаута")
     from faster_whisper.audio import decode_audio
 
     audio = decode_audio(io.BytesIO(data), sampling_rate=SAMPLE_RATE)
@@ -123,8 +139,11 @@ def transcribe_sync(data: bytes) -> str:
 
 
 async def transcribe(data: bytes) -> str:
+    """Распознать в отдельном потоке с таймаутом VOICE_TIMEOUT. Поток не прервать, поэтому есть и дедлайн."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_pool, transcribe_sync, data)
+    deadline = time.monotonic() + settings.voice_timeout
+    fut = loop.run_in_executor(_pool, transcribe_sync, data, deadline)
+    return await asyncio.wait_for(fut, timeout=settings.voice_timeout)
 
 
 async def download(ctx, url: str) -> bytes:
@@ -188,27 +207,47 @@ async def drain() -> None:
 
 
 async def _recognize(ctx, url: str) -> str:
-    return await transcribe(await download(ctx, url))  # аудио живёт только в памяти этого вызова
+    """Скачать и распознать; аудио живёт только в памяти этого вызова."""
+    global _queued
+    if _queued >= MAX_QUEUE:
+        raise VoiceBusy(f"в очереди {_queued}")
+    _queued += 1
+    try:
+        data = await asyncio.wait_for(download(ctx, url), timeout=settings.voice_timeout)
+        return await transcribe(data)
+    finally:
+        _queued -= 1
+
+
+async def _edit(ctx, mid: str, text: str, chat_id) -> None:
+    """Правка «Слушаю…». Любая ошибка — в лог: фоновая задача не падает молча."""
+    try:
+        await ctx.sender.edit(mid, text, key=chat_id, fmt=None)
+    except Exception as e:  # noqa: BLE001 — сеть после повторов, клиент закрыт при остановке
+        log.warning("Не удалось поправить «Слушаю…» (%s): %s: %s", mid, type(e).__name__, e)
 
 
 async def handle(ctx, upd: dict, url: str, mid: str, chat_id, texts: dict[str, str]) -> None:
     """Фон: распознать, поправить «Слушаю…», отдать текст обычному маршруту. Ничего не роняет."""
     started = time.monotonic()
     try:
-        text = await asyncio.wait_for(_recognize(ctx, url), timeout=settings.voice_timeout)
+        text = await _recognize(ctx, url)
     except (VoiceTooLong, DownloadTooLarge) as e:
         log.info("Голосовое длиннее лимита: %s", e)
-        await ctx.sender.edit(mid, texts["too_long"], key=chat_id, fmt=None)
+        await _edit(ctx, mid, texts["too_long"], chat_id)
         return
-    except Exception as e:  # noqa: BLE001 — нет пакета, битый файл, сеть, таймаут
+    except asyncio.CancelledError:  # бот останавливается
+        await _edit(ctx, mid, texts["failed"], chat_id)
+        raise
+    except Exception as e:  # noqa: BLE001 — нет пакета, битый файл, сеть, таймаут, очередь
         log.warning("Голосовое не распознано: %s: %s", type(e).__name__, e)
-        await ctx.sender.edit(mid, texts["failed"], key=chat_id, fmt=None)
+        await _edit(ctx, mid, texts["failed"], chat_id)
         return
     if not text:
-        await ctx.sender.edit(mid, texts["failed"], key=chat_id, fmt=None)
+        await _edit(ctx, mid, texts["failed"], chat_id)
         return
     log.info("Голосовое распознано за %.1f с (%s символов)", time.monotonic() - started, len(text))
-    await ctx.sender.edit(mid, T.VOICE_HEARD.format(text=text), key=chat_id, fmt=None)
+    await _edit(ctx, mid, T.VOICE_HEARD.format(text=text), chat_id)
     try:
         await process_text(ctx, text_update(upd, text))
     except Exception:

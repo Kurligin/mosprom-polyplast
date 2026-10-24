@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import sys
+import time
 import types
 
 import httpx
@@ -43,6 +44,7 @@ def _quiet_import(name: str):
 
 
 signal_hooks = _quiet_import("app.signals.hooks")
+REAL_TRANSCRIBE = voice.transcribe
 
 
 def ev_voice(user_id: int = 100, chat_id: int = 500, text: str = "") -> dict:
@@ -165,11 +167,43 @@ async def test_empty_recognition_asks_for_text(world, stt):
 
 
 async def test_timeout_asks_for_text(world, stt, monkeypatch):
+    """Настоящий transcribe: поток распознавания «завис» дольше VOICE_TIMEOUT."""
+    monkeypatch.setattr(voice, "transcribe", REAL_TRANSCRIBE)
+    monkeypatch.setattr(voice, "transcribe_sync", lambda data, deadline=None: time.sleep(0.3) or "поздно")
     monkeypatch.setattr(settings, "voice_timeout", 0.05)
-    stt.gate = asyncio.Event()  # распознавание «зависло»
     mid = await _send_voice(world)
     assert world.api.text(mid) == BT.tv(world.emp, BT.VOICE_FAILED)
     assert not stt.processed
+
+
+async def test_queue_full_asks_for_text(world, stt, monkeypatch):
+    monkeypatch.setattr(voice, "_queued", voice.MAX_QUEUE)
+    mid = await _send_voice(world)
+    assert world.api.text(mid) == BT.tv(world.emp, BT.VOICE_FAILED)
+    assert not stt.downloads and not stt.processed
+
+
+async def test_edit_error_does_not_crash_task(world, stt, monkeypatch, caplog):
+    """Сеть легла и при правке «Слушаю…»: задача пишет в лог и не падает с необработанным исключением."""
+    stt.text = "Привет"
+
+    async def broken_edit(*a, **kw):
+        raise httpx.ConnectError("нет сети")
+
+    monkeypatch.setattr(world.ctx.sender, "edit", broken_edit)
+    await handle_update(world.ctx, world.repo, ev_voice())
+    task = next(iter(voice._tasks))
+    await voice.drain()
+    assert task.exception() is None
+    assert "Не удалось поправить" in caplog.text
+    assert stt.processed, "распознанный текст всё равно обработан"
+
+
+async def test_broken_package_behaves_as_before(world, stt, monkeypatch):
+    monkeypatch.setattr(voice, "_broken", True)
+    await handle_update(world.ctx, world.repo, ev_voice())
+    assert world.api.text(world.api.last(500)) == BT.tv(world.emp, BT.NON_TEXT)
+    assert not stt.downloads
 
 
 @pytest.mark.parametrize("error", [voice.VoiceTooLong("75 с"), DownloadTooLarge(20_000_000)])
@@ -227,6 +261,12 @@ def fake_whisper(monkeypatch):
 async def test_transcribe_sync_joins_segments(fake_whisper):
     assert voice.transcribe_sync(b"x") == "Привет, Корсик."
     assert fake_whisper.kw["language"] == "ru" and fake_whisper.kw["vad_filter"] is True
+
+
+async def test_transcribe_sync_skips_after_deadline(fake_whisper):
+    with pytest.raises(TimeoutError):
+        voice.transcribe_sync(b"x", deadline=time.monotonic() - 1)
+    assert fake_whisper.kw is None, "просроченное в очереди не распознаём"
 
 
 async def test_transcribe_sync_too_long(fake_whisper, monkeypatch):
