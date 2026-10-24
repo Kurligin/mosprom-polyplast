@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookOpen, Check, FileSpreadsheet, FileText, FileUp, Lock, MessageSquareText, Pencil, Presentation, Upload } from 'lucide-react'
+import { BookOpen, Check, FileSpreadsheet, FileText, FileUp, MessageSquareText, Pencil, Presentation, Upload } from 'lucide-react'
 import { api, toApiError } from '../api/client'
 import type { KbDocument } from '../api/types'
 import { Cell, Chip, Empty, ErrorState, Screen, Section, Segmented, SkeletonList, fmtNum, plural, useAsync, useToast } from '../components/ui'
@@ -30,10 +30,9 @@ function DocRow({ d, onConfirm, busy }: { d: KbDocument; onConfirm: () => void; 
             .filter(Boolean)
             .join(' · ')}
         </div>
-        {(d.trade_secret || sites.length > 0 || d.status === 'draft') && (
+        {(sites.length > 0 || d.status === 'draft') && (
           <div className="chips">
             {d.status === 'draft' && <Chip tone="warning">Черновик</Chip>}
-            {d.trade_secret && <Chip tone="danger" icon={<Lock />}>КТ</Chip>}
             {sites.map((c) => <Chip key={c}>{shortSiteName(c, name(c))}</Chip>)}
           </div>
         )}

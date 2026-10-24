@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, CheckCircle2, FileText, Lock } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, FileText } from 'lucide-react'
 import { api, toApiError, isDemoData } from '../api/client'
 import type { KbDocument, SiteCode } from '../api/types'
-import { Cell, FilePick, Progress, Screen, Section, Switch, fmtNum, plural, useAsync } from '../components/ui'
+import { Cell, FilePick, Progress, Screen, Section, fmtNum, plural, useAsync } from '../components/ui'
 import { haptic } from '../lib/bridge'
 import { useNav } from '../lib/nav'
 import { useSites } from '../lib/sites'
@@ -23,7 +23,6 @@ export default function UploadDoc() {
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
-  const [kt, setKt] = useState(false)
   const [picked, setPicked] = useState<SiteCode[]>([])
   const [phase, setPhase] = useState<Phase>({ kind: 'form' })
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +52,7 @@ export default function UploadDoc() {
     setPhase({ kind: 'sending', progress: 0 })
     try {
       const doc = await api.uploadDocument(
-        { file, title: title.trim() || baseName(file.name), is_kt: kt, site_codes: picked },
+        { file, title: title.trim() || baseName(file.name), is_kt: false, site_codes: picked },
         { demo, onProgress: (p) => setPhase({ kind: 'sending', progress: p }) },
       )
       haptic.success()
@@ -69,7 +68,6 @@ export default function UploadDoc() {
     setFile(null)
     setTitle('')
     setTitleTouched(false)
-    setKt(false)
     setPicked([])
     setPhase({ kind: 'form' })
   }
@@ -81,7 +79,7 @@ export default function UploadDoc() {
         <div className="result">
           <CheckCircle2 className="result-icon success" />
           <h1>Готово: {fmtNum(n)} {plural(n, ['фрагмент', 'фрагмента', 'фрагментов'])}</h1>
-          <p>«{phase.doc.title}» в базе. Бот уже отвечает по нему{phase.doc.trade_secret ? ', а в облачную нейросеть документ не уходит' : ''}.</p>
+          <p>«{phase.doc.title}» в базе. Бот уже отвечает по нему.</p>
         </div>
         <div className="stack-actions">
           <button className="btn" onClick={() => { haptic.tap(); nav.pop() }}>К базе</button>
@@ -121,13 +119,6 @@ export default function UploadDoc() {
       </Section>
       {fileError && <p className="inline-error"><AlertTriangle size={15} />{fileError}</p>}
 
-      <Section footer="Такой документ бот ищет и цитирует сам, без облачной нейросети. Подходит для положения о коммерческой тайне.">
-        <Cell
-          left={<span className="cell-icon" style={{ background: 'var(--danger)' }}><Lock /></span>}
-          title="Коммерческая тайна"
-          value={<Switch checked={kt} onChange={setKt} label="Коммерческая тайна" disabled={sending} />}
-        />
-      </Section>
 
       <Section header="Для каких площадок" footer="Если ничего не выбрать, документ работает для всех площадок.">
         <Cell
