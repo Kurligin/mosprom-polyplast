@@ -418,10 +418,10 @@
       color: #127535;
       opacity: 0;
     }
-    #r2 {
+    #r3 {
       border-left: 6px solid var(--red);
     }
-    #r2 .tk-title {
+    #r3 .tk-title {
       color: var(--red);
     }
     .press {
@@ -554,8 +554,428 @@
     #lb,
     #rd,
     #r1,
-    #r2 {
+    #r2,
+    #r3 {
       opacity: 0;
+    }
+      /* ---------- Дополнения v2 ---------- */
+    .scr {
+      position: absolute;
+      inset: 0;
+    }
+    #s-team,
+    #s-hrg,
+    #s-mgr,
+    #s-an {
+      opacity: 0;
+    }
+    .rlbl {
+      position: absolute;
+      left: 1020px;
+      top: 190px;
+    }
+    #rl2,
+    #rl3,
+    #rl4,
+    #rl5 {
+      opacity: 0;
+    }
+
+    /* Оффер с QR поверх чата новичка */
+    #offer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      background: #ffffff;
+      padding: 44px 44px;
+      color: var(--ink);
+    }
+    .of-top {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--blue-600);
+    }
+    .of-h {
+      margin-top: 18px;
+      font-family: "Exo 2", sans-serif;
+      font-size: 54px;
+      font-weight: 600;
+    }
+    .of-name {
+      margin-top: 12px;
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .of-row {
+      margin-top: 6px;
+      font-size: 28px;
+      color: var(--ink-2);
+    }
+    .of-qr-row {
+      margin-top: 34px;
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      padding: 26px;
+      border-radius: 28px;
+      background: #eef3f9;
+    }
+    .of-qr {
+      position: relative;
+      width: 230px;
+      height: 230px;
+      flex: none;
+      padding: 12px;
+      border-radius: 18px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+    .of-qr-in {
+      width: 100%;
+      height: 100%;
+    }
+    #scan {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 6px;
+      background: linear-gradient(90deg, transparent, #226aaf, transparent);
+      box-shadow: 0 0 18px rgba(34, 106, 175, 0.7);
+      opacity: 0;
+    }
+    .of-qr-txt {
+      font-size: 30px;
+      line-height: 1.35;
+    }
+    .of-qr-txt b {
+      color: var(--blue-700);
+    }
+
+    /* Панель HR: новый сотрудник */
+    .pbody {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 101px;
+      bottom: 0;
+      padding: 26px 32px;
+      background: #f3f6fa;
+      color: var(--ink);
+    }
+    .ptitle {
+      font-family: "Exo 2", sans-serif;
+      font-size: 40px;
+      font-weight: 600;
+    }
+    .frow {
+      margin-top: 18px;
+    }
+    .fl {
+      display: block;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink-2);
+      margin-bottom: 6px;
+    }
+    .fv {
+      height: 62px;
+      border-radius: 16px;
+      background: #ffffff;
+      border: 2px solid var(--line);
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 28px;
+    }
+    .fv .tw {
+      display: inline-block;
+    }
+    .seg {
+      display: flex;
+      gap: 8px;
+    }
+    .seg span {
+      flex: 1;
+      height: 58px;
+      border-radius: 16px;
+      background: #ffffff;
+      border: 2px solid var(--line);
+      display: grid;
+      place-items: center;
+      font-size: 26px;
+      font-weight: 600;
+    }
+    #nf-btn {
+      margin-top: 26px;
+      height: 70px;
+      border-radius: 20px;
+      background: var(--blue-600);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 30px;
+      font-weight: 700;
+    }
+    #nf-done {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 26px;
+      opacity: 0;
+    }
+    .done-h {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-family: "Exo 2", sans-serif;
+      font-size: 40px;
+      font-weight: 600;
+    }
+    .done-ok {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: #127535;
+      display: grid;
+      place-items: center;
+    }
+    .done-card {
+      margin-top: 22px;
+      display: flex;
+      gap: 26px;
+      align-items: center;
+      background: #ffffff;
+      border-radius: 26px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(11, 27, 63, 0.06);
+    }
+    .done-qr {
+      width: 210px;
+      height: 210px;
+      flex: none;
+    }
+    .done-txt p {
+      font-size: 27px;
+      line-height: 1.35;
+    }
+    .done-txt .lnk {
+      margin-top: 10px;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--blue-700);
+      word-break: break-all;
+    }
+    .done-st {
+      position: relative;
+      margin-top: 22px;
+      height: 56px;
+    }
+    .done-st span {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 56px;
+      padding: 0 22px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      font-size: 26px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #st-wait {
+      background: #fbefe2;
+      color: #a44a07;
+    }
+    #st-ok {
+      background: #e3f3e8;
+      color: #127535;
+      opacity: 0;
+    }
+
+    /* Сообщения, которые меняются на месте */
+    .mw {
+      position: relative;
+      align-self: stretch;
+      flex: none;
+    }
+    .ost {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      opacity: 0;
+    }
+    .ost .kbd {
+      margin-top: 0;
+    }
+    .kbd.col {
+      flex-direction: column;
+    }
+    .sys {
+      align-self: center;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--ink-2);
+      background: #dfe7f1;
+      border-radius: 999px;
+      padding: 7px 18px;
+    }
+
+    /* Аналитика руководителя HR */
+    .an {
+      position: absolute;
+      inset: 0;
+      background: #f3f6fa;
+      padding: 30px 30px;
+      color: var(--ink);
+    }
+    .an-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .an-title {
+      font-family: "Exo 2", sans-serif;
+      font-size: 46px;
+      font-weight: 600;
+    }
+    .an-demo {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink-2);
+      border: 2px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 14px;
+    }
+    .an-seg {
+      margin-top: 16px;
+      display: flex;
+      gap: 6px;
+      background: #e3e9f1;
+      border-radius: 16px;
+      padding: 5px;
+    }
+    .an-seg span {
+      flex: 1;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 600;
+      padding: 9px 0;
+      border-radius: 12px;
+    }
+    .an-seg span.on {
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(11, 27, 63, 0.1);
+    }
+    .an-tiles {
+      margin-top: 16px;
+      display: flex;
+      gap: 12px;
+    }
+    .an-tiles div {
+      flex: 1;
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 14px 18px;
+    }
+    .an-tiles b {
+      display: block;
+      font-size: 44px;
+      line-height: 1.1;
+    }
+    .an-tiles b.red {
+      color: var(--red);
+    }
+    .an-tiles b.amb {
+      color: #a44a07;
+    }
+    .an-tiles span {
+      font-size: 22px;
+      color: var(--ink-2);
+    }
+    .an-sec {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--ink-2);
+    }
+    .an-sec i {
+      display: block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .an-list {
+      margin-top: 10px;
+      background: #ffffff;
+      border-radius: 22px;
+      overflow: hidden;
+    }
+    .an-row {
+      display: flex;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid #e6ecf3;
+    }
+    .an-ava {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #e6ecf3;
+      display: grid;
+      place-items: center;
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--ink-2);
+      flex: none;
+    }
+    .an-row b {
+      display: block;
+      font-size: 27px;
+    }
+    .an-meta {
+      display: block;
+      font-size: 22px;
+      color: var(--ink-2);
+    }
+    .an-row ul {
+      list-style: none;
+      margin-top: 4px;
+    }
+    .an-row li {
+      font-size: 23px;
+      line-height: 1.35;
+      padding-left: 20px;
+      position: relative;
+    }
+    .an-row li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 11px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #d97706;
+    }
+    .an-row li.r::before {
+      background: var(--red);
+    }
+    #an1 {
+      background: #eef5fd;
     }
   </style>
 
@@ -563,19 +983,29 @@
     <div id="d-bg"></div>
 
     <p id="d-kicker">Корсик 2.0 · как это работает</p>
-    <h2 class="cap" id="c0"><span class="w">Первая</span> <span class="w">неделя</span> <span class="w">Ивана</span> <span class="w hl">глазами</span> <span class="w hl">новичка</span> <span class="w hl">и</span> <span class="w hl">HR</span></h2>
+    <h2 class="cap" id="c0"><span class="w">Путь</span> <span class="w">Ивана:</span> <span class="w">слева</span> <span class="w">новичок,</span> <span class="w">справа</span> <span class="w hl">HR</span> <span class="w hl">и</span> <span class="w hl">руководители</span></h2>
+    <h2 class="cap" id="cA"><span class="w">HR</span> <span class="w">заводит</span> <span class="w">новичка,</span> <span class="w hl">ссылка</span> <span class="w hl">и</span> <span class="w hl">QR</span> <span class="w">уходят</span> <span class="w">в</span> <span class="w">оффер</span></h2>
+    <h2 class="cap" id="cB"><span class="w">Знакомство</span> <span class="w hl">одним</span> <span class="w hl">сообщением:</span> <span class="w">ты</span> <span class="w">или</span> <span class="w">вы</span> <span class="w">и</span> <span class="w">согласия</span></h2>
     <h2 class="cap" id="c1"><span class="w">Шаги</span> <span class="w">адаптации</span> <span class="w">приходят</span> <span class="w hl">сами,</span> <span class="w hl">по</span> <span class="w hl">расписанию</span></h2>
+    <h2 class="cap" id="cT"><span class="w">В</span> <span class="w">первый</span> <span class="w">день</span> <span class="w">бот</span> <span class="w hl">сам</span> <span class="w hl">добавляет</span> <span class="w">новичка</span> <span class="w">в</span> <span class="w">чаты</span> <span class="w">команды</span></h2>
     <h2 class="cap" id="c2"><span class="w">Свой</span> <span class="w">вопрос:</span> <span class="w">ответ</span> <span class="w hl">пунктом</span> <span class="w hl">документа,</span> <span class="w">без</span> <span class="w">HR</span></h2>
     <h2 class="cap" id="c3"><span class="w">Ответа</span> <span class="w">нет</span> <span class="w">в</span> <span class="w">документах:</span> <span class="w">вопрос</span> <span class="w hl">сразу</span> <span class="w hl">у</span> <span class="w hl">HR</span></h2>
     <h2 class="cap" id="c3b"><span class="w">HR</span> <span class="w">отвечает</span> <span class="w">из</span> <span class="w">панели,</span> <span class="w">ответ</span> <span class="w hl">попадает</span> <span class="w hl">в</span> <span class="w hl">базу</span></h2>
+    <h2 class="cap" id="c7"><span class="w">Личный</span> <span class="w">вопрос</span> <span class="w">уходит</span> <span class="w">HR</span> <span class="w hl">сразу</span> <span class="w hl">и</span> <span class="w hl">без</span> <span class="w hl">ИИ</span></h2>
+    <h2 class="cap" id="cS"><span class="w">Опрос</span> <span class="w">на</span> <span class="w">третий</span> <span class="w">день,</span> <span class="w">руководителю</span> <span class="w hl">напоминание</span> <span class="w hl">о</span> <span class="w hl">встрече</span></h2>
     <h2 class="cap" id="c4"><span class="w">Тревожный</span> <span class="w">сигнал:</span> <span class="w">HR</span> <span class="w">узнаёт</span> <span class="w hl">за</span> <span class="w hl">секунды</span></h2>
     <h2 class="cap" id="c5"><span class="w">Следующему</span> <span class="w">новичку</span> <span class="w">Корсик</span> <span class="w hl">отвечает</span> <span class="w hl">сам</span></h2>
+    <h2 class="cap" id="cH"><span class="w">Руководитель</span> <span class="w">HR</span> <span class="w">видит</span> <span class="w hl">зоны</span> <span class="w hl">риска</span> <span class="w">с</span> <span class="w">причинами</span></h2>
     <h2 class="cap" id="c6"><span class="w">HR</span> <span class="w">подключается,</span> <span class="w">только</span> <span class="w">когда</span> <span class="w hl">нужен</span> <span class="w hl">человек</span></h2>
 
     <p class="who-lbl" id="lbl-l"><i></i>Новичок · Иван, оператор на GTP</p>
-    <p class="who-lbl" id="lbl-r"><i></i>HR · Ольга, HR-группа в «МАКС»</p>
+    <p class="who-lbl rlbl" id="rl1"><i></i>HR · Ольга, панель в «МАКС»</p>
+    <p class="who-lbl rlbl" id="rl2"><i></i>Чат команды GTP в «МАКС»</p>
+    <p class="who-lbl rlbl" id="rl3"><i></i>HR · Ольга, HR-группа в «МАКС»</p>
+    <p class="who-lbl rlbl" id="rl4"><i></i>Руководитель · Сергей, мастер участка</p>
+    <p class="who-lbl rlbl" id="rl5"><i></i>Руководитель HR · аналитика в панели</p>
 
-    <!-- Слева: чат новичка с Корсиком -->
+    <!-- Слева: новичок -->
     <div class="win" id="lw">
       <div class="win-in" id="lw-in">
         <div class="head" data-layout-allow-occlusion>
@@ -587,10 +1017,18 @@
         </div>
         <div class="viewport" data-layout-allow-overflow>
           <div class="feed" id="la">
+            <div class="mw" id="lo">
+              <div class="ost"><div class="b bot">Привет, Иван! 🐾 Я Корсик. Буду рядом первые три месяца и помогу освоиться в Группе ПОЛИПЛАСТИК. Как мы будем общаться?</div><div class="kbd"><span class="press" id="o1b">На ТЫ</span><span>На ВЫ</span></div></div>
+              <div class="ost"><div class="b bot">Чтобы я мог писать тебе по плану адаптации и иногда спрашивать, как дела, нужно твоё согласие.</div><div class="kbd"><span class="press" id="o2b">Даю согласие</span><span>Подробнее</span></div></div>
+              <div class="ost"><div class="b bot">И ещё. Можно я буду разбирать твои ответы в опросах с помощью ИИ? Так HR быстрее заметит, если что-то пошло не так.</div><div class="kbd"><span class="press" id="o3b">Можно</span><span>Не надо</span></div></div>
+              <div class="ost"><div class="b bot">Очень приятно с тобой познакомиться, Иван! В течение первых трех месяцев я буду сопровождать тебя в пути. Если появится вопрос, просто напиши его сюда.</div></div>
+            </div>
             <div class="date" id="ld1">Понедельник · первый рабочий день</div>
             <div class="b bot" id="l1">Поздравляю с первым рабочим днем, Иван! 🥳 Уверен, что ты будешь отлично справляться со своими задачами.</div>
             <div class="b bot" id="l2">Наша территория довольно большая, но я помогу тебе в ней разобраться! Хочешь, я покажу подробную карту?</div>
             <div class="kbd" id="l2k"><span>Покажи карту</span></div>
+            <div class="b bot" id="lt">Вот чаты твоей команды. В чат «Команда GTP» я тебя уже добавил, а сюда сам не смог: так настроена приватность в «МАКС». Вступи по кнопке ниже, там коллеги и все новости.</div>
+            <div class="kbd" id="ltk"><span>Общий чат ПОЛИПЛАСТИК</span></div>
             <div class="b me" id="l3">Когда зарплата?</div>
             <div class="slot">
               <div class="b bot typing" id="l4t"><i></i><i></i><i></i></div>
@@ -603,7 +1041,17 @@
               <div class="b bot" id="l6">Честно, не знаю. В документах ответа не нашёл, поэтому передал вопрос HR. Ответ придёт сюда.</div>
             </div>
             <div class="b bot" id="l7"><span class="sign">Ольга (HR)</span>На территорию завода с животными нельзя, это правило охраны.</div>
+            <div class="date" id="ld2">Вторник · второй день</div>
+            <div class="b me" id="l11">Мне не начислили сверхурочные за субботу</div>
+            <div class="slot">
+              <div class="b bot typing" id="l12t"><i></i><i></i><i></i></div>
+              <div class="b bot" id="l12">Это личный вопрос, его лучше решить с HR. Я уже передал, ответ придёт сюда. Вопрос увидит только HR.</div>
+            </div>
             <div class="date" id="ld3">Среда · третий день</div>
+            <div class="mw" id="lsv">
+              <div class="ost"><div class="b bot">Вопрос 3 из 3<br />Понятны ли тебе задачи на испытательный срок?</div><div class="kbd col"><span>Да, все понятно!</span><span>Жду разъяснений от руководителя</span><span class="press" id="sv1b">Пока ничего не понял</span></div></div>
+              <div class="ost"><div class="b bot">Понимание своих задач на испытательном сроке - ключевой элемент его успешного прохождения. Если нет четкого представления, в чем будет заключаться твоя работа, лучше всего обсудить этот вопрос с руководителем.</div><div class="kbd col"><span>Передать проблему в отдел персонала</span><span>Связаться с рекрутером</span></div></div>
+            </div>
             <div class="b me" id="l8">Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка</div>
             <div class="slot">
               <div class="b bot typing" id="l9t"><i></i><i></i><i></i></div>
@@ -624,58 +1072,137 @@
         <div class="inputbar" data-layout-allow-occlusion>
           <div class="field">
             <span class="ph" id="ib-ph">Сообщение</span>
-            <span class="ibtext" id="ibt"><span class="ibm" id="ibm1"></span><span class="ibm" id="ibm2"></span><span class="ibm" id="ibm3"></span><span class="ibm" id="ibm4"></span><span id="ib-caret"></span></span>
+            <span class="ibtext" id="ibt"><span class="ibm" id="ibm1"></span><span class="ibm" id="ibm2"></span><span class="ibm" id="ibm5"></span><span class="ibm" id="ibm3"></span><span class="ibm" id="ibm4"></span><span id="ib-caret"></span></span>
           </div>
           <div class="send" id="ib-send">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg>
             <div id="ib-send-on"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
           </div>
         </div>
+
+        <div id="offer" data-layout-allow-occlusion>
+          <p class="of-top">Письмо · Группа ПОЛИПЛАСТИК</p>
+          <p class="of-h">Ждём вас на работе!</p>
+          <p class="of-name">Смирнов Иван</p>
+          <p class="of-row">Оператор производства · площадка GTP</p>
+          <p class="of-row">Первый рабочий день: пн, 9 ноября, 8:00</p>
+          <div class="of-qr-row">
+            <div class="of-qr"><div class="of-qr-in" id="of-qr"><svg style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h29v29H0z"/><path stroke="#0b1b3f" d="M0 0.5h7m1 0h1m3 0h4m2 0h2m2 0h7M0 1.5h1m5 0h1m1 0h2m1 0h1m1 0h1m2 0h2m1 0h1m2 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m2 0h1m6 0h1m2 0h1m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h2m1 0h2m3 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m2 0h4m1 0h1m1 0h2m2 0h1m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m2 0h2m1 0h2m1 0h3m4 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h2m2 0h1m2 0h2M0 8.5h1m1 0h2m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m2 0h1m2 0h1m1 0h2M0 9.5h1m4 0h1m2 0h2m1 0h1m1 0h3m1 0h1m4 0h3m3 0h1M0 10.5h1m1 0h1m2 0h3m2 0h1m1 0h2m2 0h1m2 0h1m3 0h2m1 0h2M0 11.5h1m1 0h4m1 0h1m1 0h1m6 0h1m1 0h1m4 0h2m3 0h1M0 12.5h3m1 0h5m3 0h1m1 0h2m2 0h1m1 0h1m4 0h2M2 13.5h1m2 0h1m2 0h1m1 0h2m2 0h1m1 0h3m1 0h4m2 0h3M2 14.5h1m1 0h3m1 0h2m3 0h1m1 0h3m3 0h2m3 0h3M0 15.5h2m2 0h1m4 0h2m1 0h1m1 0h1m1 0h1m10 0h1M0 16.5h7m1 0h1m2 0h2m1 0h3m1 0h1m1 0h1m3 0h2m1 0h1M2 17.5h1m1 0h1m3 0h2m2 0h1m1 0h1m1 0h3m4 0h1m1 0h3M0 18.5h1m1 0h3m1 0h2m2 0h2m1 0h6m3 0h3m1 0h1M7 19.5h2m3 0h3m3 0h1m1 0h4m2 0h1M1 20.5h4m1 0h2m1 0h2m2 0h2m1 0h2m1 0h8M8 21.5h2m5 0h2m1 0h3m3 0h5M0 22.5h7m1 0h1m1 0h3m1 0h2m1 0h1m2 0h1m1 0h1m1 0h2m1 0h1M0 23.5h1m5 0h1m1 0h3m2 0h3m3 0h2m3 0h2m1 0h2M0 24.5h1m1 0h3m1 0h1m2 0h4m3 0h1m1 0h1m1 0h5m1 0h2M0 25.5h1m1 0h3m1 0h1m1 0h1m2 0h2m6 0h3m1 0h3m1 0h1M0 26.5h1m1 0h3m1 0h1m1 0h1m1 0h2m1 0h2m2 0h2m2 0h1m1 0h1m2 0h1m1 0h1M0 27.5h1m5 0h1m2 0h3m1 0h1m1 0h1m1 0h2m1 0h2m1 0h3m1 0h1M0 28.5h7m1 0h1m1 0h4m3 0h6m1 0h1m2 0h1"/></svg></div><div id="scan"></div></div>
+            <p class="of-qr-txt">Отсканируйте QR в «МАКС»: <b>Корсик</b> поможет освоиться с первого дня</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Справа: HR-группа в «МАКС» и панель поверх неё -->
+    <!-- Справа: HR, чат команды, руководитель, аналитика -->
     <div class="win" id="rw">
       <div class="win-in" id="rw-in">
-        <div class="head" data-layout-allow-occlusion>
-          <div class="ava grp"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></div>
-          <div class="hwho">
-            <b>HR-группа ПОЛИПЛАСТИК</b>
-            <div class="status"><span class="st-a">Корсик и 3 сотрудника HR</span></div>
+
+        <div class="scr" id="s-new">
+          <div class="head" data-layout-allow-occlusion>
+            <div class="ava grp"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg></div>
+            <div class="hwho"><b>Панель HR</b><div class="status"><span class="st-a">Новый сотрудник</span></div></div>
           </div>
-        </div>
-        <div class="viewport" data-layout-allow-overflow>
-          <div class="feed" id="ra">
-            <div class="b bot" id="r0"><span class="sender">Корсик</span>Готово, теперь это HR-группа 🐾 Буду присылать сюда обращения и тревожные сигналы новичков.</div>
-            <div class="date" id="rd">Сегодня</div>
-            <div class="b bot card" id="r1"><span class="sender">Корсик</span><span class="tk-title">Новое обращение #4: бот не нашёл ответ</span><span class="tk-meta">Смирнов Иван · GTP · день 1</span><span class="tk-q">«Можно ли приходить с собакой?»</span><span class="tk-st"><span class="new" id="r1-new">Открыто</span><span class="work" id="r1-work">В работе: Петрова О.</span></span></div>
-            <div class="kbd" id="r1k"><span class="press" id="r1-open">Открыть в Mini App</span><span>Взять себе</span></div>
-            <div class="b bot card" id="r2"><span class="sender">Корсик</span><span class="tk-title">🔴 Красный флаг, обращение #5: травля и давление</span><span class="tk-meta">Смирнов Иван · GTP · день 3</span><span class="tk-q">«Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка»</span><span class="tk-st"><span class="new" id="r2-new">Видит только HR</span><span class="work" id="r2-work">В работе: Петрова О.</span></span></div>
-            <div class="kbd" id="r2k"><span>Открыть в Mini App</span><span class="press" id="r2-take">Взять себе</span></div>
+          <div class="pbody">
+            <div id="nf-form">
+              <p class="ptitle">Новый сотрудник</p>
+              <div class="frow"><span class="fl">ФИО</span><div class="fv"><span class="tw">Смирнов</span><span class="tw">Иван</span></div></div>
+              <div class="frow"><span class="fl">Должность</span><div class="fv"><span class="tw">Оператор</span><span class="tw">производства</span></div></div>
+              <div class="frow"><span class="fl">Площадка</span><div class="seg"><span>GrPP</span><span id="seg-gtp">GTP</span><span>Лужники</span></div></div>
+              <div class="frow"><span class="fl">Первый рабочий день</span><div class="fv"><span class="tw">пн,</span><span class="tw">9</span><span class="tw">ноября</span></div></div>
+              <div id="nf-btn">Завести новичка</div>
+            </div>
+            <div id="nf-done">
+              <p class="done-h"><span class="done-ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg></span>Иван заведён</p>
+              <div class="done-card">
+                <div class="done-qr"><svg style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h29v29H0z"/><path stroke="#0b1b3f" d="M0 0.5h7m1 0h1m3 0h4m2 0h2m2 0h7M0 1.5h1m5 0h1m1 0h2m1 0h1m1 0h1m2 0h2m1 0h1m2 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m2 0h1m6 0h1m2 0h1m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h2m1 0h2m3 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m2 0h4m1 0h1m1 0h2m2 0h1m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m2 0h2m1 0h2m1 0h3m4 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h2m2 0h1m2 0h2M0 8.5h1m1 0h2m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m2 0h1m2 0h1m1 0h2M0 9.5h1m4 0h1m2 0h2m1 0h1m1 0h3m1 0h1m4 0h3m3 0h1M0 10.5h1m1 0h1m2 0h3m2 0h1m1 0h2m2 0h1m2 0h1m3 0h2m1 0h2M0 11.5h1m1 0h4m1 0h1m1 0h1m6 0h1m1 0h1m4 0h2m3 0h1M0 12.5h3m1 0h5m3 0h1m1 0h2m2 0h1m1 0h1m4 0h2M2 13.5h1m2 0h1m2 0h1m1 0h2m2 0h1m1 0h3m1 0h4m2 0h3M2 14.5h1m1 0h3m1 0h2m3 0h1m1 0h3m3 0h2m3 0h3M0 15.5h2m2 0h1m4 0h2m1 0h1m1 0h1m1 0h1m10 0h1M0 16.5h7m1 0h1m2 0h2m1 0h3m1 0h1m1 0h1m3 0h2m1 0h1M2 17.5h1m1 0h1m3 0h2m2 0h1m1 0h1m1 0h3m4 0h1m1 0h3M0 18.5h1m1 0h3m1 0h2m2 0h2m1 0h6m3 0h3m1 0h1M7 19.5h2m3 0h3m3 0h1m1 0h4m2 0h1M1 20.5h4m1 0h2m1 0h2m2 0h2m1 0h2m1 0h8M8 21.5h2m5 0h2m1 0h3m3 0h5M0 22.5h7m1 0h1m1 0h3m1 0h2m1 0h1m2 0h1m1 0h1m1 0h2m1 0h1M0 23.5h1m5 0h1m1 0h3m2 0h3m3 0h2m3 0h2m1 0h2M0 24.5h1m1 0h3m1 0h1m2 0h4m3 0h1m1 0h1m1 0h5m1 0h2M0 25.5h1m1 0h3m1 0h1m1 0h1m2 0h2m6 0h3m1 0h3m1 0h1M0 26.5h1m1 0h3m1 0h1m1 0h1m1 0h2m1 0h2m2 0h2m2 0h1m1 0h1m2 0h1m1 0h1M0 27.5h1m5 0h1m2 0h3m1 0h1m1 0h1m1 0h2m1 0h2m1 0h3m1 0h1M0 28.5h7m1 0h1m1 0h4m3 0h6m1 0h1m2 0h1"/></svg></div>
+                <div class="done-txt"><p>Ссылка и QR для оффера: Иван откроет бота в «МАКС» одним касанием.</p><p class="lnk">max.ru/se14753003_bot?start=GTP7Q4K</p></div>
+              </div>
+              <div class="done-st"><span id="st-wait">Ждём подключения</span><span id="st-ok">Иван подключился к боту</span></div>
+            </div>
           </div>
-        </div>
-        <div class="inputbar" data-layout-allow-occlusion>
-          <div class="field"><span class="ph">Сообщение</span></div>
-          <div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
         </div>
 
-        <div id="sheet-scrim" data-layout-allow-occlusion></div>
-        <div id="sheet" data-layout-allow-occlusion data-layout-allow-overflow>
-          <div class="grab"></div>
-          <div class="sh-top"><span class="chip">Панель HR</span><span>Обращение #4</span></div>
-          <p class="sh-title">Бот не нашёл ответ</p>
-          <p class="sh-meta">Смирнов Иван · GTP · день 1</p>
-          <div class="sh-q">Можно ли приходить с собакой?</div>
-          <div class="sh-reply">
-            <div class="sh-input"><span class="tw">На</span> <span class="tw">территорию</span> <span class="tw">завода</span> <span class="tw">с</span> <span class="tw">животными</span> <span class="tw">нельзя,</span> <span class="tw">это</span> <span class="tw">правило</span> <span class="tw">охраны.</span></div>
-            <div id="sh-send"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
+        <div class="scr" id="s-team">
+          <div class="head" data-layout-allow-occlusion>
+            <div class="ava grp"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></div>
+            <div class="hwho"><b>Команда GTP</b><div class="status"><span class="st-a">23 участника</span></div></div>
           </div>
-          <div class="sh-kb">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#545f72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" /><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" /></svg>
-            <span class="t">Добавить ответ в базу</span>
-            <div id="sh-track"><div id="sh-track-on"></div><div id="sh-knob"></div></div>
+          <div class="viewport" data-layout-allow-overflow>
+            <div class="feed" id="ta">
+              <div class="b bot" id="t0"><span class="sender">Алексей, мастер смены</span>Завтра в 8:00 планёрка у участка нарезки.</div>
+              <div class="sys" id="t1">Корсик добавил Ивана Смирнова</div>
+              <div class="b bot" id="t2"><span class="sender">Алексей, мастер смены</span>Добро пожаловать, Иван! Завтра покажу участок 👋</div>
+            </div>
+          </div>
+          <div class="inputbar" data-layout-allow-occlusion><div class="field"><span class="ph">Сообщение</span></div><div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div></div>
+        </div>
+
+        <div class="scr" id="s-hrg">
+          <div class="head" data-layout-allow-occlusion>
+            <div class="ava grp"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></div>
+            <div class="hwho"><b>HR-группа ПОЛИПЛАСТИК</b><div class="status"><span class="st-a">Корсик и 3 сотрудника HR</span></div></div>
+          </div>
+          <div class="viewport" data-layout-allow-overflow>
+            <div class="feed" id="ra">
+              <div class="b bot" id="r0"><span class="sender">Корсик</span>Готово, теперь это HR-группа 🐾 Буду присылать сюда обращения и тревожные сигналы новичков.</div>
+              <div class="date" id="rd">Сегодня</div>
+              <div class="b bot card" id="r1"><span class="sender">Корсик</span><span class="tk-title">Новое обращение #4: бот не нашёл ответ</span><span class="tk-meta">Смирнов Иван · GTP · день 1</span><span class="tk-q">«Можно ли приходить с собакой?»</span><span class="tk-st"><span class="new" id="r1-new">Открыто</span><span class="work" id="r1-work">В работе: Петрова О.</span></span></div>
+              <div class="kbd" id="r1k"><span class="press" id="r1-open">Открыть в Mini App</span><span>Взять себе</span></div>
+              <div class="b bot card" id="r2"><span class="sender">Корсик</span><span class="tk-title">Новое обращение #5: личный вопрос</span><span class="tk-meta">Смирнов Иван · GTP · день 2 · без ИИ</span><span class="tk-q">«Мне не начислили сверхурочные за субботу»</span><span class="tk-st"><span class="new">Открыто</span></span></div>
+              <div class="kbd" id="r2k"><span>Открыть в Mini App</span><span>Взять себе</span></div>
+              <div class="b bot card" id="r3"><span class="sender">Корсик</span><span class="tk-title">🔴 Красный флаг, обращение #6: травля и давление</span><span class="tk-meta">Смирнов Иван · GTP · день 3</span><span class="tk-q">«Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка»</span><span class="tk-st"><span class="new" id="r3-new">Видит только HR</span><span class="work" id="r3-work">В работе: Петрова О.</span></span></div>
+              <div class="kbd" id="r3k"><span>Открыть в Mini App</span><span class="press" id="r3-take">Взять себе</span></div>
+            </div>
+          </div>
+          <div class="inputbar" data-layout-allow-occlusion><div class="field"><span class="ph">Сообщение</span></div><div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div></div>
+
+          <div id="sheet-scrim" data-layout-allow-occlusion></div>
+          <div id="sheet" data-layout-allow-occlusion data-layout-allow-overflow>
+            <div class="grab"></div>
+            <div class="sh-top"><span class="chip">Панель HR</span><span>Обращение #4</span></div>
+            <p class="sh-title">Бот не нашёл ответ</p>
+            <p class="sh-meta">Смирнов Иван · GTP · день 1</p>
+            <div class="sh-q">Можно ли приходить с собакой?</div>
+            <div class="sh-reply">
+              <div class="sh-input"><span class="tw">На</span> <span class="tw">территорию</span> <span class="tw">завода</span> <span class="tw">с</span> <span class="tw">животными</span> <span class="tw">нельзя,</span> <span class="tw">это</span> <span class="tw">правило</span> <span class="tw">охраны.</span></div>
+              <div id="sh-send"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
+            </div>
+            <div class="sh-kb"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#545f72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" /><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" /></svg><span class="t">Добавить ответ в базу</span><div id="sh-track"><div id="sh-track-on"></div><div id="sh-knob"></div></div></div>
           </div>
         </div>
+
+        <div class="scr" id="s-mgr">
+          <div class="head" data-layout-allow-occlusion>
+            <div class="ava"><svg width="32" height="32" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><circle cx="6" cy="9" r="2.2" /><circle cx="10" cy="5.2" r="2.2" /><circle cx="14" cy="5.2" r="2.2" /><circle cx="18" cy="9" r="2.2" /><path d="M12 10.5c-3 0-6 3.6-6 6.2 0 1.8 1.3 2.6 3 2.6 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-.8 3-2.6 0-2.6-3-6.2-6-6.2z" /></svg></div>
+            <div class="hwho"><b>Корсик</b><div class="status"><span class="st-a">бот · Группа ПОЛИПЛАСТИК</span></div></div>
+          </div>
+          <div class="viewport" data-layout-allow-overflow>
+            <div class="feed" id="ma">
+              <div class="date" id="md">Среда</div>
+              <div class="mw" id="mw">
+                <div class="ost"><div class="b bot"><b>Иван Смирнов</b> работает у нас третий день. Найдите 15 минут на встречу: как прошли первые дни, понятны ли задачи, всё ли есть для работы.</div><div class="kbd"><span class="press" id="m1b">Провёл</span></div></div>
+                <div class="ost"><div class="b bot">Встреча проведена ✓<br /><b>Иван Смирнов</b>, первые дни в компании. Спасибо, что нашли время!</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="inputbar" data-layout-allow-occlusion><div class="field"><span class="ph">Сообщение</span></div><div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div></div>
+        </div>
+
+        <div class="scr" id="s-an">
+          <div class="an">
+            <div class="an-top"><span class="an-title">Аналитика</span><span class="an-demo">демо-данные</span></div>
+            <div class="an-seg"><span class="on">Все</span><span>GTP</span><span>GrPP</span><span>Лужники</span></div>
+            <div class="an-tiles"><div><b>29</b><span>в адаптации</span></div><div><b class="red">7</b><span>высокий риск</span></div><div><b class="amb">10</b><span>средний риск</span></div></div>
+            <p class="an-sec"><i></i>Высокий риск</p>
+            <div class="an-list">
+              <div class="an-row" id="an1"><div class="an-ava">СИ</div><div><b>Смирнов Иван</b><span class="an-meta">GTP · день 3 · Оператор производства</span><ul><li class="r">2 красных сигнала: угрозы, безопасность</li><li>Жёлтый сигнал: понимание задач</li></ul></div></div>
+              <div class="an-row" id="an2"><div class="an-ava">ПС</div><div><b>Пробникова Синтия</b><span class="an-meta">Лужники · день 40 · Бухгалтер</span><ul><li class="r">Думает об уходе: сообщение 9 дней назад</li><li>Нет ответа HR 2 дня</li></ul></div></div>
+              <div class="an-row" id="an3"><div class="an-ava">ОД</div><div><b>Образцов Демьян</b><span class="an-meta">GTP · день 90 · Оператор экструдера</span><ul><li class="r">Оценка упала с 9 до 5</li></ul></div></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -685,6 +1212,7 @@
     const MSG = {
       1: "Когда зарплата?",
       2: "Можно ли приходить с собакой?",
+      5: "Мне не начислили сверхурочные за субботу",
       3: "Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка",
       4: "А с собакой на завод можно?",
     };
@@ -711,27 +1239,53 @@
         }
         return y + el.offsetHeight;
       }
-      const VH = { la: $("#la").parentElement.clientHeight, lb: $("#lb").parentElement.clientHeight, ra: $("#ra").parentElement.clientHeight };
-      const T = {};
+
+      // Сообщения, которые меняются на месте: высота каждого состояния
+      const M = {};
+      for (const id of ["lo", "lsv", "mw"]) {
+        const w = $("#" + id);
+        const sts = Array.from(w.querySelectorAll(":scope > .ost"));
+        const h = sts.map((s) => s.offsetHeight);
+        w.style.height = h[h.length - 1] + "px";
+        M[id] = { w, sts, h };
+      }
+
+      const FEEDS = ["la", "lb", "ta", "ra", "ma"];
+      const VH = {};
+      for (const f of FEEDS) VH[f] = $("#" + f).parentElement.clientHeight;
       const feedOf = {};
-      for (const id of ["ld1", "l1", "l2k", "l3", "l4t", "l4k", "l5", "l6t", "l6", "l7", "ld3", "l8", "l9t", "l9", "l10"]) feedOf[id] = "la";
-      for (const id of ["lb1", "lb2t", "lb2k"]) feedOf[id] = "lb";
-      for (const id of ["r0", "r1k", "r2k"]) feedOf[id] = "ra";
-      for (const id of Object.keys(feedOf)) {
+      const put = (f, ids) => ids.forEach((id) => (feedOf[id] = f));
+      put("la", ["lo", "ld1", "l1", "l2k", "ltk", "l3", "l4t", "l4k", "l5", "l6t", "l6", "l7", "ld2", "l11", "l12t", "l12", "ld3", "lsv", "l8", "l9t", "l9", "l10"]);
+      put("lb", ["lb1", "lb2t", "lb2k"]);
+      put("ta", ["t0", "t1", "t2"]);
+      put("ra", ["r0", "r1k", "r2k", "r3k"]);
+      put("ma", ["md", "mw"]);
+      const T = {};
+      for (const id of Object.keys(feedOf)) T[id] = VH[feedOf[id]] - PAD - bottomIn($("#" + feedOf[id]), $("#" + id));
+      // положение ленты для каждого состояния меняющегося сообщения
+      function yState(id, k) {
+        const m = M[id];
         const f = feedOf[id];
-        T[id] = VH[f] - PAD - bottomIn($("#" + f), $("#" + id));
+        const top = bottomIn($("#" + f), m.w) - m.w.offsetHeight;
+        return VH[f] - PAD - (top + m.h[k]);
       }
-      const pos = { la: T.ld1, lb: T.lb1, ra: T.r0 };
-      function scrollTo(id, t) {
-        const f = feedOf[id];
-        tl.fromTo("#" + f, { y: pos[f] }, { y: T[id], duration: 0.7, ease: "power2.inOut", immediateRender: false }, t);
-        pos[f] = T[id];
+      const pos = { la: yState("lo", 0), lb: T.lb1, ta: T.t0, ra: T.r0, ma: yState("mw", 0) };
+
+      function scrollY(f, y, t, d = 0.7) {
+        tl.fromTo("#" + f, { y: pos[f] }, { y, duration: d, ease: "power2.inOut", immediateRender: false }, t);
+        pos[f] = y;
       }
+      const scrollTo = (id, t) => scrollY(feedOf[id], T[id], t);
+
       function capIn(id, t) {
         tl.fromTo(id + " .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, stagger: 0.05, ease: "power1.out" }, t);
       }
       function capOut(id, t) {
         tl.fromTo(id + " .w", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.25, ease: "power2.in", immediateRender: false }, t);
+      }
+      function cap(id, tIn, tOut) {
+        capIn(id, tIn);
+        if (tOut) capOut(id, tOut);
       }
       function bubbleIn(id, t) {
         tl.fromTo(id, { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out" }, t);
@@ -755,7 +1309,6 @@
       function userType(n, t0, tPress, tSend) {
         const chs = document.querySelectorAll("#ibm" + n + " .c");
         const span = (tPress - 0.1 - t0) / chs.length;
-        // меряем, где кончается каждая буква, чтобы сдвигать текст влево, когда он не влезает
         chs.forEach((c) => (c.style.display = "inline"));
         const room = $("#ibt").parentElement.clientWidth - 44 - 8;
         const rights = Array.from(chs).map((c) => c.offsetLeft + c.offsetWidth);
@@ -774,9 +1327,9 @@
           }
           t += span * (1 + 0.35 * Math.sin(i * 1.7 + n));
         });
-        if (shift !== 0) tl.set("#ibt", { x: 0 }, tSend);
         tl.fromTo("#ib-send", { scale: 1 }, { scale: 0.86, duration: 0.1, ease: "power2.in", yoyo: true, repeat: 1 }, tPress);
         tl.set("#ibm" + n, { display: "none" }, tSend);
+        if (shift !== 0) tl.set("#ibt", { x: 0 }, tSend);
         tl.fromTo("#ib-caret", { opacity: 1 }, { opacity: 0, duration: 0.08, immediateRender: false }, tSend);
         tl.fromTo("#ib-send-on", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, tSend);
         tl.fromTo("#ib-ph", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, tSend + 0.05);
@@ -791,113 +1344,198 @@
         tl.fromTo(prefix + "-new", { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, t);
         tl.fromTo(prefix + "-work", { opacity: 0 }, { opacity: 1, duration: 0.25, immediateRender: false }, t + 0.1);
       }
+      // меняющееся сообщение: появление и переходы между состояниями
+      function morphIn(id, t) {
+        const m = M[id];
+        tl.set(m.w, { height: m.h[0] }, 0);
+        tl.set(m.sts[0], { opacity: 1 }, 0);
+        scrollY(feedOf[id], yState(id, 0), t - 0.05);
+        tl.fromTo(m.w, { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out" }, t);
+      }
+      function morphTo(id, k, t) {
+        const m = M[id];
+        tl.fromTo(m.sts[k - 1], { opacity: 1 }, { opacity: 0, duration: 0.2, ease: "power1.in", immediateRender: false }, t);
+        tl.fromTo(m.sts[k], { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out", immediateRender: false }, t + 0.12);
+        tl.fromTo(m.w, { height: m.h[k - 1] }, { height: m.h[k], duration: 0.4, ease: "power2.inOut", immediateRender: false }, t);
+        scrollY(feedOf[id], yState(id, k), t, 0.4);
+      }
+      // смена экрана справа и подписи над ним
+      function screen(from, to, lFrom, lTo, t) {
+        tl.fromTo(from, { opacity: 1, x: 0 }, { opacity: 0, x: -30, duration: 0.3, ease: "power2.in", immediateRender: false }, t);
+        tl.fromTo(to, { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out", immediateRender: false }, t + 0.2);
+        tl.fromTo(lFrom, { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, t);
+        tl.fromTo(lTo, { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, t + 0.2);
+      }
 
       // Начальные состояния
-      tl.set("#la", { y: pos.la }, 0);
-      tl.set("#lb", { y: pos.lb }, 0);
-      tl.set("#ra", { y: pos.ra }, 0);
+      for (const f of FEEDS) tl.set("#" + f, { y: pos[f] }, 0);
       tl.set("#sheet", { yPercent: 105 }, 0);
+      tl.set(["#rd", "#r1", "#r2", "#r3"], { opacity: 0 }, 0);
 
       // 0 · появление
       tl.fromTo("#d-kicker", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out" }, 0.1);
       tl.fromTo("#lw-in", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 0);
       tl.fromTo("#rw-in", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 0.15);
-      tl.fromTo(".who-lbl", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.15 }, 0.3);
-      capIn("#c0", 0.3);
+      tl.fromTo(["#lbl-l", "#rl1"], { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.15 }, 0.3);
+      cap("#c0", 0.3, 2.5);
 
-      // 1 · шаги приходят сами
-      bubbleIn("#ld1", 1.0);
-      scrollTo("l1", 1.3);
-      bubbleIn("#l1", 1.35);
-      capOut("#c0", 2.4);
-      capIn("#c1", 2.6);
-      scrollTo("l2k", 3.0);
-      bubbleIn("#l2", 3.05);
-      bubbleIn("#l2k", 3.25);
+      // A · HR заводит новичка, QR уходит в оффер
+      cap("#cA", 2.7, 8.3);
+      tl.fromTo("#nf-form .fv .tw", { opacity: 0 }, { opacity: 1, duration: 0.12, stagger: 0.18, ease: "power1.out" }, 3.0);
+      tl.fromTo("#seg-gtp", { backgroundColor: "#ffffff", color: "#162133", borderColor: "#d3dfec" }, { backgroundColor: "#226aaf", color: "#ffffff", borderColor: "#226aaf", duration: 0.25, immediateRender: false }, 4.3);
+      tl.fromTo("#nf-btn", { scale: 1 }, { scale: 0.95, duration: 0.12, ease: "power2.in", yoyo: true, repeat: 1 }, 5.4);
+      tl.fromTo("#nf-form", { opacity: 1, y: 0 }, { opacity: 0, y: -12, duration: 0.3, ease: "power2.in", immediateRender: false }, 5.65);
+      tl.fromTo("#nf-done", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 5.85);
+      tl.fromTo("#of-qr", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" }, 6.3);
+      tl.fromTo("#scan", { opacity: 0, y: 0 }, { opacity: 1, y: 0, duration: 0.15, immediateRender: false }, 6.95);
+      tl.fromTo("#scan", { y: 0 }, { y: 224, duration: 0.8, ease: "power1.inOut", immediateRender: false }, 7.0);
+      tl.fromTo("#scan", { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, 7.8);
+      tl.fromTo("#offer", { opacity: 1, y: 0 }, { opacity: 0, y: -40, duration: 0.5, ease: "power2.in", immediateRender: false }, 7.95);
 
-      // 2 · свой вопрос, ответ пунктом документа
-      capOut("#c1", 5.4);
-      capIn("#c2", 5.6);
-      userType(1, 5.5, 6.35, 6.5);
-      scrollTo("l3", 6.45);
-      sendIn("#l3", 6.5);
-      scrollTo("l4t", 7.0);
-      typing("#l4t", 7.05, 8.1);
-      scrollTo("l4k", 8.05);
-      cardIn("#l4", 8.15);
-      bubbleIn("#l4k", 8.4);
-      sweep("#l4s", 8.8);
+      // B · знакомство одним сообщением
+      cap("#cB", 8.5, 15.0);
+      morphIn("lo", 8.35);
+      tl.fromTo("#st-wait", { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, 8.6);
+      tl.fromTo("#st-ok", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 8.7);
+      press("#o1b", 9.8);
+      morphTo("lo", 1, 10.0);
+      press("#o2b", 11.4);
+      morphTo("lo", 2, 11.6);
+      press("#o3b", 13.0);
+      morphTo("lo", 3, 13.2);
 
-      // 3 · нет в документах: вопрос у HR, ответ в базу
-      capOut("#c2", 10.3);
-      capIn("#c3", 10.5);
-      userType(2, 10.2, 11.35, 11.5);
-      scrollTo("l5", 11.45);
-      sendIn("#l5", 11.5);
-      scrollTo("l6t", 11.95);
-      typing("#l6t", 12.0, 12.8);
-      scrollTo("l6", 12.75);
-      cardIn("#l6", 12.85);
-      tl.fromTo("#rd", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 13.0);
-      scrollTo("r1k", 13.05);
-      tl.fromTo("#r1", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 13.1);
-      bubbleIn("#r1k", 13.3);
-      press("#r1-open", 14.4);
-      tl.fromTo("#sheet-scrim", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 14.6);
-      tl.fromTo("#sheet", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 14.6);
-      capOut("#c3", 14.9);
-      capIn("#c3b", 15.1);
-      tl.fromTo(".sh-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.1, stagger: 0.1, ease: "power1.out" }, 15.4);
-      tl.fromTo("#sh-track-on", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.inOut", immediateRender: false }, 16.6);
-      tl.fromTo("#sh-knob", { x: 0 }, { x: 28, duration: 0.35, ease: "power3.inOut" }, 16.6);
-      tl.fromTo("#sh-send", { scale: 1 }, { scale: 0.88, duration: 0.11, ease: "power2.in", yoyo: true, repeat: 1 }, 17.1);
-      tl.fromTo("#sheet", { yPercent: 0 }, { yPercent: 105, duration: 0.45, ease: "power3.in", immediateRender: false }, 17.35);
-      tl.fromTo("#sheet-scrim", { opacity: 1 }, { opacity: 0, duration: 0.35, ease: "power2.in", immediateRender: false }, 17.4);
-      swapStatus("#r1", 17.75);
-      scrollTo("l7", 17.75);
-      bubbleIn("#l7", 17.8);
+      // C · первый день: шаги сами, чаты команды
+      cap("#c1", 15.2, 18.8);
+      scrollTo("ld1", 15.15);
+      bubbleIn("#ld1", 15.2);
+      scrollTo("l1", 15.55);
+      bubbleIn("#l1", 15.6);
+      scrollTo("l2k", 16.55);
+      bubbleIn("#l2", 16.6);
+      bubbleIn("#l2k", 16.8);
+      screen("#s-new", "#s-team", "#rl1", "#rl2", 18.6);
+      cap("#cT", 19.0, 22.9);
+      scrollTo("ltk", 19.15);
+      bubbleIn("#lt", 19.2);
+      bubbleIn("#ltk", 19.4);
+      scrollTo("t1", 19.65);
+      bubbleIn("#t1", 19.7);
+      scrollTo("t2", 20.95);
+      bubbleIn("#t2", 21.0);
 
-      // 4 · тревожный сигнал
-      capOut("#c3b", 19.4);
-      capIn("#c4", 19.6);
-      scrollTo("ld3", 19.4);
-      bubbleIn("#ld3", 19.45);
-      userType(3, 19.55, 21.1, 21.25);
-      scrollTo("l8", 21.2);
-      sendIn("#l8", 21.25);
-      scrollTo("r2k", 21.6);
-      tl.fromTo("#r2", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 21.65);
-      bubbleIn("#r2k", 21.85);
-      tl.fromTo("#r2", { boxShadow: "0 0 0 0 rgba(198,40,40,0)" }, { boxShadow: "0 0 0 10px rgba(198,40,40,0.18)", duration: 0.5, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, 22.2);
-      scrollTo("l9t", 21.8);
-      typing("#l9t", 21.85, 22.6);
-      scrollTo("l9", 22.55);
-      cardIn("#l9", 22.65);
-      press("#r2-take", 24.0);
-      swapStatus("#r2", 24.2);
-      scrollTo("l10", 25.6);
-      bubbleIn("#l10", 25.65);
+      // D · свой вопрос: ответ пунктом документа
+      screen("#s-team", "#s-hrg", "#rl2", "#rl3", 22.8);
+      cap("#c2", 23.1, 27.9);
+      userType(1, 23.0, 23.85, 24.0);
+      scrollTo("l3", 23.95);
+      sendIn("#l3", 24.0);
+      scrollTo("l4t", 24.45);
+      typing("#l4t", 24.5, 25.5);
+      scrollTo("l4k", 25.45);
+      cardIn("#l4", 25.55);
+      bubbleIn("#l4k", 25.8);
+      sweep("#l4s", 26.2);
 
-      // 5 · следующему новичку бот отвечает сам
-      capOut("#c4", 28.3);
-      capIn("#c5", 28.5);
-      tl.fromTo("#la", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 28.3);
-      tl.fromTo("#lb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 28.55);
+      // E · нет в документах: вопрос у HR, ответ в базу
+      cap("#c3", 28.1, 32.3);
+      userType(2, 27.8, 28.95, 29.1);
+      scrollTo("l5", 29.05);
+      sendIn("#l5", 29.1);
+      scrollTo("l6t", 29.55);
+      typing("#l6t", 29.6, 30.4);
+      scrollTo("l6", 30.35);
+      cardIn("#l6", 30.45);
+      tl.fromTo("#rd", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 30.55);
+      scrollTo("r1k", 30.6);
+      tl.fromTo("#r1", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 30.65);
+      bubbleIn("#r1k", 30.85);
+      press("#r1-open", 32.0);
+      tl.fromTo("#sheet-scrim", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 32.2);
+      tl.fromTo("#sheet", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 32.2);
+      cap("#c3b", 32.5, 36.6);
+      tl.fromTo(".sh-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.1, stagger: 0.1, ease: "power1.out" }, 33.0);
+      tl.fromTo("#sh-track-on", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.inOut", immediateRender: false }, 34.2);
+      tl.fromTo("#sh-knob", { x: 0 }, { x: 28, duration: 0.35, ease: "power3.inOut" }, 34.2);
+      tl.fromTo("#sh-send", { scale: 1 }, { scale: 0.88, duration: 0.11, ease: "power2.in", yoyo: true, repeat: 1 }, 34.7);
+      tl.fromTo("#sheet", { yPercent: 0 }, { yPercent: 105, duration: 0.45, ease: "power3.in", immediateRender: false }, 34.95);
+      tl.fromTo("#sheet-scrim", { opacity: 1 }, { opacity: 0, duration: 0.35, ease: "power2.in", immediateRender: false }, 35.0);
+      swapStatus("#r1", 35.35);
+      scrollTo("l7", 35.35);
+      bubbleIn("#l7", 35.4);
+
+      // E2 · личный вопрос: сразу HR, без ИИ
+      cap("#c7", 36.8, 42.4);
+      scrollTo("ld2", 36.55);
+      bubbleIn("#ld2", 36.6);
+      userType(5, 36.9, 38.2, 38.35);
+      scrollTo("l11", 38.3);
+      sendIn("#l11", 38.35);
+      scrollTo("l12t", 38.8);
+      typing("#l12t", 38.85, 39.35);
+      scrollTo("l12", 39.3);
+      cardIn("#l12", 39.4);
+      scrollTo("r2k", 39.55);
+      tl.fromTo("#r2", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 39.6);
+      bubbleIn("#r2k", 39.8);
+
+      // F · третий день: опрос и напоминание руководителю
+      screen("#s-hrg", "#s-mgr", "#rl3", "#rl4", 42.4);
+      cap("#cS", 42.6, 49.0);
+      scrollTo("ld3", 42.55);
+      bubbleIn("#ld3", 42.6);
+      bubbleIn("#md", 42.7);
+      morphIn("mw", 43.1);
+      morphIn("lsv", 43.0);
+      press("#sv1b", 45.2);
+      morphTo("lsv", 1, 45.4);
+      press("#m1b", 46.8);
+      morphTo("mw", 1, 47.0);
+
+      // G · тревожный сигнал
+      screen("#s-mgr", "#s-hrg", "#rl4", "#rl3", 48.9);
+      cap("#c4", 49.2, 57.2);
+      userType(3, 49.1, 50.6, 50.75);
+      scrollTo("l8", 50.7);
+      sendIn("#l8", 50.75);
+      scrollTo("r3k", 51.1);
+      tl.fromTo("#r3", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 51.15);
+      bubbleIn("#r3k", 51.35);
+      tl.fromTo("#r3", { boxShadow: "0 0 0 0 rgba(198,40,40,0)" }, { boxShadow: "0 0 0 10px rgba(198,40,40,0.18)", duration: 0.5, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, 51.7);
+      scrollTo("l9t", 51.25);
+      typing("#l9t", 51.3, 52.05);
+      scrollTo("l9", 52.0);
+      cardIn("#l9", 52.1);
+      press("#r3-take", 53.4);
+      swapStatus("#r3", 53.6);
+      scrollTo("l10", 54.95);
+      bubbleIn("#l10", 55.0);
+
+      // H · следующему новичку бот отвечает сам
+      cap("#c5", 57.4, 63.2);
+      tl.fromTo("#la", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 57.2);
+      tl.fromTo("#lb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 57.45);
       tl.set(["#lb1", "#lb2", "#lb2k"], { opacity: 0 }, 0);
-      userType(4, 28.9, 29.95, 30.1);
-      sendIn("#lb1", 30.1);
-      scrollTo("lb2t", 30.6);
-      typing("#lb2t", 30.65, 31.3);
-      scrollTo("lb2k", 31.25);
-      cardIn("#lb2", 31.35);
-      bubbleIn("#lb2k", 31.6);
-      sweep("#lb2s", 32.0);
-      tl.fromTo("#rw-in", { opacity: 1 }, { opacity: 0.55, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 30.6);
+      userType(4, 57.8, 58.85, 59.0);
+      sendIn("#lb1", 59.0);
+      scrollTo("lb2t", 59.45);
+      typing("#lb2t", 59.5, 60.15);
+      scrollTo("lb2k", 60.1);
+      cardIn("#lb2", 60.25);
+      bubbleIn("#lb2k", 60.5);
+      sweep("#lb2s", 60.9);
+      tl.fromTo("#rw-in", { opacity: 1 }, { opacity: 0.55, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 59.5);
 
-      // 6 · итог
-      capOut("#c5", 34.4);
-      capIn("#c6", 34.6);
-      tl.fromTo("#rw-in", { opacity: 0.55 }, { opacity: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 34.6);
+      // I · руководитель HR: зоны риска
+      tl.fromTo("#rw-in", { opacity: 0.55 }, { opacity: 1, duration: 0.5, ease: "power2.inOut", immediateRender: false }, 63.1);
+      screen("#s-hrg", "#s-an", "#rl3", "#rl5", 63.2);
+      cap("#cH", 63.4, 71.8);
+      tl.fromTo("#lw-in", { opacity: 1 }, { opacity: 0.5, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 63.2);
+      tl.fromTo(".an-row", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: "power3.out" }, 63.8);
+      tl.fromTo("#an1", { boxShadow: "inset 0 0 0 0 rgba(34,106,175,0)" }, { boxShadow: "inset 0 0 0 3px rgba(34,106,175,0.55)", duration: 0.5, ease: "power2.out", immediateRender: false }, 65.2);
+
+      // J · итог
+      cap("#c6", 72.0, null);
+      tl.fromTo("#lw-in", { opacity: 0.5 }, { opacity: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 72.0);
 
       window.__timelines["split"] = tl;
     });
