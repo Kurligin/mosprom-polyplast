@@ -260,7 +260,7 @@ async def test_not_admin_is_retried_not_final(db, sender, api, monkeypatch):
     assert entry["status"] != "failed", "права чата — не окончательный отказ"
     async with db() as s:
         (card,) = await service.card(s, await s.get(Employee, emp_id))
-    assert card["reason"] == T.ERROR_OTHER, "HR видит, что бот не админ"
+    assert card["reason"] == T.ERROR_OTHER, "HR видит, что «МАКС» не дал добавить"
     # HR сделал бота админом: следующая попытка добавляет
     api.member_result = {}
     later = datetime.now(UTC) + service.RETRY_AFTER + timedelta(minutes=1)
@@ -294,6 +294,23 @@ async def test_http_privacy_code_is_recognised(db, sender, api):
     async with db() as s:
         (card,) = await service.card(s, await s.get(Employee, emp_id))
     assert card["reason"] == T.ERRORS[service.PRIVACY]
+
+
+async def test_method_closed_for_bots_sends_link(db, sender, api):
+    """С 09.09.2026 «МАКС» отвечает ботам 404 method.not.found: новичок получает ссылку, HR видит честную причину."""
+    async with db() as s:
+        s.add(make_chat(-1, title="Общий чат"))
+        await s.commit()
+    api.member_result = {-1: MaxApiError(404, "method.not.found", "Method not found")}
+    (emp_id,) = await add(db, make_employee())
+    await service.tick(DAY1, sender=sender, session_factory=db)
+    entry = (await emp_data(db, emp_id))["chats"]["-1"]
+    assert entry["status"] == "link" and entry["error"] == "method.not.found"
+    assert "Вступи по кнопке ниже" in api.to(500)[-1]["text"]
+    async with db() as s:
+        (card,) = await service.card(s, await s.get(Employee, emp_id))
+    assert card["reason"] == T.ERRORS["method.not.found"]
+    assert "админ" not in card["reason"], "права админа тут не помогут"
 
 
 # --- 6. сбой вопроса о публикации не откатывает добавления ---------------------------------------------
