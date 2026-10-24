@@ -335,6 +335,7 @@
       padding: 0 24px;
     }
     .inputbar .field {
+      position: relative;
       flex: 1;
       height: 60px;
       border-radius: 30px;
@@ -342,16 +343,52 @@
       padding: 0 24px;
       display: flex;
       align-items: center;
-      font-size: 27px;
+      font-size: 28px;
+      color: var(--ink);
+    }
+    #ib-ph {
+      position: absolute;
+      left: 24px;
+      top: 50%;
+      margin-top: -17px;
+      line-height: 34px;
       color: #5f6a7d;
     }
+    .ibtext {
+      white-space: pre;
+      display: flex;
+      align-items: center;
+      line-height: 34px;
+    }
+    .ibm .c {
+      display: none;
+    }
+    #ib-caret {
+      display: inline-block;
+      width: 3px;
+      height: 34px;
+      margin-left: 2px;
+      border-radius: 2px;
+      background: var(--blue-600);
+      opacity: 0;
+    }
     .inputbar .send {
+      position: relative;
       width: 60px;
       height: 60px;
       border-radius: 50%;
       background: #e3eaf3;
       display: grid;
       place-items: center;
+    }
+    #ib-send-on {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      opacity: 0;
     }
     .feed {
       position: absolute;
@@ -609,9 +646,13 @@
         </div>
 
         <div class="inputbar">
-          <div class="field">Сообщение</div>
-          <div class="send">
+          <div class="field">
+            <span id="ib-ph">Сообщение</span>
+            <span class="ibtext"><span class="ibm" id="ibm1"><span class="c">К</span><span class="c">о</span><span class="c">г</span><span class="c">д</span><span class="c">а</span><span class="c"> </span><span class="c">з</span><span class="c">а</span><span class="c">р</span><span class="c">п</span><span class="c">л</span><span class="c">а</span><span class="c">т</span><span class="c">а</span><span class="c">?</span></span><span class="ibm" id="ibm2"><span class="c">М</span><span class="c">о</span><span class="c">ж</span><span class="c">н</span><span class="c">о</span><span class="c"> </span><span class="c">л</span><span class="c">и</span><span class="c"> </span><span class="c">п</span><span class="c">р</span><span class="c">и</span><span class="c">х</span><span class="c">о</span><span class="c">д</span><span class="c">и</span><span class="c">т</span><span class="c">ь</span><span class="c"> </span><span class="c">с</span><span class="c"> </span><span class="c">с</span><span class="c">о</span><span class="c">б</span><span class="c">а</span><span class="c">к</span><span class="c">о</span><span class="c">й</span><span class="c">?</span></span><span class="ibm" id="ibm3"><span class="c">А</span><span class="c"> </span><span class="c">с</span><span class="c"> </span><span class="c">с</span><span class="c">о</span><span class="c">б</span><span class="c">а</span><span class="c">к</span><span class="c">о</span><span class="c">й</span><span class="c"> </span><span class="c">н</span><span class="c">а</span><span class="c"> </span><span class="c">з</span><span class="c">а</span><span class="c">в</span><span class="c">о</span><span class="c">д</span><span class="c"> </span><span class="c">м</span><span class="c">о</span><span class="c">ж</span><span class="c">н</span><span class="c">о</span><span class="c">?</span></span><span id="ib-caret"></span></span>
+          </div>
+          <div class="send" id="ib-send">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg>
+            <div id="ib-send-on"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
           </div>
         </div>
       </div>
@@ -676,6 +717,28 @@
       function sweep(id, t) {
         tl.fromTo(id, { xPercent: -110 }, { xPercent: 210, duration: 0.9, ease: "power2.inOut" }, t);
       }
+      // Новичок набирает сообщение в строке ввода и отправляет его
+      function userType(n, t0, tPress, tSend) {
+        const chs = document.querySelectorAll("#ibm" + n + " .c");
+        const span = (tPress - 0.12 - t0) / chs.length;
+        tl.fromTo("#ib-ph", { opacity: 1 }, { opacity: 0, duration: 0.12, immediateRender: false }, t0);
+        tl.fromTo("#ib-caret", { opacity: 0 }, { opacity: 1, duration: 0.08, immediateRender: false }, t0);
+        tl.fromTo("#ib-send-on", { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power1.out", immediateRender: false }, t0 + 0.1);
+        let t = t0;
+        chs.forEach((c, i) => {
+          tl.set(c, { display: "inline" }, t);
+          t += span * (1 + 0.35 * Math.sin(i * 1.7 + n));
+        });
+        tl.fromTo("#ib-send", { scale: 1 }, { scale: 0.86, duration: 0.1, ease: "power2.in", yoyo: true, repeat: 1 }, tPress);
+        tl.set("#ibm" + n, { display: "none" }, tSend);
+        tl.fromTo("#ib-caret", { opacity: 1 }, { opacity: 0, duration: 0.08, immediateRender: false }, tSend);
+        tl.fromTo("#ib-send-on", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, tSend);
+        tl.fromTo("#ib-ph", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, tSend + 0.05);
+      }
+      // Отправленное сообщение выезжает из строки ввода в ленту
+      function sendIn(id, t) {
+        tl.fromTo(id, { opacity: 0, y: 120, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: "power3.out" }, t);
+      }
       // Шаги: линия дотягивается до узла, узел загорается
       let fillAt = 0;
       function step(n, t) {
@@ -699,68 +762,71 @@
       tl.fromTo("#c-kicker", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out" }, 0.1);
       tl.fromTo("#c-steps", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.3);
 
-      // 1 · вопрос новичка
+      // 1 · новичок набирает и отправляет вопрос
       capIn("#cap1", 0.4);
-      step(1, 0.9);
-      bubbleIn("#a1", 0.9);
+      userType(1, 0.9, 1.95, 2.1);
+      sendIn("#a1", 2.1);
+      step(1, 2.1);
 
       // 2 · ищет в документах
-      scrollTo("fa", "a2", 1.55);
-      typing("#a2", 1.6, 4.4);
-      capOut("#cap1", 2.7);
-      capIn("#cap2", 2.95);
+      scrollTo("fa", "a2", 2.75);
+      typing("#a2", 2.8, 5.6);
+      capOut("#cap1", 3.9);
+      capIn("#cap2", 4.15);
 
       // 3 · ответ дословным пунктом с источником
-      scrollTo("fa", "a3-btn", 4.4);
-      cardIn("#a3", 4.5);
-      bubbleIn("#a3-btn", 4.75);
-      step(2, 4.6);
-      capOut("#cap2", 4.9);
-      capIn("#cap3", 5.15);
-      sweep("#a3-sweep", 5.6);
+      scrollTo("fa", "a3-btn", 5.6);
+      cardIn("#a3", 5.7);
+      bubbleIn("#a3-btn", 5.95);
+      step(2, 5.8);
+      capOut("#cap2", 6.1);
+      capIn("#cap3", 6.35);
+      sweep("#a3-sweep", 6.8);
 
       // 4 · вопрос вне документов: честное «не знаю»
-      capOut("#cap3", 7.6);
-      capIn("#cap4", 7.85);
-      scrollTo("fa", "a4", 7.85);
-      bubbleIn("#a4", 7.9);
-      scrollTo("fa", "a5", 8.45);
-      typing("#a5", 8.5, 9.4);
-      scrollTo("fa", "a6", 9.35);
-      cardIn("#a6", 9.45);
-      step(3, 9.55);
+      userType(2, 7.45, 8.95, 9.1);
+      capOut("#cap3", 8.8);
+      capIn("#cap4", 9.05);
+      scrollTo("fa", "a4", 8.9);
+      sendIn("#a4", 9.1);
+      scrollTo("fa", "a5", 9.65);
+      typing("#a5", 9.7, 10.6);
+      scrollTo("fa", "a6", 10.55);
+      cardIn("#a6", 10.65);
+      step(3, 10.75);
 
       // 5 · HR отвечает, ответ в базу
-      tl.fromTo("#c-hr", { opacity: 0, y: 30, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.8, ease: "power3.out", immediateRender: false }, 10.1);
-      capOut("#cap4", 10.3);
-      capIn("#cap5", 10.55);
-      tl.fromTo(".hr-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.12, stagger: 0.11, ease: "power1.out", immediateRender: false }, 10.8);
-      tl.fromTo("#hr-track-on", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.inOut", immediateRender: false }, 11.9);
-      tl.fromTo("#hr-knob", { x: 0 }, { x: 28, duration: 0.4, ease: "power3.inOut" }, 11.9);
-      tl.fromTo("#hr-send", { scale: 1 }, { scale: 0.9, duration: 0.12, ease: "power2.in", yoyo: true, repeat: 1 }, 12.35);
-      scrollTo("fa", "a7", 12.5);
-      bubbleIn("#a7", 12.6);
-      step(4, 12.7);
+      tl.fromTo("#c-hr", { opacity: 0, y: 30, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.8, ease: "power3.out", immediateRender: false }, 11.3);
+      capOut("#cap4", 11.5);
+      capIn("#cap5", 11.75);
+      tl.fromTo(".hr-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.12, stagger: 0.11, ease: "power1.out", immediateRender: false }, 12.0);
+      tl.fromTo("#hr-track-on", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.inOut", immediateRender: false }, 13.1);
+      tl.fromTo("#hr-knob", { x: 0 }, { x: 28, duration: 0.4, ease: "power3.inOut" }, 13.1);
+      tl.fromTo("#hr-send", { scale: 1 }, { scale: 0.9, duration: 0.12, ease: "power2.in", yoyo: true, repeat: 1 }, 13.55);
+      scrollTo("fa", "a7", 13.7);
+      bubbleIn("#a7", 13.8);
+      step(4, 13.9);
 
       // 6 · следующему новичку бот отвечает сам
-      capOut("#cap5", 14.85);
-      tl.fromTo("#c-hr", { opacity: 1, y: 0, filter: "blur(0px)" }, { opacity: 0, y: 20, filter: "blur(6px)", duration: 0.4, ease: "power2.in", immediateRender: false }, 14.85);
-      tl.fromTo("#fa", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 14.9);
-      tl.fromTo("#fb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 15.0);
-      capIn("#cap6", 15.05);
-      bubbleIn("#b1", 15.45);
-      scrollTo("fb", "b2", 16.05);
-      typing("#b2", 16.1, 16.8);
-      scrollTo("fb", "b3-btn", 16.75);
-      cardIn("#b3", 16.85);
-      bubbleIn("#b3-btn", 17.1);
-      step(5, 17.0);
-      sweep("#b3-sweep", 17.45);
+      capOut("#cap5", 16.05);
+      tl.fromTo("#c-hr", { opacity: 1, y: 0, filter: "blur(0px)" }, { opacity: 0, y: 20, filter: "blur(6px)", duration: 0.4, ease: "power2.in", immediateRender: false }, 16.05);
+      tl.fromTo("#fa", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 16.1);
+      tl.fromTo("#fb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 16.2);
+      capIn("#cap6", 16.25);
+      userType(3, 16.65, 17.92, 18.1);
+      sendIn("#b1", 18.1);
+      scrollTo("fb", "b2", 18.7);
+      typing("#b2", 18.75, 19.45);
+      scrollTo("fb", "b3-btn", 19.4);
+      cardIn("#b3", 19.5);
+      bubbleIn("#b3-btn", 19.75);
+      step(5, 19.65);
+      sweep("#b3-sweep", 20.1);
 
       // 7 · итог
-      capOut("#cap6", 19.4);
-      tl.fromTo("#c-final .w", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, stagger: 0.07, ease: "power2.out", immediateRender: false }, 19.65);
-      tl.fromTo("#c-final-sub", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out", immediateRender: false }, 20.1);
+      capOut("#cap6", 22.05);
+      tl.fromTo("#c-final .w", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, stagger: 0.07, ease: "power2.out", immediateRender: false }, 22.3);
+      tl.fromTo("#c-final-sub", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out", immediateRender: false }, 22.75);
 
       window.__timelines["chat"] = tl;
     });

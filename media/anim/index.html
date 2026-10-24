@@ -25,7 +25,7 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="23.5"
+      data-duration="26.2"
       data-width="1920"
       data-height="1080"
     >
@@ -34,12 +34,27 @@
         data-composition-id="chat"
         data-composition-src="compositions/chat.html"
         data-start="0"
-        data-duration="23.5"
+        data-duration="26.2"
         data-track-index="1"
         data-track-kind="graphics"
         data-width="1920"
         data-height="1080"
       ></div>
+
+      <!-- Звуки: пик каждого приходится на кадр своего события (+1 кадр) -->
+      <audio id="sfx-type-1" class="clip" src="assets/sfx/typing.mp3" data-start="0.446" data-duration="1.4" data-track-index="6" data-volume="0.6"></audio>
+      <audio id="sfx-send-1" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="1.955" data-duration="0.575" data-track-index="2" data-volume="0.44"></audio>
+      <audio id="sfx-in-1" class="clip" src="assets/sfx/pop.mp3" data-start="5.6" data-duration="0.72" data-track-index="3" data-volume="1.2"></audio>
+      <audio id="sfx-type-2" class="clip" src="assets/sfx/typing.mp3" data-start="6.996" data-duration="1.5" data-track-index="6" data-volume="0.6"></audio>
+      <audio id="sfx-send-2" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="8.955" data-duration="0.575" data-track-index="2" data-volume="0.4"></audio>
+      <audio id="sfx-in-2" class="clip" src="assets/sfx/pop.mp3" data-start="10.55" data-duration="0.72" data-track-index="3" data-volume="1.1"></audio>
+      <audio id="sfx-hr-typing" class="clip" src="assets/sfx/typing.mp3" data-start="11.546" data-duration="1.5" data-track-index="4" data-volume="1.0"></audio>
+      <audio id="sfx-toggle" class="clip" src="assets/sfx/click.mp3" data-start="13.044" data-duration="0.366" data-track-index="7" data-volume="1.2"></audio>
+      <audio id="sfx-hr-send" class="clip" src="assets/sfx/click-soft.mp3" data-start="13.494" data-duration="0.366" data-track-index="7" data-volume="0.9"></audio>
+      <audio id="sfx-in-3" class="clip" src="assets/sfx/pop.mp3" data-start="13.7" data-duration="0.72" data-track-index="3" data-volume="1.1"></audio>
+      <audio id="sfx-type-3" class="clip" src="assets/sfx/typing.mp3" data-start="16.196" data-duration="1.5" data-track-index="6" data-volume="0.6"></audio>
+      <audio id="sfx-send-3" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="17.955" data-duration="0.575" data-track-index="2" data-volume="0.4"></audio>
+      <audio id="sfx-in-4" class="clip" src="assets/sfx/pop.mp3" data-start="19.4" data-duration="0.72" data-track-index="3" data-volume="1.2"></audio>
     </div>
     <script>
       window.__timelines["main"] = gsap.timeline({ paused: true });
