@@ -374,6 +374,10 @@ async def on_bot_started(ctx: BotCtx, repo, upd: dict) -> None:
 
 async def handle_start(ctx: BotCtx, repo, user_id: int, chat_id: int | None, code: str,
                        user: dict | None = None) -> None:
+    if settings.demo_enabled and user_id and not await repo.employee_by_user(user_id) \
+            and not await repo.staff_by_user(user_id):
+        # первый вход в демо (судьи по QR или без кода): отдельным сообщением — что здесь можно делать
+        await ctx.sender.send(repo, T.DEMO_HELP, chat_id=chat_id, user_id=user_id)
     if code and CODE_RE.match(code):
         if await bind_by_code(ctx, repo, code, user_id, chat_id, user):
             return

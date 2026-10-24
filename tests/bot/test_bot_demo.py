@@ -260,3 +260,35 @@ async def test_demo_newcomer_takes_name_from_max_profile(demo):
     await demo.session.refresh(demo.gtp)
     assert demo.gtp.max_user_id == ME
     assert (demo.gtp.full_name, demo.gtp.first_name) == ("Иван Петров", "Иван")
+
+
+# --- подсказка демо-режима ----------------------------------------------------------------------------------
+
+async def test_demo_start_without_code_sends_help_then_menu(demo):
+    await _cmd(demo, "/start")
+    texts = [demo.api.text(m) for m in demo.api.sent(MY_CHAT)]
+    assert texts[-2] == BT.DEMO_HELP and texts[-1] == BT.DEMO_MENU, "подсказка отдельным сообщением перед меню"
+
+
+async def test_demo_start_with_code_sends_help_after_greeting(demo):
+    demo.gtp.invite_code = "DemoGtp1"
+    await demo.session.flush()
+    await _cmd(demo, "/start DemoGtp1")
+    texts = [demo.api.text(m) for m in demo.api.sent(MY_CHAT)]
+    assert texts[-2] == BT.DEMO_HELP and BT.ASK_FORM in texts[-1], "сначала подсказка, потом знакомство"
+
+
+async def test_demo_help_not_repeated_for_bound_account(demo):
+    await _cmd(demo, "/start")
+    await _press(demo, demo.api.last(MY_CHAT), BT.DEMO_ROLES["emp:GTP"])
+    await _cmd(demo, "/start")
+    texts = [demo.api.text(m) for m in demo.api.sent(MY_CHAT)]
+    assert texts.count(BT.DEMO_HELP) == 1, "подсказка — только при первом входе"
+
+
+async def test_demo_help_not_sent_when_demo_disabled(demo, monkeypatch):
+    monkeypatch.setattr(settings, "demo_enabled", False)
+    demo.gtp.invite_code = "DemoGtp2"
+    await demo.session.flush()
+    await _cmd(demo, "/start DemoGtp2")
+    assert BT.DEMO_HELP not in [demo.api.text(m) for m in demo.api.sent(MY_CHAT)]
