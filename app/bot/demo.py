@@ -148,6 +148,10 @@ async def on_callback(cb: Callback) -> None:
     if not settings.demo_enabled:
         await cb.toast(T.DEMO_OFF)
         return
+    if not cb.user_id:
+        # без аккаунта employee_by_user(None) искал бы всех непривязанных
+        await cb.toast(T.DEMO_STALE)
+        return
     parts = cb.payload.split(":")
     action = parts[1] if len(parts) > 1 else ""
     if action == "menu":
