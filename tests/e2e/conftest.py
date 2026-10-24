@@ -220,6 +220,16 @@ def _patch(mp: pytest.MonkeyPatch, factory, run: J.Journey) -> None:
     mp.setattr(gigachat, "choose_chunk", no_llm_choose)
     mp.setattr(gigachat, "analyze_answer", no_llm_analyze)
 
+    # «Путь новичка» включён, как в проде; карточка — без Chromium (настоящая отрисовка — tests/path)
+    from app.path import card as path_card
+
+    mp.setattr(settings, "path_enabled", True)
+
+    async def fake_path_card(state, name=None):
+        return f"path {state.passed}/{state.total} here {state.current}".encode()
+
+    mp.setattr(path_card, "render_png", fake_path_card)
+
     # «отправить шаги сразу после перемотки» — та же функция движка, но после коммита и без паузы
     mp.setattr(engine, "_deliver_soon", run.queue_deliver_soon)
     mp.setattr(engine, "_locks", defaultdict(asyncio.Lock))

@@ -33,7 +33,8 @@ LIMITS = {
     "day14": (3, 0, 0, 0),          # опрос + следующий вопрос после текстового ответа
     "live": (4, 0, 1, 0),           # дни без перемотки: шаги дня и опрос
     "day60": (2, 0, 1, 0),
-    "end": (6, 0, 0, 0),            # поздравление, опрос (+2 после текстовых ответов), прощание
+    # поздравление, опрос (+2 после текстовых ответов), прощание; HR-группе — «путь пройден, можно вручить мерч»
+    "end": (6, 1, 0, 0),
 }
 
 
@@ -194,10 +195,12 @@ def test_onboarding_is_one_message_then_preboarding(journey):
     sends = new_sends(journey, st, J.NEWCOMER)
     first = sends[0]
     assert first["mid"] == journey.onboarding_mid and labels(first) == ["На ТЫ", "На ВЫ"]
-    # знакомство правится на месте: все ответы на кнопки — в том же сообщении
+    # знакомство правится на месте: все ответы на кнопки — в том же сообщении,
+    # пятая правка — карточка «Пути новичка» в финал знакомства, когда картинка загрузилась
     ed = edits(journey, st, J.NEWCOMER)
-    assert len(ed) == 4 and {e["mid"] for e in ed} == {journey.onboarding_mid}
+    assert len(ed) == 5 and {e["mid"] for e in ed} == {journey.onboarding_mid}
     assert "Очень приятно с тобой познакомиться, Иван!" in ed[-1]["text"] and labels(ed[-1]) == []
+    assert ed[-2]["text"] == ed[-1]["text"] and J.media(ed[-1]["attachments"]) == ["korsik-path.png"]
     # после знакомства — шаги «за 2–3 дня до выхода»
     pre = sends[1:]
     assert 1 <= len(pre) <= 2 and any("документов" in e["text"] for e in pre)
@@ -394,6 +397,39 @@ def test_end_final_survey_goodbye_and_all_meetings_done(journey):
     assert len(tasks) == 4 and all(t["status"] == "done" and t["mid"] for t in tasks), "все встречи с push и «Провёл»"
     flags = journey.stage_by("end").db_after["flags"]
     assert Counter(f["level"] for f in mine(flags, journey.emp_id).values()) == {"red": 2, "yellow": 1}
+
+
+# --- «Путь новичка»: вехи без новых сообщений ------------------------------------------------------------
+
+def test_path_milestones_ride_on_existing_messages(journey):
+    """Карточка пути и строка о вехе — в уже существующих сообщениях: новых сообщений новичку столько же (39)."""
+    route = [st for st in journey.stages if st.key != "setup"]
+    assert sum(len(new_sends(journey, st, J.NEWCOMER)) for st in route) == 39, "число на слайде и в речи"
+
+    newcomer = [e for e in journey.api.log if e["op"] in ("send", "answer", "edit")
+                and e["chat_id"] == J.NEWCOMER.chat_id and "korsik-path.png" in J.media(e["attachments"])]
+    lines = {re.search(r"Веха (\d) из 7 пройдена", e["text"]).group(1) for e in newcomer}
+    assert lines == {"1", "2", "3", "4", "5", "6", "7"}, "все вехи: знакомство и 6 опросов"
+    onboarding = journey.stage_by("onboarding")
+    intro = [e for e in edits(journey, onboarding, J.NEWCOMER) if "Веха 1 из 7" in e["text"]]
+    assert intro and intro[-1]["text"].startswith("Очень приятно"), "веха 1 — в финале знакомства"
+    assert "Дальше: «Первый день»" in intro[-1]["text"]
+    final = [e for e in newcomer if "Веха 7 из 7" in e["text"]]
+    assert final and all("Спасибо! Мы обязательно учтем твои рекомендации" in e["text"] for e in final)
+    for e in newcomer:
+        assert not re.search("подар|мерч|сюрприз", e["text"]), "новичку про подарок заранее не говорим"
+
+
+def test_path_merch_to_hr_group_once_at_the_end(journey):
+    merch = [(st.key, e) for st in journey.stages for e in new_sends(journey, st, J.HR_GROUP)
+             if "Путь адаптации пройден" in e["text"]]
+    assert [k for k, _ in merch] == ["end"], "один раз и только после последней вехи"
+    text = merch[0][1]["text"]
+    assert text.startswith("Путь адаптации пройден: Иван Смирнов, площадка GTP.")
+    assert "термокружк" in text
+    for quote in (J.RED_TEXT, "Добавить в первый день экскурсию", "Не хватает инструкции"):
+        assert quote not in text, "ответы и жалобы в сообщение про мерч не попадают"
+    assert journey.final["dialog_data"]["path"]["hr_finished_at"]
 
 
 # --- вне маршрута: найденные баги ---------------------------------------------------------------------------
