@@ -177,7 +177,7 @@ def detect(text: str, *, free_text: bool = False, rules: Rules | None = None) ->
 
 
 def is_sensitive(text: str, rules: Rules | None = None) -> bool:
-    """Тема здоровья и близкие: такой текст не уходит в облачную нейросеть."""
+    """Тема здоровья и близкие: такой текст не уходит в модель."""
     rules = rules or load()
     low = normalize(text)
     if any(rx.search(low) for rx in rules.sensitive):
