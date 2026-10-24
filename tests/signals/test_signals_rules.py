@@ -70,3 +70,28 @@ def test_sensitive():
     assert rules.is_sensitive("Был на больничном, никто не объяснил, как оформить")
     assert rules.is_sensitive("Кружится голова и тошнит")
     assert not rules.is_sensitive("Не хватает наставника")
+
+
+def test_free_text_first_person_verb_is_personal():
+    """«Если пожалуюсь» — о себе, хотя «я» в тексте нет: красный флаг в свободном сообщении."""
+    text = "мастер угрожает уволить, если пожалуюсь на сломанный кожух"
+    assert cats(text, free_text=True) == {"threats", "safety"}
+    assert cats("Боюсь, бригадир заставит работать без ограждения", free_text=True) == {"safety"}
+    assert cats("Хочу сказать, что мастер угрожает новичкам", free_text=True) == {"threats"}
+
+
+def test_free_text_questions_without_first_person_not_flagged():
+    assert cats("угрожает ли что-то при работе на станке?", free_text=True) == set()
+    assert cats("Скажите, кожух на станке обязателен?", free_text=True) == set()
+    assert cats("К краю склада подходить опасно?", free_text=True) == set(), "«к краю» — не первое лицо"
+    assert cats("Мастер сказал, что без кожуха на станке работать нельзя?", free_text=True) == set()
+    # глагол первого лица в вопросе к базе знаний — не жалоба
+    assert cats("Могу ли работать на прессе без допуска?", free_text=True) == set()
+    assert cats("Хочу узнать, какие травмы бывают на производстве", free_text=True) == set()
+    assert cats("Интересуюсь, опасно ли на прессе", free_text=True) == set()
+    assert cats("Опасно ли ездить в Беларусь в командировку", free_text=True) == set()
+
+
+def test_broken_guard_is_safety():
+    assert cats("На станке сломанный кожух") == {"safety"}
+    assert cats("Защитный экран на прессе сломан") == {"safety"}

@@ -52,6 +52,8 @@ class Rules:
     negations: set[str]
     personal: re.Pattern
     sensitive: list[re.Pattern]
+    personal_verbs: re.Pattern = re.compile(r"$^")
+    question: re.Pattern = re.compile(r"$^")
 
 
 def normalize(text: str) -> str:
@@ -77,7 +79,19 @@ def parse(data: dict) -> Rules:
     cats.sort(key=lambda c: ORDER.index(c.code) if c.code in ORDER else len(ORDER))
     return Rules(categories=cats, negations=set(data.get("negations") or []),
                  personal=re.compile(data.get("personal") or r"$^"),
-                 sensitive=[re.compile(p) for p in data.get("sensitive") or []])
+                 sensitive=[re.compile(p) for p in data.get("sensitive") or []],
+                 personal_verbs=re.compile(data.get("personal_verbs") or r"$^"),
+                 question=re.compile(data.get("question") or r"$^"))
+
+
+def about_self(low: str, rules: Rules) -> bool:
+    """Человек пишет о себе: местоимение первого лица или глагол первого лица ед. ч. не в вопросе.
+
+    «Мастер угрожает уволить, если пожалуюсь» — о себе. «Могу ли работать без допуска?» — вопрос в базу знаний.
+    """
+    if rules.personal.search(low):
+        return True
+    return bool(rules.personal_verbs.search(low)) and not rules.question.search(low)
 
 
 _cache: dict = {"mtime": None, "path": None, "rules": None}
@@ -145,7 +159,7 @@ def detect(text: str, *, free_text: bool = False, rules: Rules | None = None) ->
         return []
     rules = rules or load()
     low = normalize(text)
-    if free_text and not rules.personal.search(low):
+    if free_text and not about_self(low, rules):
         return []
     hits: list[Hit] = []
     for cat in rules.categories:
