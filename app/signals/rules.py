@@ -33,6 +33,7 @@ class Category:
     stems: list[re.Pattern]
     patterns: list[re.Pattern]
     combos: list[tuple[list[re.Pattern], list[re.Pattern]]]
+    question_mark_ok: bool = False  # «?» не гасит глагол первого лица: «что делать, если угрожают уволить?»
 
 
 @dataclass
@@ -71,6 +72,7 @@ def parse(data: dict) -> Rules:
             code=code, topic=str(raw["topic"]), level=raw.get("level", "red"),
             notice=bool(raw.get("notice", True)), emergency=bool(raw.get("emergency", False)),
             free_text=bool(raw.get("free_text", False)),
+            question_mark_ok=bool(raw.get("question_mark_ok", False)),
             stems=[_rx(s, stem=True) for s in raw.get("stems") or []],
             patterns=[_rx(p) for p in raw.get("patterns") or []],
             combos=[([_rx(a) for a in c.get("any") or []], [_rx(w) for w in c.get("with") or []])
@@ -84,14 +86,17 @@ def parse(data: dict) -> Rules:
                  question=re.compile(data.get("question") or r"$^"))
 
 
-def about_self(low: str, rules: Rules) -> bool:
+def about_self(low: str, rules: Rules, *, question_mark_ok: bool = False) -> bool:
     """Человек пишет о себе: местоимение первого лица или глагол первого лица ед. ч. не в вопросе.
 
     «Мастер угрожает уволить, если пожалуюсь» — о себе. «Могу ли работать без допуска?» — вопрос в базу знаний.
+    question_mark_ok — голый «?» вопросом не считается, только словесные маркеры («ли», «хочу узнать»).
     """
     if rules.personal.search(low):
         return True
-    return bool(rules.personal_verbs.search(low)) and not rules.question.search(low)
+    if not rules.personal_verbs.search(low):
+        return False
+    return not rules.question.search(low.replace("?", " ") if question_mark_ok else low)
 
 
 _cache: dict = {"mtime": None, "path": None, "rules": None}
@@ -159,11 +164,9 @@ def detect(text: str, *, free_text: bool = False, rules: Rules | None = None) ->
         return []
     rules = rules or load()
     low = normalize(text)
-    if free_text and not about_self(low, rules):
-        return []
     hits: list[Hit] = []
     for cat in rules.categories:
-        if free_text and not cat.free_text:
+        if free_text and not (cat.free_text and about_self(low, rules, question_mark_ok=cat.question_mark_ok)):
             continue
         found = _match_category(cat, text, low, rules.negations)
         if found:

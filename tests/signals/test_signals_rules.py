@@ -95,3 +95,13 @@ def test_free_text_questions_without_first_person_not_flagged():
 def test_broken_guard_is_safety():
     assert cats("На станке сломанный кожух") == {"safety"}
     assert cats("Защитный экран на прессе сломан") == {"safety"}
+
+
+def test_free_text_threat_with_question_mark_still_flagged():
+    """Знак «?» в жалобе на угрозу — не вопрос к базе знаний: «Что делать, если мастер угрожает уволить?»"""
+    assert "threats" in cats("Мастер угрожает уволить, если пожалуюсь на сломанный кожух?", free_text=True)
+    assert "threats" in cats("что делать, если мастер угрожает уволить, если пожалуюсь?", free_text=True)
+    # явные маркеры вопроса к базе знаний по-прежнему гасят глагол первого лица
+    assert cats("Хочу узнать, угрожает ли что-то при работе на станке?", free_text=True) == set()
+    # для остальных тем «?» без «я» — по-прежнему вопрос
+    assert cats("Боюсь, кожух на станке обязателен?", free_text=True) == set()
