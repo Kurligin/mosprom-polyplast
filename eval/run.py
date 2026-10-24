@@ -303,7 +303,7 @@ def table(m: Metrics, hi: float, lo: float, llm: bool) -> str:
         f"| Из них выбор пункта GigaChat | {m.by_llm} |",
     ]
     note = (f"Пороги: ответ сразу при близости ≥ {hi:.2f}, GigaChat выбирает пункт при {lo:.2f}–{hi:.2f}, "
-            f"ниже — «не знаю» и обращение к HR. GigaChat {'включён' if llm else 'выключен (между порогами — к HR)'}.")
+            f"ниже «не знаю» и обращение к HR. GigaChat {'включён' if llm else 'выключен (между порогами вопрос уходит HR)'}.")
     return "\n".join(lines) + "\n\n" + note
 
 
@@ -355,9 +355,9 @@ def write_results(m: Metrics, hi: float, lo: float, llm: bool) -> None:
     body = [
         "# Качество базы знаний на эталоне",
         "",
-        (f"Эталон — `eval/golden.jsonl`: {m.n} вопросов ({m.answerable} отвечаемых, {m.esc_total} личных "
+        (f"Эталон: `eval/golden.jsonl`, вопросов в нём {m.n} ({m.answerable} отвечаемых, {m.esc_total} личных "
          f"кадровых, {m.oob_total} вне базы). Источник отвечаемого вопроса есть в базе у {m.with_source} вопросов."),
-        ("Прогон — `make eval` (`python -m eval.run --llm --write`): живой поиск в Postgres "
+        ("Прогон: `make eval` (`python -m eval.run --llm --write`): живой поиск в Postgres "
          "(полнотекстовый + bge-m3 + RRF, фильтр по площадке) и маршрут вопроса."),
         "",
         table(m, hi, lo, llm),
