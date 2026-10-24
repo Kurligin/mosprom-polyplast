@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # Демо-кнопки панели: машина времени (только тестовые и синтетические новички) и «Сформировать сводку».
     # В docker-compose.prod.yml по умолчанию false
     demo_enabled: bool = True
+    # «Путь новичка»: вехи по опросам, карточка пути картинкой, мерч-сюрприз в конце (app/path)
+    path_enabled: bool = True
 
     # База знаний
     embedding_model: str = "BAAI/bge-m3"

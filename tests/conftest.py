@@ -26,3 +26,20 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "needs_customer_docs" in item.keywords:
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def path_off(monkeypatch):
+    """«Путь новичка» (app/path) дописывает строку о вехе и карточку к «спасибо» опроса, финалу знакомства
+    и приветствию. Тесты других модулей сверяют эти сообщения дословно, поэтому здесь модуль выключен.
+    Тесты пути (tests/path, фикстура `path_on`) и сквозной маршрут (tests/e2e) включают его сами."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "path_enabled", False)
+
+
+@pytest.fixture
+def path_on(path_off, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "path_enabled", True)

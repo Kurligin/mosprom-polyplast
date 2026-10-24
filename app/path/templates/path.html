@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Путь новичка</title>
+<style>
+  {% if font %}
+  @font-face {
+    font-family: "Exo 2";
+    src: url(data:font/ttf;base64,{{ font }}) format("truetype");
+    font-weight: 100 900;
+    font-style: normal;
+  }
+  {% endif %}
+  /* Фирменные цвета Полипластика (сайт polyplastic.ru) */
+  :root {
+    --blue: #005593;
+    --blue-ui: #226AAF;
+    --blue-mid: #4884C3;
+    --blue-light: #6AC0F3;
+    --navy: #00173E;
+    --fill: #E9F1FA;
+    --muted: #4A6A92;
+    --line-ahead: #B5CDE8;
+    --skip: #8FA9C6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: {{ width }}px; height: {{ height }}px; overflow: hidden; }
+  body {
+    position: relative;
+    background: #FFFFFF;
+    color: var(--navy);
+    font-family: "Exo 2", "Noto Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Мотив квадратных скобок у плашек */
+  .br { position: relative; display: inline-block; padding: 6px 26px; }
+  .br::before, .br::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 14px;
+    border: 4px solid currentColor;
+  }
+  .br::before { left: 0; border-right: none; }
+  .br::after { right: 0; border-left: none; }
+
+  header { position: absolute; left: 72px; top: 64px; right: 72px; }
+  .eyebrow { color: var(--blue-ui); font-size: 30px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  h1 { font-size: 88px; font-weight: 800; line-height: 1; letter-spacing: -0.01em; margin-top: 26px; }
+  .sub { font-size: 34px; font-weight: 500; color: var(--blue-ui); margin-top: 16px; }
+
+  .panel { position: absolute; left: 48px; top: 300px; width: 984px; height: 580px; background: var(--fill); border-radius: 36px; }
+  svg.map { position: absolute; left: 0; top: 0; }
+
+  .label {
+    position: absolute; width: 228px; margin-left: -114px; text-align: center;
+    font-size: 28px; line-height: 1.15; font-weight: 600; color: var(--muted);
+  }
+  .label.done { color: var(--navy); }
+  .label.next { color: var(--blue); font-weight: 800; }
+  .label .note { display: block; font-size: 23px; font-weight: 500; margin-top: 4px; color: var(--muted); }
+
+  .here {
+    position: absolute; transform: translate(-50%, -100%);
+    background: var(--navy); color: #FFFFFF; font-size: 24px; font-weight: 700; letter-spacing: 0.02em;
+    padding: 8px 18px; border-radius: 10px; white-space: nowrap;
+  }
+  .here::after {
+    content: ""; position: absolute; left: 50%; bottom: -10px; margin-left: -10px;
+    border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 10px solid var(--navy);
+  }
+
+  .legend { position: absolute; right: 88px; top: 834px; display: flex; gap: 26px; font-size: 23px; font-weight: 500; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 9px; }
+  .legend i { display: inline-block; width: 22px; height: 22px; border-radius: 50%; }
+  .legend .l-done { background: var(--blue); }
+  .legend .l-ahead { background: #FFFFFF; border: 3px solid var(--line-ahead); }
+  .legend .l-skip { background: #FFFFFF; border: 3px dashed var(--skip); }
+
+  footer { position: absolute; left: 72px; right: 72px; top: 904px; display: flex; align-items: center; justify-content: space-between; }
+  .next-plate { color: var(--blue); font-size: 40px; font-weight: 700; }
+  .brand { font-size: 26px; font-weight: 600; color: var(--blue-ui); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow"><span class="br">{{ eyebrow }}</span></div>
+    <h1>{{ title }}</h1>
+    <div class="sub">{{ sub }}</div>
+  </header>
+
+  <div class="panel"></div>
+  <svg class="map" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" xmlns="http://www.w3.org/2000/svg">
+    {% for s in segments %}
+    {% if s.walked %}
+    <path d="{{ s.d }}" fill="none" stroke="#005593" stroke-width="8" stroke-linecap="round"/>
+    {% else %}
+    <path d="{{ s.d }}" fill="none" stroke="#B5CDE8" stroke-width="8" stroke-linecap="round" stroke-dasharray="2 18"/>
+    {% endif %}
+    {% endfor %}
+    {% for p in points %}
+    {% if p.here %}
+    <circle cx="{{ p.x }}" cy="{{ p.y }}" r="50" fill="#6AC0F3" fill-opacity="0.35"/>
+    {% endif %}
+    {% if p.status == DONE %}
+    <circle cx="{{ p.x }}" cy="{{ p.y }}" r="32" fill="#005593"/>
+    <path d="M{{ p.x - 13 }} {{ p.y + 1 }} l9 9 l18 -20" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    {% elif p.status == SKIPPED %}
+    <circle cx="{{ p.x }}" cy="{{ p.y }}" r="30" fill="#FFFFFF" stroke="#8FA9C6" stroke-width="4" stroke-dasharray="8 7"/>
+    <text x="{{ p.x }}" y="{{ p.y + 10 }}" text-anchor="middle" font-family="Exo 2, sans-serif" font-size="28" font-weight="700" fill="#8FA9C6">{{ p.n }}</text>
+    {% elif p.next %}
+    <circle cx="{{ p.x }}" cy="{{ p.y }}" r="30" fill="#FFFFFF" stroke="#226AAF" stroke-width="7"/>
+    <text x="{{ p.x }}" y="{{ p.y + 10 }}" text-anchor="middle" font-family="Exo 2, sans-serif" font-size="28" font-weight="800" fill="#226AAF">{{ p.n }}</text>
+    {% else %}
+    <circle cx="{{ p.x }}" cy="{{ p.y }}" r="30" fill="#FFFFFF" stroke="#B5CDE8" stroke-width="5"/>
+    <text x="{{ p.x }}" y="{{ p.y + 10 }}" text-anchor="middle" font-family="Exo 2, sans-serif" font-size="28" font-weight="700" fill="#7F9DC2">{{ p.n }}</text>
+    {% endif %}
+    {% endfor %}
+  </svg>
+
+  {% for p in points %}
+  <div class="label {{ p.status }}{% if p.next %} next{% endif %}" style="left: {{ p.x }}px; top: {{ p.y + 46 }}px;">
+    {{ p.label }}{% if p.status == SKIPPED %}<span class="note">{{ skipped }}</span>{% endif %}
+  </div>
+  {% if p.here %}
+  <div class="here" style="left: {{ p.x }}px; top: {{ p.y - 62 }}px;">{{ here }}</div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="legend">
+    <span><i class="l-done"></i>{{ legend[0] }}</span>
+    <span><i class="l-ahead"></i>{{ legend[1] }}</span>
+    <span><i class="l-skip"></i>{{ legend[2] }}</span>
+  </div>
+
+  <footer>
+    {% if footer %}<div class="next-plate"><span class="br">{{ footer }}</span></div>{% else %}<div></div>{% endif %}
+    <div class="brand">Корсик</div>
+  </footer>
+</body>
+</html>
