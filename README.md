@@ -6,7 +6,7 @@
 
 **[Презентация](https://mosprom-polyplast.rapira-cloud.ru)** · **[Ссылки и проверка](#ссылки)** · **[Критерии кейса](#критерии-кейса-где-это-видно)** · [Запуск](#запуск-env-и-одна-команда) · [Проверить руками](#проверить-руками) · [Маршрут сотрудника по дням](eval/journey/gtp-operator.md) · [Разработчикам](app/CONTRACTS.md)
 
-![Python 3.12](media/stack/python.svg) ![FastAPI](media/stack/fastapi.svg) ![PostgreSQL 16 · pgvector](media/stack/postgresql.svg) ![bge-m3](media/stack/bge-m3.svg) ![GigaChat · OpenAI API](media/stack/gigachat.svg) ![React 18](media/stack/react.svg) ![TypeScript 5](media/stack/typescript.svg) ![Docker Compose](media/stack/docker.svg) ![Bot API «МАКС»](media/stack/max.svg)
+![Python 3.12](media/stack/python.svg) ![FastAPI](media/stack/fastapi.svg) ![PostgreSQL 16 · pgvector](media/stack/postgresql.svg) ![bge-m3](media/stack/bge-m3.svg) ![GigaChat 3 Lightning · локально](media/stack/gigachat.svg) ![React 18](media/stack/react.svg) ![TypeScript 5](media/stack/typescript.svg) ![Docker Compose](media/stack/docker.svg) ![Bot API «МАКС»](media/stack/max.svg)
 
 > [!IMPORTANT]
 > **Корсик отвечает только по документам компании и ничего не придумывает.** На вопрос новичка он присылает пункт документа слово в слово и указывает источник («ПВТР, п. 6.5.2, стр. 15»). Нейросеть только выбирает подходящий пункт из пяти найденных, свой текст она не пишет. Если ответа в документах нет, бот честно говорит «не знаю» и передаёт вопрос HR. Ответ HR можно одной кнопкой добавить в базу, и в следующий раз бот ответит сам.
@@ -212,8 +212,11 @@
 | Задача | Чем делаем | Где работает |
 | --- | --- | --- |
 | Поиск по документам | bge-m3 (открытые веса) и полнотекстовый поиск Postgres | всегда на сервере компании |
-| Выбрать пункт, разобрать ответ опроса | открытая модель через OpenAI-совместимый API, например GigaChat 3 Lightning (веса открыты под MIT) | на сервере компании |
+| Выбрать пункт, разобрать ответ опроса | открытая модель, например GigaChat 3 Lightning (веса открыты под MIT), развёрнута у компании | только на сервере компании, в интернет не ходит |
 | Личные вопросы, красные флаги, маскирование ФИО и телефонов | правила и словари | всегда локально |
+
+> [!NOTE]
+> **Облачный GigaChat стоит только на демо-стенде,** чтобы бота можно было потестить до установки у заказчика: у команды нет сервера с видеокартой. В пилоте его нет, модель работает в закрытом контуре компании.
 
 Модель подключается настройками в `.env`: `LLM_PROVIDER=openai`, `LLM_BASE_URL=http://<сервер модели>/v1`, `LLM_MODEL=<имя модели>`. Если модель недоступна, бот всё равно работает: при уверенном поиске отвечает пунктом сам, иначе передаёт вопрос HR.
 
@@ -346,7 +349,7 @@ flowchart TB
     C --> APP
     APP --> DB["PostgreSQL 16 + pgvector"]
     APP --> EMB["bge-m3, локально"]
-    APP --> LLM["Модель в контуре компании<br/>на демо GigaChat API"]
+    APP --> LLM["Открытая модель на сервере компании<br/>на демо-стенде облачный GigaChat для теста"]
     classDef brand fill:#E9F1FA,stroke:#226AAF,color:#00173E
     classDef core fill:#226AAF,stroke:#005593,color:#FFFFFF
     class N,H,B,C,DB,EMB,LLM brand
