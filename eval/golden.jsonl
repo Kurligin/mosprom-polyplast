@@ -1,0 +1,73 @@
+{"id": "g001", "question": "Во сколько начинается рабочий день?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.6.1–6.6.2, стр. 15"}
+{"id": "g002", "question": "скока длится обед", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.6.1, стр. 15; п. 6.7.3, стр. 17"}
+{"id": "g003", "question": "Когда платят зарплату?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.5.2, стр. 15"}
+{"id": "g004", "question": "зп 14го или 15го приходит? а аванс?", "category": "answerable", "site": "GTP", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.5.2, стр. 15"}
+{"id": "g005", "question": "Сколько дней отпуска в год?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.4, стр. 17"}
+{"id": "g006", "question": "когда мне можно будет пойти в первый отпуск? я только устроился", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.8, стр. 18"}
+{"id": "g007", "question": "Можно разбить отпуск на несколько частей?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.11, стр. 18"}
+{"id": "g008", "question": "хочу перенести отпуск с графика на другие даты, как?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.7, 6.7.10, стр. 18"}
+{"id": "g009", "question": "у меня свадьба через месяц, дадут выходные?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.15, стр. 19"}
+{"id": "g010", "question": "Я заболел, что делать?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.4.2, стр. 14; п. 6.11.1, стр. 23"}
+{"id": "g011", "question": "больничный кто оплачивает, компания или фонд?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.11.1–6.11.2, стр. 23"}
+{"id": "g012", "question": "Сколько длится испытательный срок?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.1.9, стр. 5"}
+{"id": "g013", "question": "я болел неделю на испытательном, он продлится?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.1.10, стр. 5"}
+{"id": "g014", "question": "Какие документы нужно принести в первый день?", "category": "answerable", "site": "GrPP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, «за 2–3 дня до выхода», список документов (GrPP, Luzhniki); ПВТР п. 6.1.3, стр. 4–5"}
+{"id": "g015", "question": "какие доки нужны для оформления на завод", "category": "answerable", "site": "GTP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, «за 2–3 дня до выхода», список документов (GTP)"}
+{"id": "g016", "question": "Трудовой книжки нет, у меня только электронная. Это проблема?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.1.3, стр. 4; сценарий ТЗ, список документов"}
+{"id": "g017", "question": "Медосмотр при приёме платный?", "category": "answerable", "site": "GTP", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.1.5, стр. 5"}
+{"id": "g018", "question": "Что такое КЭДО и надо ли мне что-то подписывать?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР раздел 4, стр. 3; п. 6.1.14, стр. 6; п. 6.1.26, стр. 7"}
+{"id": "g019", "question": "Если опоздаю на пару часов, это прогул?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.6.7, стр. 16; п. 6.6.15, стр. 17"}
+{"id": "g020", "question": "Могут ли заставить работать в выходной?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.6.10–6.6.11, стр. 16"}
+{"id": "g021", "question": "можно ли курить на перерыве", "category": "answerable", "site": "GrPP", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.4.2, стр. 13–14"}
+{"id": "g022", "question": "Есть ли дресс-код?", "category": "answerable", "site": "Luzhniki", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.4.2, стр. 14"}
+{"id": "g023", "question": "Можно сфоткать линию и выложить в сторис?", "category": "answerable", "site": "GTP", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.5.1, стр. 14; п. 6.3.3, стр. 9; trade-secret слайд 5, 8"}
+{"id": "g024", "question": "Можно в рабочее время читать книги или играть, если задач нет?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.4.2, стр. 13"}
+{"id": "g025", "question": "Поставщик хочет подарить мне бутылку коньяка на НГ, можно взять?", "category": "answerable", "site": "any", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайды 8–9"}
+{"id": "g026", "question": "какой максимальный подарок можно дарить партнёрам?", "category": "answerable", "site": "any", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайды 8–9"}
+{"id": "g027", "question": "Мне намекнули на откат, куда сообщить?", "category": "answerable", "site": "any", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайды 5–6, 11 [OCR]"}
+{"id": "g028", "question": "телефон горячей линии по коррупции", "category": "answerable", "site": "GTP", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайд 5"}
+{"id": "g029", "question": "Если я откажусь дать взятку и мы потеряем контракт, меня накажут?", "category": "answerable", "site": "any", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайд 11 [OCR], слайд 6"}
+{"id": "g030", "question": "Как проверить нового контрагента?", "category": "answerable", "site": "GrPP", "source": "anticorruption.txt", "source_ref": "Антикоррупционная политика, слайд 4"}
+{"id": "g031", "question": "Что такое коммерческая тайна?", "category": "answerable", "site": "any", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайды 3 [SmartArt], 5"}
+{"id": "g032", "question": "чем отличается КИ от ДСП", "category": "answerable", "site": "any", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайды 3 [SmartArt], 4, 6"}
+{"id": "g033", "question": "Можно скинуть рабочий файл себе на гмейл чтобы доделать дома?", "category": "answerable", "site": "Luzhniki", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайды 10–11"}
+{"id": "g034", "question": "После увольнения я могу рассказывать о проектах?", "category": "answerable", "site": "any", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайд 7; ПВТР п. 6.3.5, стр. 10"}
+{"id": "g035", "question": "какую подпись ставить в письмах партнёрам?", "category": "answerable", "site": "GrPP", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайд 12"}
+{"id": "g036", "question": "Где найти полный текст положения о коммерческой тайне?", "category": "answerable", "site": "any", "source": "trade-secret.txt", "source_ref": "Положение о КТ, слайд 14 [OCR]"}
+{"id": "g037", "question": "Где взять контакты коллег?", "category": "answerable", "site": "GrPP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, первый день 13:00, справочник (GrPP, Luzhniki)"}
+{"id": "g038", "question": "справочник телефонов на заводе где", "category": "answerable", "site": "GTP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, первый день 13:00, справочник (GTP)"}
+{"id": "g039", "question": "Мне не выдали доступы, что делать?", "category": "answerable", "site": "Luzhniki", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, первый день 12:00, «Корсик_Доступы»"}
+{"id": "g040", "question": "Чем вообще занимается компания, какая миссия?", "category": "answerable", "site": "any", "source": "quality-ecology.txt", "source_ref": "Политика качества и экологии, слайд 2; сценарий ТЗ, первый день 15:00"}
+{"id": "g041", "question": "По каким стандартам работает система качества?", "category": "answerable", "site": "GTP", "source": "quality-ecology.txt", "source_ref": "Политика качества и экологии, слайд 5 [SmartArt]"}
+{"id": "g042", "question": "есть ли спортзал на территории?", "category": "answerable", "site": "GTP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, третий рабочий день 11:00 (GTP)"}
+{"id": "g043", "question": "Когда можно взять день на диспансеризацию? мне 42", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.16, стр. 19"}
+{"id": "g044", "question": "Как уволиться по собственному, за сколько предупреждать?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.3.2, стр. 9"}
+{"id": "g045", "question": "Какие бывают дисциплинарные взыскания?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.10.4–6.10.9, стр. 20–21"}
+{"id": "g046", "question": "Как добраться до офиса в Лужниках?", "category": "answerable", "site": "Luzhniki", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, за 2–3 дня (транспорт, Luzhniki); первый день 11:00 (карта этажей)"}
+{"id": "g047", "question": "есть корпоративный автобус?", "category": "answerable", "site": "GrPP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, за 2–3 дня, корпоративный транспорт (GrPP)"}
+{"id": "g048", "question": "Где можно пообедать рядом?", "category": "answerable", "site": "GTP", "source": "korsik-scenario-tz.txt", "source_ref": "Сценарий ТЗ, первый день 12:30, «Где пообедать» (GTP); ПВТР п. 6.6.1"}
+{"id": "g049", "question": "Сколько дней мне дадут если родится ребёнок?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.7.15, стр. 19; п. 6.11.4, стр. 23"}
+{"id": "g050", "question": "Сменил фамилию, нужно сообщать?", "category": "answerable", "site": "any", "source": "pvtr.txt", "source_ref": "ПВТР п. 6.11.5, стр. 23; сценарий ТЗ, список документов"}
+{"id": "g051", "question": "За зарплату сколько получает мой коллега Иванов?", "category": "escalate", "site": "any", "source": "policy", "source_ref": "персональные данные; Положение о КТ, слайд 5 (людские ресурсы)"}
+{"id": "g052", "question": "почему мне начислили меньше чем в оффере?", "category": "escalate", "site": "GTP", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.5.2, стр. 15 (только общая норма)"}
+{"id": "g053", "question": "Меня хотят уволить на испытательном, это законно?", "category": "escalate", "site": "any", "source": "policy", "source_ref": "кадровый/юридический вопрос — обязательная эскалация (кейс)"}
+{"id": "g054", "question": "У меня конфликт с руководителем, он орёт на меня при всех", "category": "escalate", "site": "GTP", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.4.2, стр. 13 (общая норма)"}
+{"id": "g055", "question": "Мне не оплатили больничный за 2 дня, что делать?", "category": "escalate", "site": "any", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.11.1, стр. 23"}
+{"id": "g056", "question": "Мне дали выговор, могу ли я его оспорить?", "category": "escalate", "site": "any", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.10.6–6.10.9, стр. 21"}
+{"id": "g057", "question": "могут ли меня перевести в другой цех без согласия?", "category": "escalate", "site": "GTP", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.2.1–6.2.2, стр. 7"}
+{"id": "g058", "question": "Мастер заставляет работать без СИЗ, говорит так быстрее", "category": "escalate", "site": "GTP", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.4.2, стр. 13"}
+{"id": "g059", "question": "Я беременна, меня могут уволить по испытательному?", "category": "escalate", "site": "any", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.1.11, стр. 5"}
+{"id": "g060", "question": "Мне предложили уволиться по соглашению сторон, соглашаться?", "category": "escalate", "site": "Luzhniki", "source": "policy", "source_ref": "кадровый вопрос — обязательная эскалация"}
+{"id": "g061", "question": "Коллега ворует материалы со склада, кому сказать?", "category": "escalate", "site": "GTP", "source": "anticorruption.txt + policy", "source_ref": "Антикоррупционная политика, слайды 5–6"}
+{"id": "g062", "question": "Сколько мне заплатят при увольнении за неотгуленный отпуск?", "category": "escalate", "site": "any", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.7.13, стр. 18; п. 6.3.12, стр. 12"}
+{"id": "g063", "question": "Можно ли подать в суд на компанию за невыплату премии?", "category": "escalate", "site": "any", "source": "policy", "source_ref": "юридический вопрос — обязательная эскалация"}
+{"id": "g064", "question": "Меня поставили в ночь две недели подряд, я не выдерживаю", "category": "escalate", "site": "GTP", "source": "pvtr.txt + policy", "source_ref": "ПВТР п. 6.6.10–6.6.13, стр. 16"}
+{"id": "g065", "question": "Я в депрессии и не хочу ничего, мне плохо", "category": "escalate", "site": "any", "source": "policy", "source_ref": "кризисная ситуация — обязательная эскалация"}
+{"id": "g066", "question": "Как получить ДМС и что в него входит?", "category": "out_of_kb", "site": "GrPP", "source": "none", "source_ref": "—"}
+{"id": "g067", "question": "потерял пропуск, где сделать новый?", "category": "out_of_kb", "site": "GTP", "source": "none", "source_ref": "частично: ПВТР п. 6.4.2, стр. 14"}
+{"id": "g068", "question": "Какой пароль от вайфая в офисе?", "category": "out_of_kb", "site": "Luzhniki", "source": "none", "source_ref": "—"}
+{"id": "g069", "question": "Какие суточные в командировке по России?", "category": "out_of_kb", "site": "GrPP", "source": "none", "source_ref": "ПВТР п. 6.8.4, 6.8.6 — только отсылка"}
+{"id": "g070", "question": "Как заказать справку 2-НДФЛ?", "category": "out_of_kb", "site": "any", "source": "none", "source_ref": "частично: trade-secret слайд 14 [OCR] (меню портала)"}
+{"id": "g071", "question": "Есть ли компенсация за спортзал вне завода или фитнес?", "category": "out_of_kb", "site": "Luzhniki", "source": "none", "source_ref": "—"}
+{"id": "g072", "question": "Где выдают спецовку и ботинки?", "category": "out_of_kb", "site": "GTP", "source": "none", "source_ref": "—"}
+{"id": "g073", "question": "Когда корпоратив на новый год?", "category": "out_of_kb", "site": "GrPP", "source": "none", "source_ref": "частично: сценарий ТЗ, +10 дней (корпоративные мероприятия)"}
