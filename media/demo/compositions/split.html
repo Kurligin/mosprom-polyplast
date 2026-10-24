@@ -1,0 +1,905 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Exo 2";
+      src: url("assets/fonts/Exo2.ttf") format("truetype");
+      font-weight: 100 900;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      font-family: Inter, sans-serif;
+      color: #0b1b3f;
+      --navy: #0b1b3f;
+      --blue-700: #005593;
+      --blue-600: #226aaf;
+      --ink: #162133;
+      --ink-2: #545f72;
+      --line: #d3dfec;
+      --fill: #e9f1fa;
+      --red: #c62828;
+    }
+    #d-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(1100px 700px at 85% 115%, rgba(34, 106, 175, 0.14), transparent 70%),
+        radial-gradient(900px 600px at 5% -15%, rgba(106, 192, 243, 0.2), transparent 70%),
+        linear-gradient(160deg, #f8fbfe 0%, #e8eff8 100%);
+    }
+
+    /* Подпись сверху */
+    #d-kicker {
+      position: absolute;
+      left: 120px;
+      top: 52px;
+      font-family: "Exo 2", sans-serif;
+      font-weight: 600;
+      font-size: 26px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--blue-600);
+    }
+    .cap {
+      position: absolute;
+      left: 120px;
+      top: 92px;
+      width: 1700px;
+      font-family: "Exo 2", sans-serif;
+      font-weight: 500;
+      font-size: 56px;
+      line-height: 1.1;
+      color: var(--navy);
+      white-space: nowrap;
+    }
+    .cap .w {
+      display: inline-block;
+    }
+    .cap .hl {
+      color: var(--blue-600);
+      font-weight: 600;
+    }
+
+    /* Подписи над половинами */
+    .who-lbl {
+      position: absolute;
+      top: 190px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .who-lbl i {
+      display: block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--blue-600);
+    }
+    #lbl-l {
+      left: 120px;
+    }
+    #lbl-r {
+      left: 1020px;
+    }
+
+    /* Окна */
+    .win {
+      position: absolute;
+      top: 234px;
+      width: 780px;
+      height: 772px;
+    }
+    #lw {
+      left: 120px;
+    }
+    #rw {
+      left: 1020px;
+    }
+    .win-in {
+      position: absolute;
+      inset: 0;
+      border-radius: 40px;
+      background: #eef3f9;
+      overflow: hidden;
+      box-shadow: 0 40px 90px rgba(11, 27, 63, 0.18), 0 4px 12px rgba(11, 27, 63, 0.06), 0 0 0 1px rgba(11, 27, 63, 0.05);
+    }
+    .head {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 100px;
+      background: #ffffff;
+      border-bottom: 1px solid #e1e8f0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 28px;
+      z-index: 3;
+    }
+    .ava {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .ava.grp {
+      background: #0b1b3f;
+    }
+    .hwho {
+      flex: 1;
+    }
+    .hwho b {
+      display: block;
+      font-size: 29px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .status {
+      position: relative;
+      height: 32px;
+      font-size: 24px;
+    }
+    .status span {
+      position: absolute;
+      left: 0;
+      top: 0;
+      white-space: nowrap;
+    }
+    .st-a {
+      color: var(--ink-2);
+    }
+    .st-b {
+      color: var(--blue-600);
+      font-weight: 600;
+      opacity: 0;
+    }
+    .viewport {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 101px;
+      bottom: 96px;
+      overflow: hidden;
+    }
+    .inputbar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 96px;
+      background: #ffffff;
+      border-top: 1px solid #e1e8f0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 22px;
+      z-index: 3;
+    }
+    .field {
+      position: relative;
+      flex: 1;
+      height: 58px;
+      border-radius: 29px;
+      background: #f0f4f9;
+      padding: 0 22px;
+      display: flex;
+      align-items: center;
+      font-size: 27px;
+      color: var(--ink);
+      overflow: hidden;
+    }
+    .ph {
+      position: absolute;
+      left: 22px;
+      top: 50%;
+      margin-top: -17px;
+      line-height: 34px;
+      color: #5f6a7d;
+    }
+    .ibtext {
+      white-space: pre;
+      display: flex;
+      align-items: center;
+      line-height: 34px;
+    }
+    .ibm .c {
+      display: none;
+    }
+    #ib-caret {
+      display: inline-block;
+      width: 3px;
+      height: 32px;
+      margin-left: 2px;
+      border-radius: 2px;
+      background: var(--blue-600);
+      opacity: 0;
+    }
+    .send {
+      position: relative;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: #e3eaf3;
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    #ib-send-on {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      opacity: 0;
+    }
+
+    .feed {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: 26px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .b {
+      max-width: 620px;
+      padding: 18px 24px;
+      border-radius: 28px;
+      font-size: 29px;
+      line-height: 1.36;
+    }
+    .me {
+      align-self: flex-end;
+      background: var(--blue-600);
+      color: #ffffff;
+      border-bottom-right-radius: 10px;
+      transform-origin: 100% 100%;
+    }
+    .bot {
+      align-self: flex-start;
+      background: #ffffff;
+      color: var(--ink);
+      border-bottom-left-radius: 10px;
+      box-shadow: 0 1px 2px rgba(11, 27, 63, 0.06), 0 6px 16px rgba(11, 27, 63, 0.05);
+      transform-origin: 0% 100%;
+    }
+    .sender {
+      display: block;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--blue-700);
+      margin-bottom: 2px;
+    }
+    .date {
+      align-self: center;
+      font-size: 23px;
+      font-weight: 600;
+      color: var(--ink-2);
+      background: #dfe7f1;
+      border-radius: 999px;
+      padding: 6px 18px;
+    }
+    .slot {
+      position: relative;
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .typing {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: flex;
+      gap: 10px;
+      padding: 26px 26px;
+    }
+    .typing i {
+      display: block;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #9aa6b8;
+    }
+    .card {
+      width: 620px;
+    }
+    .quote {
+      margin-top: 12px;
+      padding-left: 16px;
+      border-left: 5px solid var(--blue-600);
+    }
+    .quote p {
+      font-size: 28px;
+      line-height: 1.36;
+    }
+    .bar {
+      height: 13px;
+      border-radius: 7px;
+      background: #dde5ef;
+      margin: 11px 0;
+    }
+    .src {
+      position: relative;
+      display: inline-block;
+      margin-top: 12px;
+      padding: 5px 15px;
+      border-radius: 999px;
+      background: var(--fill);
+      color: var(--blue-700);
+      font-weight: 600;
+      font-size: 26px;
+      overflow: hidden;
+    }
+    .sweep {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 60%;
+      background: linear-gradient(90deg, transparent, rgba(106, 192, 243, 0.5), transparent);
+    }
+    .src .t {
+      position: relative;
+    }
+    .kbd {
+      margin-top: 8px;
+      align-self: flex-start;
+      display: flex;
+      gap: 8px;
+      width: 620px;
+    }
+    .kbd span {
+      flex: 1;
+      text-align: center;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--blue-700);
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 13px 0;
+      box-shadow: 0 1px 2px rgba(11, 27, 63, 0.06);
+      white-space: nowrap;
+    }
+    .sign {
+      display: block;
+      font-weight: 700;
+      color: var(--blue-700);
+    }
+
+    /* Сообщения в HR-группе */
+    .tk-title {
+      display: block;
+      font-weight: 700;
+    }
+    .tk-meta {
+      display: block;
+      font-size: 25px;
+      color: var(--ink-2);
+    }
+    .tk-q {
+      display: block;
+      margin-top: 8px;
+      font-size: 27px;
+      padding-left: 14px;
+      border-left: 4px solid var(--line);
+    }
+    .tk-st {
+      position: relative;
+      display: block;
+      height: 34px;
+      margin-top: 8px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .tk-st span {
+      position: absolute;
+      left: 0;
+      top: 0;
+      white-space: nowrap;
+    }
+    .tk-st .new {
+      color: #a44a07;
+    }
+    .tk-st .work {
+      color: #127535;
+      opacity: 0;
+    }
+    #r2 {
+      border-left: 6px solid var(--red);
+    }
+    #r2 .tk-title {
+      color: var(--red);
+    }
+    .press {
+      transform-origin: 50% 50%;
+    }
+
+    /* Панель (Mini App) поверх HR-группы */
+    #sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 70px;
+      bottom: 0;
+      background: #ffffff;
+      border-radius: 32px 32px 0 0;
+      box-shadow: 0 -20px 50px rgba(11, 27, 63, 0.18);
+      z-index: 5;
+      padding: 18px 30px 26px;
+      color: var(--ink);
+    }
+    #sheet-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(11, 27, 63, 0.28);
+      z-index: 4;
+      opacity: 0;
+    }
+    .grab {
+      width: 64px;
+      height: 6px;
+      border-radius: 3px;
+      background: #d3dce8;
+      margin: 0 auto 18px;
+    }
+    .sh-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--ink-2);
+    }
+    .sh-top .chip {
+      color: var(--blue-700);
+      background: var(--fill);
+      border-radius: 999px;
+      padding: 5px 14px;
+    }
+    .sh-title {
+      margin-top: 14px;
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .sh-meta {
+      margin-top: 2px;
+      font-size: 25px;
+      color: var(--ink-2);
+    }
+    .sh-q {
+      margin-top: 18px;
+      display: inline-block;
+      background: #eef3f9;
+      border-radius: 24px;
+      border-bottom-left-radius: 8px;
+      padding: 16px 22px;
+      font-size: 28px;
+    }
+    .sh-reply {
+      margin-top: 22px;
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+    }
+    .sh-input {
+      flex: 1;
+      min-height: 120px;
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      padding: 14px 18px;
+      font-size: 28px;
+      line-height: 1.36;
+    }
+    .sh-input .tw {
+      display: inline-block;
+    }
+    #sh-send {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--blue-600);
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .sh-kb {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 28px;
+    }
+    .sh-kb span.t {
+      flex: 1;
+    }
+    #sh-track {
+      position: relative;
+      width: 68px;
+      height: 40px;
+      border-radius: 999px;
+      background: #d5dde8;
+    }
+    #sh-track-on {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--blue-600);
+      opacity: 0;
+    }
+    #sh-knob {
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+    }
+
+    #lb,
+    #rd,
+    #r1,
+    #r2 {
+      opacity: 0;
+    }
+  </style>
+
+  <div id="root" data-composition-id="split" data-width="1920" data-height="1080">
+    <div id="d-bg"></div>
+
+    <p id="d-kicker">Корсик 2.0 · как это работает</p>
+    <h2 class="cap" id="c0"><span class="w">Первая</span> <span class="w">неделя</span> <span class="w">Ивана</span> <span class="w hl">глазами</span> <span class="w hl">новичка</span> <span class="w hl">и</span> <span class="w hl">HR</span></h2>
+    <h2 class="cap" id="c1"><span class="w">Шаги</span> <span class="w">адаптации</span> <span class="w">приходят</span> <span class="w hl">сами,</span> <span class="w hl">по</span> <span class="w hl">расписанию</span></h2>
+    <h2 class="cap" id="c2"><span class="w">Свой</span> <span class="w">вопрос:</span> <span class="w">ответ</span> <span class="w hl">пунктом</span> <span class="w hl">документа,</span> <span class="w">без</span> <span class="w">HR</span></h2>
+    <h2 class="cap" id="c3"><span class="w">Ответа</span> <span class="w">нет</span> <span class="w">в</span> <span class="w">документах:</span> <span class="w">вопрос</span> <span class="w hl">сразу</span> <span class="w hl">у</span> <span class="w hl">HR</span></h2>
+    <h2 class="cap" id="c3b"><span class="w">HR</span> <span class="w">отвечает</span> <span class="w">из</span> <span class="w">панели,</span> <span class="w">ответ</span> <span class="w hl">попадает</span> <span class="w hl">в</span> <span class="w hl">базу</span></h2>
+    <h2 class="cap" id="c4"><span class="w">Тревожный</span> <span class="w">сигнал:</span> <span class="w">HR</span> <span class="w">узнаёт</span> <span class="w hl">за</span> <span class="w hl">секунды</span></h2>
+    <h2 class="cap" id="c5"><span class="w">Следующему</span> <span class="w">новичку</span> <span class="w">Корсик</span> <span class="w hl">отвечает</span> <span class="w hl">сам</span></h2>
+    <h2 class="cap" id="c6"><span class="w">HR</span> <span class="w">подключается,</span> <span class="w">только</span> <span class="w">когда</span> <span class="w hl">нужен</span> <span class="w hl">человек</span></h2>
+
+    <p class="who-lbl" id="lbl-l"><i></i>Новичок · Иван, оператор на GTP</p>
+    <p class="who-lbl" id="lbl-r"><i></i>HR · Ольга, HR-группа в «МАКС»</p>
+
+    <!-- Слева: чат новичка с Корсиком -->
+    <div class="win" id="lw">
+      <div class="win-in" id="lw-in">
+        <div class="head" data-layout-allow-occlusion>
+          <div class="ava"><svg width="32" height="32" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><circle cx="6" cy="9" r="2.2" /><circle cx="10" cy="5.2" r="2.2" /><circle cx="14" cy="5.2" r="2.2" /><circle cx="18" cy="9" r="2.2" /><path d="M12 10.5c-3 0-6 3.6-6 6.2 0 1.8 1.3 2.6 3 2.6 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-.8 3-2.6 0-2.6-3-6.2-6-6.2z" /></svg></div>
+          <div class="hwho">
+            <b>Корсик</b>
+            <div class="status" data-layout-allow-overlap><span class="st-a" id="ls-a">бот · Группа ПОЛИПЛАСТИК</span><span class="st-b" id="ls-b">печатает…</span></div>
+          </div>
+        </div>
+        <div class="viewport" data-layout-allow-overflow>
+          <div class="feed" id="la">
+            <div class="date" id="ld1">Понедельник · первый рабочий день</div>
+            <div class="b bot" id="l1">Поздравляю с первым рабочим днем, Иван! 🥳 Уверен, что ты будешь отлично справляться со своими задачами.</div>
+            <div class="b bot" id="l2">Наша территория довольно большая, но я помогу тебе в ней разобраться! Хочешь, я покажу подробную карту?</div>
+            <div class="kbd" id="l2k"><span>Покажи карту</span></div>
+            <div class="b me" id="l3">Когда зарплата?</div>
+            <div class="slot">
+              <div class="b bot typing" id="l4t"><i></i><i></i><i></i></div>
+              <div class="b bot card" id="l4">Нашёл в документах компании. Смотри:<div class="quote"><div class="bar" style="width: 96%"></div><div class="bar" style="width: 88%"></div><div class="bar" style="width: 56%"></div></div><span class="src"><span class="sweep" id="l4s"></span><span class="t">Источник: ПВТР, п. 6.5.2, стр. 15</span></span></div>
+              <div class="kbd" id="l4k"><span>Связаться с HR</span></div>
+            </div>
+            <div class="b me" id="l5">Можно ли приходить с собакой?</div>
+            <div class="slot">
+              <div class="b bot typing" id="l6t"><i></i><i></i><i></i></div>
+              <div class="b bot" id="l6">Честно, не знаю. В документах ответа не нашёл, поэтому передал вопрос HR. Ответ придёт сюда.</div>
+            </div>
+            <div class="b bot" id="l7"><span class="sign">Ольга (HR)</span>На территорию завода с животными нельзя, это правило охраны.</div>
+            <div class="date" id="ld3">Среда · третий день</div>
+            <div class="b me" id="l8">Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка</div>
+            <div class="slot">
+              <div class="b bot typing" id="l9t"><i></i><i></i><i></i></div>
+              <div class="b bot" id="l9">Это важно. Я сразу передал твоё сообщение HR, его увидит только HR. Если нужна срочная помощь, звони 112.</div>
+            </div>
+            <div class="b bot" id="l10"><span class="sign">Ольга (HR)</span>Иван, спасибо, что написал. Так быть не должно. Сегодня до 17:00 позвоню, а кожух уже передали в ремонт.</div>
+          </div>
+          <div class="feed" id="lb">
+            <div class="date" id="lb0">Неделю спустя · другой новичок</div>
+            <div class="b me" id="lb1">А с собакой на завод можно?</div>
+            <div class="slot">
+              <div class="b bot typing" id="lb2t"><i></i><i></i><i></i></div>
+              <div class="b bot card" id="lb2">HR уже отвечали на такой вопрос:<div class="quote"><p>На территорию завода с животными нельзя, это правило охраны.</p></div><span class="src"><span class="sweep" id="lb2s"></span><span class="t">Источник: Ответ HR от 24.10.2026</span></span></div>
+              <div class="kbd" id="lb2k"><span>Связаться с HR</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="inputbar" data-layout-allow-occlusion>
+          <div class="field">
+            <span class="ph" id="ib-ph">Сообщение</span>
+            <span class="ibtext" id="ibt"><span class="ibm" id="ibm1"></span><span class="ibm" id="ibm2"></span><span class="ibm" id="ibm3"></span><span class="ibm" id="ibm4"></span><span id="ib-caret"></span></span>
+          </div>
+          <div class="send" id="ib-send">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg>
+            <div id="ib-send-on"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Справа: HR-группа в «МАКС» и панель поверх неё -->
+    <div class="win" id="rw">
+      <div class="win-in" id="rw-in">
+        <div class="head" data-layout-allow-occlusion>
+          <div class="ava grp"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></div>
+          <div class="hwho">
+            <b>HR-группа ПОЛИПЛАСТИК</b>
+            <div class="status"><span class="st-a">Корсик и 3 сотрудника HR</span></div>
+          </div>
+        </div>
+        <div class="viewport" data-layout-allow-overflow>
+          <div class="feed" id="ra">
+            <div class="b bot" id="r0"><span class="sender">Корсик</span>Готово, теперь это HR-группа 🐾 Буду присылать сюда обращения и тревожные сигналы новичков.</div>
+            <div class="date" id="rd">Сегодня</div>
+            <div class="b bot card" id="r1"><span class="sender">Корсик</span><span class="tk-title">Новое обращение #4: бот не нашёл ответ</span><span class="tk-meta">Смирнов Иван · GTP · день 1</span><span class="tk-q">«Можно ли приходить с собакой?»</span><span class="tk-st"><span class="new" id="r1-new">Открыто</span><span class="work" id="r1-work">В работе: Петрова О.</span></span></div>
+            <div class="kbd" id="r1k"><span class="press" id="r1-open">Открыть в Mini App</span><span>Взять себе</span></div>
+            <div class="b bot card" id="r2"><span class="sender">Корсик</span><span class="tk-title">🔴 Красный флаг, обращение #5: травля и давление</span><span class="tk-meta">Смирнов Иван · GTP · день 3</span><span class="tk-q">«Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка»</span><span class="tk-st"><span class="new" id="r2-new">Видит только HR</span><span class="work" id="r2-work">В работе: Петрова О.</span></span></div>
+            <div class="kbd" id="r2k"><span>Открыть в Mini App</span><span class="press" id="r2-take">Взять себе</span></div>
+          </div>
+        </div>
+        <div class="inputbar" data-layout-allow-occlusion>
+          <div class="field"><span class="ph">Сообщение</span></div>
+          <div class="send"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
+        </div>
+
+        <div id="sheet-scrim" data-layout-allow-occlusion></div>
+        <div id="sheet" data-layout-allow-occlusion data-layout-allow-overflow>
+          <div class="grab"></div>
+          <div class="sh-top"><span class="chip">Панель HR</span><span>Обращение #4</span></div>
+          <p class="sh-title">Бот не нашёл ответ</p>
+          <p class="sh-meta">Смирнов Иван · GTP · день 1</p>
+          <div class="sh-q">Можно ли приходить с собакой?</div>
+          <div class="sh-reply">
+            <div class="sh-input"><span class="tw">На</span> <span class="tw">территорию</span> <span class="tw">завода</span> <span class="tw">с</span> <span class="tw">животными</span> <span class="tw">нельзя,</span> <span class="tw">это</span> <span class="tw">правило</span> <span class="tw">охраны.</span></div>
+            <div id="sh-send"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></svg></div>
+          </div>
+          <div class="sh-kb">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#545f72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" /><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" /></svg>
+            <span class="t">Добавить ответ в базу</span>
+            <div id="sh-track"><div id="sh-track-on"></div><div id="sh-knob"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Буквы для строки ввода новичка: каждая отдельным span, показываем по таймлайну
+    const MSG = {
+      1: "Когда зарплата?",
+      2: "Можно ли приходить с собакой?",
+      3: "Мастер угрожает, что уволит меня, если пожалуюсь на сломанный защитный кожух станка",
+      4: "А с собакой на завод можно?",
+    };
+    for (const k of Object.keys(MSG)) {
+      const box = document.getElementById("ibm" + k);
+      for (const ch of MSG[k]) {
+        const s = document.createElement("span");
+        s.className = "c";
+        s.textContent = ch;
+        box.appendChild(s);
+      }
+    }
+
+    document.fonts.ready.then(() => {
+      const tl = gsap.timeline({ paused: true });
+      const $ = (q) => document.querySelector(q);
+      const PAD = 26;
+      function bottomIn(feed, el) {
+        let y = 0;
+        let n = el;
+        while (n && n !== feed) {
+          y += n.offsetTop;
+          n = n.offsetParent;
+        }
+        return y + el.offsetHeight;
+      }
+      const VH = { la: $("#la").parentElement.clientHeight, lb: $("#lb").parentElement.clientHeight, ra: $("#ra").parentElement.clientHeight };
+      const T = {};
+      const feedOf = {};
+      for (const id of ["ld1", "l1", "l2k", "l3", "l4t", "l4k", "l5", "l6t", "l6", "l7", "ld3", "l8", "l9t", "l9", "l10"]) feedOf[id] = "la";
+      for (const id of ["lb1", "lb2t", "lb2k"]) feedOf[id] = "lb";
+      for (const id of ["r0", "r1k", "r2k"]) feedOf[id] = "ra";
+      for (const id of Object.keys(feedOf)) {
+        const f = feedOf[id];
+        T[id] = VH[f] - PAD - bottomIn($("#" + f), $("#" + id));
+      }
+      const pos = { la: T.ld1, lb: T.lb1, ra: T.r0 };
+      function scrollTo(id, t) {
+        const f = feedOf[id];
+        tl.fromTo("#" + f, { y: pos[f] }, { y: T[id], duration: 0.7, ease: "power2.inOut", immediateRender: false }, t);
+        pos[f] = T[id];
+      }
+      function capIn(id, t) {
+        tl.fromTo(id + " .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, stagger: 0.05, ease: "power1.out" }, t);
+      }
+      function capOut(id, t) {
+        tl.fromTo(id + " .w", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.25, ease: "power2.in", immediateRender: false }, t);
+      }
+      function bubbleIn(id, t) {
+        tl.fromTo(id, { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out" }, t);
+      }
+      function cardIn(id, t) {
+        tl.fromTo(id, { opacity: 0, y: 14, scale: 0.98, filter: "blur(4px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.7, ease: "power3.out" }, t);
+      }
+      function sendIn(id, t) {
+        tl.fromTo(id, { opacity: 0, y: 110, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, t);
+      }
+      function typing(id, t0, t1) {
+        tl.fromTo(id, { opacity: 0, y: 12, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "power3.out" }, t0);
+        tl.fromTo("#ls-b", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, t0);
+        tl.fromTo("#ls-a", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, t0);
+        const reps = Math.max(1, Math.floor((t1 - t0 - 0.2) / 0.6) * 2 - 1);
+        tl.fromTo(id + " i", { y: 0, opacity: 0.55 }, { y: -8, opacity: 1, duration: 0.3, ease: "sine.inOut", yoyo: true, repeat: reps, stagger: 0.15 }, t0 + 0.12);
+        tl.fromTo(id, { opacity: 1 }, { opacity: 0, duration: 0.16, ease: "power1.in", immediateRender: false }, t1);
+        tl.fromTo("#ls-b", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, t1);
+        tl.fromTo("#ls-a", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, t1);
+      }
+      function userType(n, t0, tPress, tSend) {
+        const chs = document.querySelectorAll("#ibm" + n + " .c");
+        const span = (tPress - 0.1 - t0) / chs.length;
+        // меряем, где кончается каждая буква, чтобы сдвигать текст влево, когда он не влезает
+        chs.forEach((c) => (c.style.display = "inline"));
+        const room = $("#ibt").parentElement.clientWidth - 44 - 8;
+        const rights = Array.from(chs).map((c) => c.offsetLeft + c.offsetWidth);
+        chs.forEach((c) => (c.style.display = ""));
+        let shift = 0;
+        tl.fromTo("#ib-ph", { opacity: 1 }, { opacity: 0, duration: 0.1, immediateRender: false }, t0);
+        tl.fromTo("#ib-caret", { opacity: 0 }, { opacity: 1, duration: 0.08, immediateRender: false }, t0);
+        tl.fromTo("#ib-send-on", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, t0 + 0.1);
+        let t = t0;
+        chs.forEach((c, i) => {
+          tl.set(c, { display: "inline" }, t);
+          const need = Math.min(0, room - rights[i]);
+          if (need !== shift) {
+            tl.set("#ibt", { x: need }, t);
+            shift = need;
+          }
+          t += span * (1 + 0.35 * Math.sin(i * 1.7 + n));
+        });
+        if (shift !== 0) tl.set("#ibt", { x: 0 }, tSend);
+        tl.fromTo("#ib-send", { scale: 1 }, { scale: 0.86, duration: 0.1, ease: "power2.in", yoyo: true, repeat: 1 }, tPress);
+        tl.set("#ibm" + n, { display: "none" }, tSend);
+        tl.fromTo("#ib-caret", { opacity: 1 }, { opacity: 0, duration: 0.08, immediateRender: false }, tSend);
+        tl.fromTo("#ib-send-on", { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, tSend);
+        tl.fromTo("#ib-ph", { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, tSend + 0.05);
+      }
+      function press(id, t) {
+        tl.fromTo(id, { scale: 1, backgroundColor: "#ffffff" }, { scale: 0.93, backgroundColor: "#dcebfa", duration: 0.12, ease: "power2.in", yoyo: true, repeat: 1 }, t);
+      }
+      function sweep(id, t) {
+        tl.fromTo(id, { xPercent: -110 }, { xPercent: 210, duration: 0.9, ease: "power2.inOut" }, t);
+      }
+      function swapStatus(prefix, t) {
+        tl.fromTo(prefix + "-new", { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, t);
+        tl.fromTo(prefix + "-work", { opacity: 0 }, { opacity: 1, duration: 0.25, immediateRender: false }, t + 0.1);
+      }
+
+      // Начальные состояния
+      tl.set("#la", { y: pos.la }, 0);
+      tl.set("#lb", { y: pos.lb }, 0);
+      tl.set("#ra", { y: pos.ra }, 0);
+      tl.set("#sheet", { yPercent: 105 }, 0);
+
+      // 0 · появление
+      tl.fromTo("#d-kicker", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.5, ease: "power2.out" }, 0.1);
+      tl.fromTo("#lw-in", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 0);
+      tl.fromTo("#rw-in", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 1.0, ease: "power3.out" }, 0.15);
+      tl.fromTo(".who-lbl", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.15 }, 0.3);
+      capIn("#c0", 0.3);
+
+      // 1 · шаги приходят сами
+      bubbleIn("#ld1", 1.0);
+      scrollTo("l1", 1.3);
+      bubbleIn("#l1", 1.35);
+      capOut("#c0", 2.4);
+      capIn("#c1", 2.6);
+      scrollTo("l2k", 3.0);
+      bubbleIn("#l2", 3.05);
+      bubbleIn("#l2k", 3.25);
+
+      // 2 · свой вопрос, ответ пунктом документа
+      capOut("#c1", 5.4);
+      capIn("#c2", 5.6);
+      userType(1, 5.5, 6.35, 6.5);
+      scrollTo("l3", 6.45);
+      sendIn("#l3", 6.5);
+      scrollTo("l4t", 7.0);
+      typing("#l4t", 7.05, 8.1);
+      scrollTo("l4k", 8.05);
+      cardIn("#l4", 8.15);
+      bubbleIn("#l4k", 8.4);
+      sweep("#l4s", 8.8);
+
+      // 3 · нет в документах: вопрос у HR, ответ в базу
+      capOut("#c2", 10.3);
+      capIn("#c3", 10.5);
+      userType(2, 10.2, 11.35, 11.5);
+      scrollTo("l5", 11.45);
+      sendIn("#l5", 11.5);
+      scrollTo("l6t", 11.95);
+      typing("#l6t", 12.0, 12.8);
+      scrollTo("l6", 12.75);
+      cardIn("#l6", 12.85);
+      tl.fromTo("#rd", { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 13.0);
+      scrollTo("r1k", 13.05);
+      tl.fromTo("#r1", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 13.1);
+      bubbleIn("#r1k", 13.3);
+      press("#r1-open", 14.4);
+      tl.fromTo("#sheet-scrim", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out", immediateRender: false }, 14.6);
+      tl.fromTo("#sheet", { yPercent: 105 }, { yPercent: 0, duration: 0.6, ease: "power3.out", immediateRender: false }, 14.6);
+      capOut("#c3", 14.9);
+      capIn("#c3b", 15.1);
+      tl.fromTo(".sh-input .tw", { opacity: 0 }, { opacity: 1, duration: 0.1, stagger: 0.1, ease: "power1.out" }, 15.4);
+      tl.fromTo("#sh-track-on", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.inOut", immediateRender: false }, 16.6);
+      tl.fromTo("#sh-knob", { x: 0 }, { x: 28, duration: 0.35, ease: "power3.inOut" }, 16.6);
+      tl.fromTo("#sh-send", { scale: 1 }, { scale: 0.88, duration: 0.11, ease: "power2.in", yoyo: true, repeat: 1 }, 17.1);
+      tl.fromTo("#sheet", { yPercent: 0 }, { yPercent: 105, duration: 0.45, ease: "power3.in", immediateRender: false }, 17.35);
+      tl.fromTo("#sheet-scrim", { opacity: 1 }, { opacity: 0, duration: 0.35, ease: "power2.in", immediateRender: false }, 17.4);
+      swapStatus("#r1", 17.75);
+      scrollTo("l7", 17.75);
+      bubbleIn("#l7", 17.8);
+
+      // 4 · тревожный сигнал
+      capOut("#c3b", 19.4);
+      capIn("#c4", 19.6);
+      scrollTo("ld3", 19.4);
+      bubbleIn("#ld3", 19.45);
+      userType(3, 19.55, 21.1, 21.25);
+      scrollTo("l8", 21.2);
+      sendIn("#l8", 21.25);
+      scrollTo("r2k", 21.6);
+      tl.fromTo("#r2", { opacity: 0, y: 20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out", immediateRender: false }, 21.65);
+      bubbleIn("#r2k", 21.85);
+      tl.fromTo("#r2", { boxShadow: "0 0 0 0 rgba(198,40,40,0)" }, { boxShadow: "0 0 0 10px rgba(198,40,40,0.18)", duration: 0.5, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, 22.2);
+      scrollTo("l9t", 21.8);
+      typing("#l9t", 21.85, 22.6);
+      scrollTo("l9", 22.55);
+      cardIn("#l9", 22.65);
+      press("#r2-take", 24.0);
+      swapStatus("#r2", 24.2);
+      scrollTo("l10", 25.6);
+      bubbleIn("#l10", 25.65);
+
+      // 5 · следующему новичку бот отвечает сам
+      capOut("#c4", 28.3);
+      capIn("#c5", 28.5);
+      tl.fromTo("#la", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.35, ease: "power2.in", immediateRender: false }, 28.3);
+      tl.fromTo("#lb", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.45, ease: "power2.out", immediateRender: false }, 28.55);
+      tl.set(["#lb1", "#lb2", "#lb2k"], { opacity: 0 }, 0);
+      userType(4, 28.9, 29.95, 30.1);
+      sendIn("#lb1", 30.1);
+      scrollTo("lb2t", 30.6);
+      typing("#lb2t", 30.65, 31.3);
+      scrollTo("lb2k", 31.25);
+      cardIn("#lb2", 31.35);
+      bubbleIn("#lb2k", 31.6);
+      sweep("#lb2s", 32.0);
+      tl.fromTo("#rw-in", { opacity: 1 }, { opacity: 0.55, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 30.6);
+
+      // 6 · итог
+      capOut("#c5", 34.4);
+      capIn("#c6", 34.6);
+      tl.fromTo("#rw-in", { opacity: 0.55 }, { opacity: 1, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 34.6);
+
+      window.__timelines["split"] = tl;
+    });
+  </script>
+</template>

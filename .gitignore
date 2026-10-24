@@ -18,3 +18,5 @@ htmlcov/
 # HyperFrames: рендеры и служебные снимки
 media/anim/renders/
 media/anim/.hyperframes/
+media/demo/renders/
+media/demo/.hyperframes/
