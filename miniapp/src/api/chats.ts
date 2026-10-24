@@ -5,7 +5,8 @@ import type { SiteCode, WorkType } from './types'
 
 /*
  * Чаты команды (miniapp/API.md, раздел «Чаты команды»): групповые чаты «МАКС», куда добавлен Корсик.
- * HR отмечает, кому нужен чат; в первый рабочий день бот сам добавляет туда новичка.
+ * HR отмечает, кому нужен чат; в первый рабочий день бот присылает новичку ссылку для вступления.
+ * Добавлять участников «МАКС» ботам с 09.09.2026 не даёт; код добавления готов на случай, если метод вернут.
  * Свой маленький клиент: в общем client.ts нет PATCH. Демо-данные — по тем же правилам:
  * сервер недоступен или эндпоинт не готов (501, маршрута нет), либо ?mocks=1.
  */
@@ -16,7 +17,7 @@ export type ChatAudience = 'none' | 'all' | 'sites'
 export interface TeamChat {
   id: number
   title: string
-  /** Ссылка-приглашение: её получит новичок, если «МАКС» не дал добавить его в чат */
+  /** Ссылка-приглашение: её бот присылает новичку в первый рабочий день */
   link: string | null
   audience: ChatAudience
   sites: SiteCode[]
@@ -63,7 +64,7 @@ export const EMPLOYEE_CHAT_STATUS: Record<EmployeeChatStatus, string> = {
   added: 'Добавлен',
   link: 'Отправили ссылку',
   failed: 'Не получилось добавить',
-  pending: 'Добавим в первый рабочий день',
+  pending: 'Пришлём ссылку в первый рабочий день',
   intro: 'Опубликовали представление',
 }
 
@@ -77,7 +78,7 @@ export const WORK_TYPE_LABEL: Record<WorkType, string> = { office: 'Офис', p
 
 /** Кому нужен чат, одной строкой: «Всем новичкам · Производство», «GTP, GrPP · Офис» */
 export function audienceText(c: Pick<TeamChat, 'audience' | 'sites' | 'work_type'>, siteName: (code: SiteCode) => string = (s) => s) {
-  if (c.audience === 'none') return 'Новичков сюда не добавляем'
+  if (c.audience === 'none') return 'Новичкам не присылаем'
   const who = c.audience === 'all' ? 'Всем новичкам' : c.sites.length ? c.sites.map(siteName).join(', ') : 'Площадки не выбраны'
   return c.work_type ? `${who} · ${WORK_TYPE_LABEL[c.work_type]}` : who
 }

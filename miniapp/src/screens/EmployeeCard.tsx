@@ -349,7 +349,7 @@ function ChatsSection({ e }: { e: Employee }) {
   const chats = e.chats ?? []
   if (!chats.length) return null
   return (
-    <Section header="Чаты команды" footer="Корсик добавляет новичка в чаты в первый рабочий день. Если не пустили настройки приватности, присылает ссылку.">
+    <Section header="Чаты команды" footer="В первый рабочий день Корсик присылает новичку ссылку для вступления в чат команды.">
       {chats.map((c) => (
         <Cell
           key={c.chat_id}
