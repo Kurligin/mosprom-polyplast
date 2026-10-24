@@ -21,6 +21,7 @@ from app.bot.handlers import (
     _onboarded,
     _set_state,
     _state,
+    _sync_test_name,
     onboarding_view,
     staff_greeting,
 )
@@ -115,6 +116,8 @@ async def _switch(cb: Callback, kind: str, key: str) -> None:
     await repo.flush()  # max_user_id уникален: сначала отвязка, потом привязка
     target.max_user_id = uid
     target.chat_id = cb.chat_id
+    if kind == "emp":
+        _sync_test_name(target, cb.user)  # как при входе по коду: в панели HR видно настоящее имя
     await repo.flush()
 
     if kind == "staff":

@@ -248,3 +248,15 @@ async def test_shift_uses_time_machine(demo, monkeypatch):
     assert w.api.text(mid) == "Тест: день 3"
     await _press(w, mid, BT.DEMO_BACK)
     assert BT.DEMO_MENU in w.api.text(mid)
+
+
+async def test_demo_newcomer_takes_name_from_max_profile(demo):
+    """Как при входе по коду: тестовый новичок получает имя из профиля «МАКС», а не «Тестовый Новичок GTP»."""
+    mid = await _cmd(demo, "/demo")
+    ev = ev_press(demo.api, mid, BT.DEMO_ROLES["emp:GTP"], user_id=ME, chat_id=MY_CHAT)
+    ev["callback"]["user"].update({"first_name": "Иван", "last_name": "Петров", "name": "Иван Петров"})
+    await handle_update(demo.ctx, demo.repo, ev)
+    await demo.session.flush()
+    await demo.session.refresh(demo.gtp)
+    assert demo.gtp.max_user_id == ME
+    assert (demo.gtp.full_name, demo.gtp.first_name) == ("Иван Петров", "Иван")

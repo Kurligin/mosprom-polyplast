@@ -578,7 +578,7 @@ async def on_message_callback(ctx: BotCtx, repo, upd: dict) -> None:
     cb = Callback(ctx=ctx, repo=repo, callback_id=cbd.get("callback_id"), payload=payload,
                   label=_button_label(body, payload), orig_text=body.get("text") or "", mid=body.get("mid"),
                   chat_id=(msg.get("recipient") or {}).get("chat_id"),
-                  user_id=(cbd.get("user") or {}).get("user_id"))
+                  user_id=(cbd.get("user") or {}).get("user_id"), user=cbd.get("user"))
     try:
         if payload.startswith("dm:"):
             # демо-меню: работает и до привязки, сама кнопка выбирает, кем стать

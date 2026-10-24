@@ -45,6 +45,7 @@ class Callback:
     chat_id: int | None
     user_id: int | None
     is_staff: bool = False
+    user: dict | None = None  # профиль «МАКС» из нажатия: имя тестового новичка в демо
     answered: bool = False
 
     async def replace(self, text: str, attachments: list[dict] | None = None, *,
