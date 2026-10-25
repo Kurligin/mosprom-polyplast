@@ -98,7 +98,7 @@ export default function TicketView({ id }: { id: number }) {
         {/* личный вопрос в базу не добавляется: переключатель не показываем */}
         {!t.is_personal && <div className="composer-kb">
           <BookOpen size={18} aria-hidden />
-          <label htmlFor="reply-to-kb"><span>{toKb ? 'В базу для' : 'Добавить ответ в базу'}</span></label>
+          <label htmlFor="reply-to-kb" onMouseDown={(e) => e.preventDefault()}><span>{toKb ? 'В базу для' : 'Добавить ответ в базу'}</span></label>
           {toKb && (
             <select aria-label="Площадка для ответа" value={kbSite} onChange={(e) => setKbSite(e.target.value as SiteCode | 'all')}>
               <option value="all">Все площадки</option>

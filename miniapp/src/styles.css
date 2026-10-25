@@ -348,7 +348,7 @@ img.avatar { object-fit: cover; }
 /* ---------- Переключатель ---------- */
 .switch { position: relative; display: inline-block; vertical-align: middle; width: 51px; height: 31px; flex: none; }
 /* невидимый чекбокс шире самого переключателя: цель касания 63 × 45 */
-.switch input { position: absolute; inset: -7px -6px; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch input { position: absolute; inset: -7px -6px; opacity: 0; margin: 0; cursor: pointer; z-index: 1; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .switch input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 .switch span { position: absolute; inset: 0; border-radius: 16px; background: var(--fill); transition: background-color 200ms ease; }
 .switch span::after {
@@ -440,7 +440,7 @@ img.avatar { object-fit: cover; }
 .composer-kb { display: flex; align-items: center; gap: var(--s2); font-size: 15px; min-height: 44px; }
 .composer-kb > .lucide { color: var(--text-secondary); }
 /* подпись тоже переключает: вся строка — цель касания */
-.composer-kb label { flex: 1 1 auto; min-width: 3em; min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.composer-kb label { flex: 1 1 auto; min-width: 3em; min-height: 44px; display: flex; align-items: center; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .composer-kb label span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* выбор площадки как кнопка-меню iOS: длинное название обрезается, переключатель не уезжает за край */
 .composer-kb select {

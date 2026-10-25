@@ -37,12 +37,28 @@ class SqlRepo:
     async def employee_by_user(self, max_user_id: int):
         """Новичок по аккаунту «МАКС». Строка блокируется до конца события (FOR NO KEY UPDATE):
         планировщик и API, которые меняют dialog_data, дождутся коммита бота и перечитают свежие данные."""
+        if max_user_id is None:  # без аккаунта искали бы всех непривязанных
+            return None
         return (await self.s.execute(
             select(Employee).where(Employee.max_user_id == max_user_id)
             .with_for_update(key_share=True))).scalar_one_or_none()
 
     async def staff_by_user(self, max_user_id: int):
+        if max_user_id is None:
+            return None
         return (await self.s.execute(select(Staff).where(Staff.max_user_id == max_user_id))).scalar_one_or_none()
+
+    async def user_by_chat(self, chat_id: int | None) -> int | None:
+        """Аккаунт «МАКС» по личному чату с ботом: у части событий (голосовые) нет sender.user_id."""
+        if not chat_id:
+            return None
+        for model in (Employee, Staff):
+            uid = (await self.s.execute(
+                select(model.max_user_id).where(model.chat_id == chat_id, model.max_user_id.is_not(None))
+                .limit(1))).scalar_one_or_none()
+            if uid is not None:
+                return uid
+        return None
 
     # --- демо-режим (/demo) ---
 

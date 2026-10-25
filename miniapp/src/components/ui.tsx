@@ -302,7 +302,12 @@ export function Switch({ checked, onChange, label, disabled, id }: { checked: bo
         aria-label={label}
         checked={checked}
         disabled={disabled}
-        onChange={(e) => { haptic.select(); onChange(e.target.checked) }}
+        // фокус остаётся в поле ввода: клавиатура не закрывается и экран не прыгает под пальцем
+        onMouseDown={(e) => e.preventDefault()}
+        onChange={(e) => {
+          onChange(e.target.checked)
+          setTimeout(haptic.select, 0) // вибрация через мост после переключения, а не перед ним
+        }}
       />
       <span />
     </span>

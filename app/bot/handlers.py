@@ -461,6 +461,25 @@ async def _resume_bound(ctx: BotCtx, repo, user_id: int, chat_id: int | None, us
     return False
 
 
+def _shape(upd: dict) -> str:
+    """Событие для лога: только структура. Значения — лишь у служебных полей (без имён, текста, ссылок)."""
+    import json
+
+    ids = {"chat_id", "user_id", "timestamp", "seq"}
+    kinds = {"update_type", "type", "chat_type"}
+
+    def walk(v, key=""):
+        if isinstance(v, dict):
+            return {k: walk(x, k) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x, key) for x in v[:5]]
+        if (key in ids and isinstance(v, int)) or (key in kinds and isinstance(v, str)):
+            return v
+        return f"<{type(v).__name__}>"
+
+    return json.dumps(walk(upd), ensure_ascii=False)[:1500]
+
+
 async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
     msg = upd.get("message") or {}
     sender = msg.get("sender") or {}
@@ -474,6 +493,17 @@ async def on_message_created(ctx: BotCtx, repo, upd: dict) -> None:
     body = msg.get("body") or {}
     text = (body.get("text") or "").strip()
     mid = body.get("mid")
+    if user_id is None:
+        # у голосовых «МАКС» не всегда присылает sender.user_id: ищем в других полях события и по личному чату
+        chat_id = chat_id or upd.get("chat_id") or msg.get("chat_id")
+        user_id = (upd.get("user_id") or (upd.get("user") or {}).get("user_id")
+                   or (msg.get("user") or {}).get("user_id"))
+        if user_id is None:
+            user_id = await repo.user_by_chat(chat_id)
+        log.info("message_created без sender.user_id: user_id=%s chat_id=%s событие: %s",
+                 user_id, chat_id, _shape(upd))
+        if user_id is None:
+            return
 
     emp = await repo.employee_by_user(user_id)
     staff = None if emp else await repo.staff_by_user(user_id)
